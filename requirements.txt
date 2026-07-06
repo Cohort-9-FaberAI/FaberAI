@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+supabase
+celery
+redis
+sentry-sdk
