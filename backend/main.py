@@ -1,5 +1,12 @@
-from fastapi import FastAPI, UploadFile, status
-from core.workers import extract_geometry_task
+from uuid import UUID
+
+from celery.result import AsyncResult
+from fastapi import FastAPI, HTTPException, UploadFile, status
+from pydantic import ValidationError
+
+from core.database import fetch_analysis_by_task_id
+from core.schemas import AnalysisResult
+from core.workers import celery_app, extract_geometry_task
 
 app = FastAPI(
     title="FaberAI Backend",
@@ -28,6 +35,60 @@ async def upload_cad_file(file: UploadFile):
         "filename": file_name,
         "status": "processing"
     }
+
+@app.get("/tasks/{task_id}", tags=["Tasks"])
+def get_task_status(task_id: str):
+    """
+    Polls the status of a background processing task.
+
+    Returns the current Celery state (PENDING, PROCESSING, SUCCESS, FAILURE).
+    On SUCCESS, fetches the final analysis from Supabase, validates it
+    against the agreed API contract and returns it to the frontend.
+
+    Note: Celery reports unknown task ids as PENDING, so a well-formed but
+    nonexistent id is indistinguishable from a queued task. Malformed ids
+    (not a UUID) return 404.
+    """
+    try:
+        UUID(task_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task '{task_id}' not found.",
+        )
+
+    result = AsyncResult(task_id, app=celery_app)
+
+    if result.state == "FAILURE":
+        return {
+            "task_id": task_id,
+            "status": "FAILURE",
+            "error": str(result.result),
+        }
+
+    if result.state == "SUCCESS":
+        analysis = fetch_analysis_by_task_id(task_id)
+        if analysis is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Task '{task_id}' completed but no analysis was found for it.",
+            )
+        try:
+            validated = AnalysisResult.model_validate(analysis)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Stored analysis for task '{task_id}' failed validation: {exc.error_count()} error(s).",
+            )
+        return {
+            "task_id": task_id,
+            "status": "SUCCESS",
+            "result": validated.model_dump(),
+        }
+
+    # PENDING or any other intermediate state
+    return {"task_id": task_id, "status": result.state}
+
 
 @app.post("/analyze-mock", tags=["Analysis (Mock)"])
 def analyze_mock():
