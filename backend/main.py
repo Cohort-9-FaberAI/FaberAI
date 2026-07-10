@@ -1,5 +1,7 @@
 from fastapi import FastAPI, UploadFile, status
 from core.workers import extract_geometry_task
+from app.schemas import AnalysisResult
+from app.crud import insert_analysis_result
 
 app = FastAPI(
     title="FaberAI Backend",
@@ -83,3 +85,12 @@ def analyze_mock():
             }
         ]
     }
+
+@app.post("/analysis/", tags=["Analysis"])
+def create_analysis(result: AnalysisResult):
+    """
+    Accepts a validated analysis result payload and stores it in Supabase.
+    Used to verify DB integration is working correctly.
+    """
+    inserted = insert_analysis_result(result)
+    return {"message": "Analysis result saved successfully.", "data": inserted}
