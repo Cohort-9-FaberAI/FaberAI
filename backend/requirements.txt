@@ -14,3 +14,9 @@ typing_extensions==4.16.0
 uvicorn==0.51.0
 celery
 redis
+trimesh>=4.0
+manifold3d>=2.5
+numpy>=1.24
+pytest>=7.0
+scipy>=1.10
+networkx>=3.0
