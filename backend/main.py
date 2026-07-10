@@ -1,7 +1,9 @@
-from fastapi import FastAPI, UploadFile, status
-from core.workers import extract_geometry_task
+from celery.result import AsyncResult
+from fastapi import FastAPI, HTTPException, UploadFile, status
+from postgrest.exceptions import APIError
+from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult
-from app.crud import insert_analysis_result
+from app.crud import insert_analysis_result, get_analysis_by_id
 
 app = FastAPI(
     title="FaberAI Backend",
@@ -30,6 +32,53 @@ async def upload_cad_file(file: UploadFile):
         "filename": file_name,
         "status": "processing"
     }
+
+@app.get("/tasks/{task_id}", tags=["Tasks"])
+def get_task_status(task_id: str):
+    """
+    Polls the status of a background analysis task.
+
+    Returns the current Celery state (PENDING, PROCESSING, SUCCESS, FAILURE).
+    On SUCCESS, fetches the final validated analysis result from Supabase.
+    Note: Celery reports unknown task ids as PENDING, so a 404 is only
+    possible once a task has finished but no stored result can be found.
+    """
+    task_result = AsyncResult(task_id, app=celery_app)
+    state = task_result.state
+
+    if state == "FAILURE":
+        return {
+            "task_id": task_id,
+            "status": "FAILURE",
+            "error": str(task_result.result),
+        }
+
+    if state == "SUCCESS":
+        task_output = task_result.result
+        analysis_id = (
+            task_output.get("analysis_id", task_id)
+            if isinstance(task_output, dict)
+            else task_id
+        )
+
+        try:
+            record = get_analysis_by_id(analysis_id)
+        except APIError:
+            record = None
+
+        if record is None or not record.get("results_json"):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No analysis result found for task '{task_id}'.",
+            )
+
+        analysis = AnalysisResult.model_validate(record["results_json"])
+        return {"task_id": task_id, "status": "SUCCESS", "result": analysis}
+
+    # Celery uses STARTED/RETRY for in-flight tasks; expose them as PROCESSING
+    status_map = {"STARTED": "PROCESSING", "RETRY": "PROCESSING"}
+    return {"task_id": task_id, "status": status_map.get(state, state)}
+
 
 @app.post("/analyze-mock", tags=["Analysis (Mock)"])
 def analyze_mock():
