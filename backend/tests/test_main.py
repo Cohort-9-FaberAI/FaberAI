@@ -1,0 +1,122 @@
+"""
+Unit tests for the FastAPI routes in main.py.
+
+The Celery dispatch in /upload/ is mocked so no Redis broker is required,
+and Supabase credentials are faked in conftest.py so no database is touched.
+"""
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+import main
+
+
+class TestHealthCheck:
+    def test_returns_200(self, client):
+        response = client.get("/")
+        assert response.status_code == 200
+
+    def test_returns_ok_payload(self, client):
+        body = client.get("/").json()
+        assert body == {"status": "ok", "message": "FaberAI backend is running."}
+
+
+class TestAnalyzeMock:
+    def test_returns_200(self, client):
+        response = client.post("/analyze-mock")
+        assert response.status_code == 200
+
+    def test_matches_agreed_api_contract(self, client):
+        body = client.post("/analyze-mock").json()
+
+        assert body["analysis_id"] == "mock-analysis-0001"
+        assert body["status"] == "completed"
+        assert isinstance(body["manufacturability_score"], int)
+        assert "part_metadata" in body
+        assert "bounding_box" in body["part_metadata"]
+
+    def test_issues_include_three_js_highlights(self, client):
+        body = client.post("/analyze-mock").json()
+
+        assert len(body["issues"]) == 2
+        for issue in body["issues"]:
+            highlight = issue["three_js_highlight"]
+            assert highlight["type"] == "bounding_box"
+            assert {"min", "max", "center", "color"} <= highlight.keys()
+
+
+class TestUpload:
+    def _upload(self, client, filename="bracket.stl"):
+        return client.post(
+            "/upload/",
+            files={"file": (filename, b"solid mock-geometry", "application/octet-stream")},
+        )
+
+    def test_returns_202_and_dispatches_celery_task(self, client):
+        with patch.object(
+            main.extract_geometry_task,
+            "delay",
+            return_value=SimpleNamespace(id="task-123"),
+        ) as mock_delay:
+            response = self._upload(client)
+
+        assert response.status_code == 202
+        mock_delay.assert_called_once_with("bracket.stl")
+
+    def test_response_body_contains_task_info(self, client):
+        with patch.object(
+            main.extract_geometry_task,
+            "delay",
+            return_value=SimpleNamespace(id="task-123"),
+        ):
+            body = self._upload(client).json()
+
+        assert body["task_id"] == "task-123"
+        assert body["filename"] == "bracket.stl"
+        assert body["status"] == "processing"
+
+    def test_missing_file_returns_422(self, client):
+        response = client.post("/upload/")
+        assert response.status_code == 422
+
+
+class TestErrorHandlers:
+    def test_422_uses_standard_error_envelope(self, client):
+        # Posting /upload/ without a file triggers a request validation error.
+        response = client.post("/upload/")
+
+        assert response.status_code == 422
+        error = response.json()["error"]
+        assert error["code"] == 422
+        assert error["type"] == "validation_error"
+        assert error["message"] == "Request validation failed."
+        assert error["details"]  # pydantic per-field errors are preserved
+
+    def test_http_exception_uses_standard_error_envelope(self, client):
+        response = client.get("/route-that-does-not-exist")
+
+        assert response.status_code == 404
+        error = response.json()["error"]
+        assert error["code"] == 404
+        assert error["type"] == "http_error"
+
+    def test_unhandled_exception_returns_standard_500(self):
+        # raise_server_exceptions=False lets the response through instead of
+        # re-raising the error in the test process.
+        client = TestClient(main.app, raise_server_exceptions=False)
+        with patch.object(
+            main.extract_geometry_task, "delay", side_effect=RuntimeError("boom")
+        ):
+            response = client.post(
+                "/upload/", files={"file": ("bracket.stl", b"solid mock-geometry")}
+            )
+
+        assert response.status_code == 500
+        assert response.json() == {
+            "error": {
+                "code": 500,
+                "type": "internal_server_error",
+                "message": "An unexpected internal error occurred.",
+            }
+        }
