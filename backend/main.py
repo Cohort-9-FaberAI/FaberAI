@@ -1,6 +1,10 @@
 from celery.result import AsyncResult
-from fastapi import FastAPI, HTTPException, UploadFile, status
+from fastapi import FastAPI, HTTPException, Request, UploadFile, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult
 from app.crud import insert_analysis_result, get_analysis_by_id
@@ -10,6 +14,53 @@ app = FastAPI(
     description="AI-powered manufacturability review API for CAD parts.",
     version="0.1.0",
 )
+
+
+def _error_response(status_code: int, error_type: str, message, details=None) -> JSONResponse:
+    """
+    Builds the standardized error envelope used by all exception handlers:
+    {"error": {"code": <int>, "type": <slug>, "message": <str>, "details": <optional>}}
+    """
+    error = {"code": status_code, "type": error_type, "message": message}
+    if details is not None:
+        error["details"] = details
+    return JSONResponse(status_code=status_code, content={"error": error})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """
+    Wraps HTTPExceptions raised by routes (e.g. 404s) in the standard envelope
+    instead of FastAPI's default {"detail": ...} shape.
+    """
+    return _error_response(exc.status_code, "http_error", exc.detail)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Standardizes 422 Unprocessable Entity responses, keeping pydantic's
+    per-field error list under "details".
+    """
+    return _error_response(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "validation_error",
+        "Request validation failed.",
+        details=jsonable_encoder(exc.errors()),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Catch-all for unexpected errors: returns a standard 500 envelope without
+    leaking internal exception details to the client.
+    """
+    return _error_response(
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        "internal_server_error",
+        "An unexpected internal error occurred.",
+    )
 
 @app.get("/", tags=["Health"])
 def health_check():
