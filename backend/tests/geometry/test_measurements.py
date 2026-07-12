@@ -38,8 +38,6 @@ OCC_BBOX_ATOL = 1e-5    # OCC's Bnd_Box adds a small internal safety gap
                         # (observed ~1e-7), so corners aren't bit-exact zero
 
 
-
-# Fixtures: known solids with analytical answers
 @pytest.fixture
 def cube():
     """10 x 10 x 10 mm cube, corner at origin."""
@@ -91,8 +89,6 @@ def hollow_box():
     }
 
 
-
-# Mesh (STL / trimesh) path
 def test_cube_mesh(cube):
     mesh, expected = cube
     bb = compute_bbox_mesh(mesh)
@@ -202,7 +198,6 @@ def test_load_geometry_stl_end_to_end(cube, tmp_path):
 
 
 
-# OCC (STEP) path — skipped unless pythonOCC is installed
 @pytest.mark.skipif(not HAS_OCC, reason="pythonOCC not installed in this environment")
 class TestOccPath:
     """Same solids, generated via OCC's BRepPrimAPI, checked via the OCC

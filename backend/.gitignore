@@ -10,3 +10,4 @@ env/
 Thumbs.db
 .vscode/
 tests/geometry/fixtures/
+try_all_fixtures.py
