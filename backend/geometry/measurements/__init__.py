@@ -17,6 +17,7 @@ from .centroid import compute_center_mass_occ, compute_center_mass_mesh
 from .inertia import compute_moment_inertia_occ, compute_moment_inertia_mesh
 from .reliability import is_mesh_reliable, attempt_mesh_repair
 
+
 __all__ = [
     "compute_bbox_occ",
     "compute_bbox_mesh",
