@@ -1,8 +1,9 @@
 """
 Unit tests for the FastAPI routes in main.py.
 
-The Celery dispatch in /upload/ is mocked so no Redis broker is required,
-and Supabase credentials are faked in conftest.py so no database is touched.
+The Supabase Storage upload and Celery dispatch in /upload/ are mocked so no
+storage bucket or Redis broker is required, and Supabase credentials are faked
+in conftest.py so no database is touched.
 """
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -53,8 +54,18 @@ class TestUpload:
             files={"file": (filename, b"solid mock-geometry", "application/octet-stream")},
         )
 
+    # What upload_cad_file_to_storage returns for bracket.stl; mocked so the
+    # tests never talk to real Supabase Storage.
+    STORAGE_RESULT = {
+        "storage_path": "uploads/mock-uuid.stl",
+        "public_url": "https://test-project.supabase.co/storage/v1/object/public/cad-uploads/uploads/mock-uuid.stl",
+        "original_filename": "bracket.stl",
+    }
+
     def test_returns_202_and_dispatches_celery_task(self, client):
         with patch.object(
+            main, "upload_cad_file_to_storage", return_value=self.STORAGE_RESULT
+        ), patch.object(
             main.extract_geometry_task,
             "delay",
             return_value=SimpleNamespace(id="task-123"),
@@ -62,10 +73,14 @@ class TestUpload:
             response = self._upload(client)
 
         assert response.status_code == 202
-        mock_delay.assert_called_once_with("bracket.stl")
+        mock_delay.assert_called_once_with(
+            self.STORAGE_RESULT["public_url"], "bracket.stl"
+        )
 
     def test_response_body_contains_task_info(self, client):
         with patch.object(
+            main, "upload_cad_file_to_storage", return_value=self.STORAGE_RESULT
+        ), patch.object(
             main.extract_geometry_task,
             "delay",
             return_value=SimpleNamespace(id="task-123"),
