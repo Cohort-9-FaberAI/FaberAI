@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult
 from app.crud import insert_analysis_result, get_analysis_by_id
+from app.services.storage import upload_cad_file_to_storage
 
 app = FastAPI(
     title="FaberAI Backend",
@@ -72,16 +73,26 @@ def health_check():
 
 @app.post("/upload/", status_code=status.HTTP_202_ACCEPTED, tags=["Upload"])
 async def upload_cad_file(file: UploadFile):
-    file_name = file.filename
-    
-    # Dispara a tarefa assíncrona
-    task = extract_geometry_task.delay(file_name)
-    
+    """
+    Accepts a CAD file (STEP or STL), uploads it to Supabase Storage,
+    and dispatches a background Celery task for geometry analysis.
+    Returns the task ID for status polling.
+    """
+    # Upload file to Supabase Storage and get back the URL
+    upload_result = upload_cad_file_to_storage(file)
+ 
+    # Dispatch Celery task with the storage URL instead of local filename
+    task = extract_geometry_task.delay(
+        upload_result["public_url"],
+        upload_result["original_filename"],
+    )
+ 
     return {
-        "message": "File received successfully. Processing started in background.",
+        "message": "File received and uploaded successfully. Processing started in background.",
         "task_id": task.id,
-        "filename": file_name,
-        "status": "processing"
+        "filename": upload_result["original_filename"],
+        "storage_path": upload_result["storage_path"],
+        "status": "processing",
     }
 
 @app.get("/tasks/{task_id}", tags=["Tasks"])
