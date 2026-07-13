@@ -1,0 +1,14 @@
+# Ruff configuration for the FaberAI backend (used by CI: .github/workflows/ci.yml).
+# Default rule set (E4/E7/E9, F). Pre-existing violations are baselined below
+# so CI starts green without touching application code; remove entries as the
+# underlying code gets cleaned up.
+
+[lint.per-file-ignores]
+# Imports app.database for its side effects / re-export.
+"core/workers.py" = ["F401"]
+# Legacy build123d loader kept alongside the pythonocc one; uses star imports.
+"geometry/loaders/step_loader.py" = ["F401", "F403", "F405"]
+# Env vars must be set before importing main, forcing late imports.
+"tests/conftest.py" = ["E402"]
+# `I` is the conventional name for an inertia tensor; unused OCC import.
+"tests/geometry/test_measurements.py" = ["E741", "F401"]
