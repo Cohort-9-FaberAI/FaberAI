@@ -1,4 +1,5 @@
 from OCP.BRepAdaptor import BRepAdaptor_Surface
+from build123d import *
 
 def classify_surface_occ(face) -> dict:
     geom_type = face.geom_type

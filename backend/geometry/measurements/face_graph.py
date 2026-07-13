@@ -5,7 +5,9 @@ from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 from OCP.TopoDS import TopoDS
 from OCP.BRepAdaptor import BRepAdaptor_Curve
 from OCP.gp import gp_Pnt, gp_Vec
-
+import numpy as np
+from .surface_classifier import classify_surface_occ
+from build123d import *
 
 def compute_face_adjacency(shape) -> TopTools_IndexedDataMapOfShapeListOfShape:
   topo_shape = shape.wrapped if hasattr(shape, "wrapped") else shape
