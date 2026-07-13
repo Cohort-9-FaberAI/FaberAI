@@ -1,5 +1,7 @@
 from celery import Celery
 from app.database import supabase
+from app.crud import insert_analysis_result
+from app.schemas import AnalysisResult, AnalysisStatus
 from app.services.geometry_engine_adapter import run_geometry_engine
 import tempfile
 import os
@@ -58,7 +60,17 @@ def extract_geometry_task(file_url: str, original_filename: str):
         result = run_geometry_engine(tmp_path, original_filename)
         print(f"[WORKER] Processing complete for: {original_filename}")
 
-        return result
+        # Persist the analysis so /tasks/{task_id} can fetch it from Supabase
+        analysis = AnalysisResult(
+            filename=original_filename,
+            status=AnalysisStatus.completed,
+            manufacturability_score=result["mock_score"],
+        )
+        insert_analysis_result(analysis)
+        print(f"[WORKER] Analysis result persisted: {analysis.analysis_id}")
+
+        # Expose analysis_id so the status endpoint can look up the record
+        return {**result, "analysis_id": analysis.analysis_id}
 
     finally:
         # Always clean up the temp file, even if processing fails
