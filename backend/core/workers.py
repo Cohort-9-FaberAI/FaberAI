@@ -1,6 +1,6 @@
-import time
 from celery import Celery
 from app.database import supabase
+from app.services.geometry_engine_adapter import run_geometry_engine
 import tempfile
 import os
 import requests
@@ -54,18 +54,11 @@ def extract_geometry_task(file_url: str, original_filename: str):
 
         print(f"[WORKER] File downloaded to temp path: {tmp_path}")
 
-        # --- Geometry engine will be called here ---
-        # e.g. result = run_geometry_engine(tmp_path)
-        # Placeholder simulation until DS team integrates:
-        time.sleep(5)
-        mock_score = 85
+        # Delegate analysis to the geometry engine adapter (currently a mock)
+        result = run_geometry_engine(tmp_path, original_filename)
         print(f"[WORKER] Processing complete for: {original_filename}")
 
-        return {
-            "status": "completed",
-            "file": original_filename,
-            "mock_score": mock_score,
-        }
+        return result
 
     finally:
         # Always clean up the temp file, even if processing fails
