@@ -1,0 +1,25 @@
+name: faberai-ds
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.11
+
+  # Scientific stack
+  - numpy>=1.24
+  - scipy>=1.10
+  - networkx>=3.0
+
+  # CAD kernel
+  - occt
+  - pythonocc-core
+
+  # CAD libraries
+  - cadquery>=2.5
+
+  - pip
+
+  # Pure Python packages
+  - pip:
+      - build123d>=0.6.0
+      - trimesh>=4.0
