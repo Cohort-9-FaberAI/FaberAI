@@ -59,6 +59,22 @@ def load_geometry(path: str) -> GeometryModel:
         model.surface_area_mm2 = compute_surface_area_occ(shape)
         model.center_mass = compute_center_mass_occ(shape)
         model.moment_of_inertia = compute_moment_inertia_occ(shape)
+        try:
+            from geometry.measurements.face_extraction import extract_faces_occ
+            from geometry.measurements.face_graph import build_face_graph, compute_face_adjacency
+            from geometry.measurements.face_extraction import graph_to_faces_and_edges
+            
+            vertices, indices = extract_faces_occ(shape)
+            face_graph = build_face_graph(shape.faces(), shape)
+            faces_list, edges_list = graph_to_faces_and_edges(face_graph, vertices, indices)
+            
+            model.faces = faces_list
+            model.edges = edges_list
+        except Exception as e:
+            # Topology extraction is optional; log and continue
+            print(f"Warning: face/edge extraction failed for {path}: {e}")
+            model.faces = []
+            model.edges = []
         return model
 
     else:  # SourceFormat.STL

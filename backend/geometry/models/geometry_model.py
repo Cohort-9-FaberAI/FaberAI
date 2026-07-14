@@ -7,6 +7,10 @@ from typing import Any, Optional
 
 import numpy as np
 
+from backend.geometry.models.edge import Edge
+from backend.geometry.models.face import Face
+from backend.geometry.models.wall_sample import WallSample
+
 from .bounding_box import BoundingBox
 from .enums import SourceFormat
 
@@ -41,6 +45,15 @@ class GeometryModel:
     # kept so later pipeline stages (DFM checks, 3D highlighting) can
     # still reach into the original geometry.
     raw: Any = field(default=None, repr=False)
+
+    # Additional data structures for the faces, edges, and wall samples of the model.
+    faces: list[Face] = field(default_factory=list)
+    edges: list[Edge] = field(default_factory=list)
+
+    wall_samples: list[WallSample] = field(default_factory=list)
+    nominal_wall: float
+
+    face_graph: dict[int, list[int]]
 
     def as_dict(self) -> dict:
         """Flat, JSON-friendly summary — handy for API responses/tests."""
