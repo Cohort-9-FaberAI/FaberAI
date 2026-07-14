@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 import numpy as np
 
-from geometry.models.enums import CurveType
+from .enums import CurveType
 
 
 @dataclass

@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 import numpy as np
 
-from backend.geometry.models.bounding_box import BoundingBox
-from geometry.models.enums import SurfaceType
+from .bounding_box import BoundingBox
+from .enums import SurfaceType
 
 
 @dataclass
