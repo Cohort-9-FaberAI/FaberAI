@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import numpy as np
 
+from backend.geometry.models.bounding_box import BoundingBox
 from geometry.models.enums import SurfaceType
 
 
@@ -24,7 +25,7 @@ class Face:
     surface_type: SurfaceType
 
     # Bounding box of the face
-    bounding_box: Optional["BoundingBox"] = None
+    bounding_box: Optional[BoundingBox] = None
 
     # Principal curvature (optional for STEP, estimated for STL)
     mean_curvature: Optional[float] = None

@@ -61,7 +61,7 @@ def load_geometry(path: str) -> GeometryModel:
         model.moment_of_inertia = compute_moment_inertia_occ(shape)
         try:
             from geometry.measurements.face_extraction import extract_faces_occ
-            from geometry.measurements.face_graph import build_face_graph, compute_face_adjacency
+            from geometry.measurements.face_graph import build_face_graph
             from geometry.measurements.face_extraction import graph_to_faces_and_edges
             
             vertices, indices = extract_faces_occ(shape)
