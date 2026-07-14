@@ -8,7 +8,10 @@ from typing import Any, Optional
 import numpy as np
 
 from .bounding_box import BoundingBox
+from .edge import Edge
 from .enums import SourceFormat
+from .face import Face
+from .wall_sample import WallSample
 
 
 @dataclass
@@ -41,6 +44,13 @@ class GeometryModel:
     # kept so later pipeline stages (DFM checks, 3D highlighting) can
     # still reach into the original geometry.
     raw: Any = field(default=None, repr=False)
+
+    # Additional data structures for the faces, edges, and wall samples of the model.
+    faces: list[Face] = field(default_factory=list)
+    edges: list[Edge] = field(default_factory=list)
+    wall_samples: list[WallSample] = field(default_factory=list)
+    nominal_wall: Optional[float] = None
+    face_graph: Optional[dict[int, list[int]]] = None
 
     def as_dict(self) -> dict:
         """Flat, JSON-friendly summary — handy for API responses/tests."""
