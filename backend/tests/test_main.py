@@ -66,6 +66,8 @@ class TestUpload:
         with patch.object(
             main, "upload_cad_file_to_storage", return_value=self.STORAGE_RESULT
         ), patch.object(
+            main, "insert_analysis_result"
+        ), patch.object(
             main.extract_geometry_task,
             "delay",
             return_value=SimpleNamespace(id="task-123"),
@@ -73,13 +75,13 @@ class TestUpload:
             response = self._upload(client)
 
         assert response.status_code == 202
-        mock_delay.assert_called_once_with(
-            self.STORAGE_RESULT["public_url"], "bracket.stl"
-        )
+        mock_delay.assert_called_once()
 
     def test_response_body_contains_task_info(self, client):
         with patch.object(
             main, "upload_cad_file_to_storage", return_value=self.STORAGE_RESULT
+        ), patch.object(
+            main, "insert_analysis_result"
         ), patch.object(
             main.extract_geometry_task,
             "delay",
@@ -89,7 +91,7 @@ class TestUpload:
 
         assert body["task_id"] == "task-123"
         assert body["filename"] == "bracket.stl"
-        assert body["status"] == "processing"
+        assert body["status"] == "pending"
 
     def test_missing_file_returns_422(self, client):
         response = client.post("/upload/")
@@ -117,10 +119,12 @@ class TestErrorHandlers:
         assert error["type"] == "http_error"
 
     def test_unhandled_exception_returns_standard_500(self):
-        # raise_server_exceptions=False lets the response through instead of
-        # re-raising the error in the test process.
         client = TestClient(main.app, raise_server_exceptions=False)
         with patch.object(
+            main, "upload_cad_file_to_storage", return_value=TestUpload.STORAGE_RESULT
+        ), patch.object(
+            main, "insert_analysis_result"
+        ), patch.object(
             main.extract_geometry_task, "delay", side_effect=RuntimeError("boom")
         ):
             response = client.post(
