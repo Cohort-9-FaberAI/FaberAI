@@ -7,7 +7,7 @@ from postgrest.exceptions import APIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult, AnalysisStatus
-from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
+from app.crud import insert_analysis_result, get_analysis_by_id
 from app.services.storage import upload_cad_file_to_storage
 
 app = FastAPI(
