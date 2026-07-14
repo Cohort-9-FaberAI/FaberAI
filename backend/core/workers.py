@@ -1,6 +1,6 @@
 from celery import Celery
 from app.database import supabase
-from app.crud import insert_analysis_result
+from app.crud import insert_analysis_result, update_analysis_status
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.services.geometry_engine_adapter import run_geometry_engine
 import tempfile
@@ -25,25 +25,47 @@ celery_app.conf.update(
 )
 
 
-@celery_app.task(name="extract_geometry_task")
-def extract_geometry_task(file_url: str, original_filename: str):
+@celery_app.task(
+    name="extract_geometry_task",
+    bind=True,
+    max_retries=3,
+    autoretry_for=(
+        requests.exceptions.Timeout,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.RequestException,
+    ),
+    retry_kwargs={
+        "countdown": 5,
+    },
+    retry_backoff=True,
+    retry_backoff_max=60,     #cap backoff at 60 seconds
+    retry_jitter=True,       
+)
+def extract_geometry_task(self, file_url: str, original_filename: str, analysis_id: str):
     """
-    Downloads the CAD file from Supabase Storage into a secure temporary file,
-    passes the temporary path to the geometry engine, then cleans up automatically.
+    Full lifecycle Celery task for CAD file analysis:
+    1. Sets status to processing in Supabase
+    2. Downloads the CAD file from Supabase Storage into a secure temp file
+    3. Passes the temp path to the geometry engine
+    4. Saves the result and sets status to completed
+    5. On any failure, sets status to failed
+    6. Retries automatically on network errors with exponential backoff
 
     Args:
         file_url: The public Supabase Storage URL of the uploaded CAD file.
-        original_filename: The original name of the file for logging and context.
+        original_filename: The original name of the file for logging.
+        analysis_id: The Supabase record ID to update throughout the lifecycle.
     """
     print(f"[WORKER] Starting processing for: {original_filename}")
-    print(f"[WORKER] Downloading from: {file_url}")
-
-    # Determine file extension from original filename
+    update_analysis_status(analysis_id, AnalysisStatus.processing.value)
+    print(f"[WORKER] Status set to processing for: {analysis_id}")
+    
     file_extension = original_filename.split(".")[-1].lower()
-
     tmp_path = None
+
     try:
-        # Download file from Supabase Storage into a secure temp file
+        #file from Supabase Storage
+        print(f"[WORKER] Downloading from: {file_url}")
         response = requests.get(file_url, timeout=30)
         response.raise_for_status()
 
@@ -56,21 +78,31 @@ def extract_geometry_task(file_url: str, original_filename: str):
 
         print(f"[WORKER] File downloaded to temp path: {tmp_path}")
 
-        # Delegate analysis to the geometry engine adapter (currently a mock)
         result = run_geometry_engine(tmp_path, original_filename)
         print(f"[WORKER] Processing complete for: {original_filename}")
 
-        # Persist the analysis so /tasks/{task_id} can fetch it from Supabase
-        analysis = AnalysisResult(
-            filename=original_filename,
-            status=AnalysisStatus.completed,
-            manufacturability_score=result["mock_score"],
+        update_analysis_status(
+            analysis_id,
+            AnalysisStatus.completed.value,
+            extra_fields={
+                "manufacturability_score": result.get("mock_score"),
+                "results_json": result,
+            }
         )
-        insert_analysis_result(analysis)
-        print(f"[WORKER] Analysis result persisted: {analysis.analysis_id}")
+        print(f"[WORKER] Status set to completed for: {analysis_id}")
 
-        # Expose analysis_id so the status endpoint can look up the record
-        return {**result, "analysis_id": analysis.analysis_id}
+        return {**result, "analysis_id": analysis_id}
+
+    except Exception as exc:
+        if self.request.retries >= self.max_retries:
+            print(f"[WORKER] All retries exhausted for: {original_filename}. Marking as failed.")
+            update_analysis_status(
+                analysis_id,
+                AnalysisStatus.failed.value,
+            )
+        else:
+            print(f"[WORKER] Error on attempt {self.request.retries + 1}, retrying: {exc}")
+        raise
 
     finally:
         # Always clean up the temp file, even if processing fails

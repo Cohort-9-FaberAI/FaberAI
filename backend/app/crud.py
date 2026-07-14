@@ -43,3 +43,31 @@ def get_analysis_by_id(analysis_id: str) -> dict | None:
     )
 
     return response.data if response.data else None
+
+def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = None) -> dict:
+    """
+    Updates the status of an existing analysis record in Supabase.
+    Optionally updates additional fields (e.g. manufacturability_score, results_json)
+    at the same time as the status change.
+
+    Args:
+        analysis_id: The UUID of the analysis record to update.
+        status: The new status string (e.g. "processing", "completed", "failed").
+        extra_fields: Optional dict of additional columns to update in the same call.
+
+    Returns:
+        The updated row data from Supabase.
+    """
+    payload = {"status": status}
+    if extra_fields:
+        payload.update(extra_fields)
+
+    response = (
+        supabase
+        .table(TABLE_NAME)
+        .update(payload)
+        .eq("analysis_id", analysis_id)
+        .execute()
+    )
+
+    return response.data

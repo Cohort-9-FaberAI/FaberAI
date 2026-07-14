@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
-from app.schemas import AnalysisResult
-from app.crud import insert_analysis_result, get_analysis_by_id
+from app.schemas import AnalysisResult, AnalysisStatus
+from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
 from app.services.storage import upload_cad_file_to_storage
 
 app = FastAPI(
@@ -75,24 +75,34 @@ def health_check():
 async def upload_cad_file(file: UploadFile):
     """
     Accepts a CAD file (STEP or STL), uploads it to Supabase Storage,
-    and dispatches a background Celery task for geometry analysis.
-    Returns the task ID for status polling.
+    creates a pending record in Supabase, and dispatches a background
+    Celery task for geometry analysis.
+    Returns the task ID and analysis ID for status polling.
     """
     # Upload file to Supabase Storage and get back the URL
     upload_result = upload_cad_file_to_storage(file)
- 
-    # Dispatch Celery task with the storage URL instead of local filename
+
+    # Create a pending record in Supabase before dispatching the task
+    analysis = AnalysisResult(
+        filename=upload_result["original_filename"],
+        status=AnalysisStatus.pending,
+    )
+    insert_analysis_result(analysis)
+
+    # Pass analysis_id to the worker so it can update the record
     task = extract_geometry_task.delay(
         upload_result["public_url"],
         upload_result["original_filename"],
+        analysis.analysis_id,
     )
- 
+
     return {
         "message": "File received and uploaded successfully. Processing started in background.",
         "task_id": task.id,
+        "analysis_id": analysis.analysis_id,
         "filename": upload_result["original_filename"],
         "storage_path": upload_result["storage_path"],
-        "status": "processing",
+        "status": "pending",
     }
 
 @app.get("/tasks/{task_id}", tags=["Tasks"])
