@@ -106,17 +106,37 @@ async def upload_cad_file(file: UploadFile):
     }
 
 @app.get("/tasks/{task_id}", tags=["Tasks"])
-def get_task_status(task_id: str):
+def get_task_status(task_id: str, analysis_id: str | None = None):
     """
     Polls the status of a background analysis task.
 
-    Returns the current Celery state (PENDING, PROCESSING, SUCCESS, FAILURE).
-    On SUCCESS, fetches the final validated analysis result from Supabase.
-    Note: Celery reports unknown task ids as PENDING, so a 404 is only
-    possible once a task has finished but no stored result can be found.
+    Returns the current task state. When an analysis_id is supplied, the API
+    prefers the Supabase analysis record so the UI can see completed/failed
+    status immediately even if Celery still reports PENDING for a moment.
     """
     task_result = AsyncResult(task_id, app=celery_app)
     state = task_result.state
+
+    if analysis_id:
+        try:
+            record = get_analysis_by_id(analysis_id)
+        except APIError:
+            record = None
+
+        if record is not None:
+            db_status = record.get("status")
+            if db_status == "completed":
+                results_json = record.get("results_json")
+                if results_json:
+                    analysis = AnalysisResult.model_validate(results_json)
+                    return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id, "result": analysis}
+                return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id}
+
+            if db_status == "failed":
+                return {"task_id": task_id, "status": "FAILED", "analysis_id": analysis_id}
+
+            if db_status in {"pending", "processing"}:
+                return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
 
     if state == "FAILURE":
         return {
@@ -127,14 +147,14 @@ def get_task_status(task_id: str):
 
     if state == "SUCCESS":
         task_output = task_result.result
-        analysis_id = (
-            task_output.get("analysis_id", task_id)
+        resolved_analysis_id = (
+            task_output.get("analysis_id", analysis_id or task_id)
             if isinstance(task_output, dict)
-            else task_id
+            else analysis_id or task_id
         )
 
         try:
-            record = get_analysis_by_id(analysis_id)
+            record = get_analysis_by_id(resolved_analysis_id)
         except APIError:
             record = None
 
@@ -145,7 +165,7 @@ def get_task_status(task_id: str):
             )
 
         analysis = AnalysisResult.model_validate(record["results_json"])
-        return {"task_id": task_id, "status": "SUCCESS", "result": analysis}
+        return {"task_id": task_id, "status": "SUCCESS", "analysis_id": resolved_analysis_id, "result": analysis}
 
     # Celery uses STARTED/RETRY for in-flight tasks; expose them as PROCESSING
     status_map = {"STARTED": "PROCESSING", "RETRY": "PROCESSING"}
