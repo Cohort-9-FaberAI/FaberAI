@@ -72,7 +72,7 @@ def load_geometry(path: str) -> GeometryModel:
             model.edges = edges_list
             # Serialize the adjacency graph as {face_id: [neighbour_ids, ...]}
             # so downstream consumers (adapter, API) don't need networkx.
-            import networkx as nx
+            # import networkx as nx
             model.face_graph = {
                 node: list(face_graph.neighbors(node))
                 for node in face_graph.nodes()
