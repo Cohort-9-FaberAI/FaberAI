@@ -4,6 +4,10 @@ from OCP.TopExp import TopExp
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 from OCP.TopoDS import TopoDS
 from OCP.BRepAdaptor import BRepAdaptor_Curve
+from OCP.GeomAbs import (
+    GeomAbs_Line, GeomAbs_Circle, GeomAbs_Ellipse,
+    GeomAbs_BSplineCurve, GeomAbs_BezierCurve,
+)
 from OCP.gp import gp_Pnt, gp_Vec
 import numpy as np
 from .surface_classifier import classify_surface_occ
@@ -21,6 +25,35 @@ def _match_face_index(topo_face, face_index):
     if face.wrapped.IsSame(topo_face):
       return idx
   return None
+
+
+def _edge_endpoints_and_curve_type(edge) -> dict:
+  """Extract start point, end point, and curve type from a TopoDS_Edge."""
+  try:
+    adaptor = BRepAdaptor_Curve(edge)
+    t_first = adaptor.FirstParameter()
+    t_last = adaptor.LastParameter()
+    p_start = gp_Pnt()
+    p_end = gp_Pnt()
+    adaptor.D0(t_first, p_start)
+    adaptor.D0(t_last, p_end)
+
+    curve_type_map = {
+      GeomAbs_Line: "line",
+      GeomAbs_Circle: "circle",
+      GeomAbs_Ellipse: "ellipse",
+      GeomAbs_BSplineCurve: "spline",
+      GeomAbs_BezierCurve: "spline",
+    }
+    curve_type = curve_type_map.get(adaptor.GetType(), "unknown")
+
+    return {
+      "start_point": (p_start.X(), p_start.Y(), p_start.Z()),
+      "end_point": (p_end.X(), p_end.Y(), p_end.Z()),
+      "curve_type": curve_type,
+    }
+  except Exception:
+    return {"start_point": None, "end_point": None, "curve_type": "unknown"}
 
 
 def _edge_convexity(edge, n1, n2) -> bool:
@@ -93,12 +126,16 @@ def build_face_graph(faces, shape=None) -> nx.Graph:
     cosang = float(np.clip(np.dot(n1v, n2v), -1.0, 1.0))
     angle_deg = float(np.degrees(np.arccos(cosang)))
     convex = _edge_convexity(edge, n1v, n2v)
+    ep = _edge_endpoints_and_curve_type(edge)
 
     graph.add_edge(
         id1, id2,
         edge_length=edge_length,
         angle=angle_deg,
         convex=convex,
+        start_point=ep["start_point"],
+        end_point=ep["end_point"],
+        curve_type=ep["curve_type"],
     )
 
   return graph
