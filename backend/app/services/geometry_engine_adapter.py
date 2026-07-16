@@ -43,6 +43,10 @@ class FaceSummary(BaseModel):
     centroid: Vector3
     normal: Vector3
     surface_type: str
+    # Typed geometry parameters — populated when surface_type provides them
+    radius: Optional[float] = None
+    axis: Optional[Vector3] = None
+    origin: Optional[Vector3] = None
 
 
 class EdgeSummary(BaseModel):
@@ -148,6 +152,9 @@ def _to_face_summary(face: Any) -> FaceSummary:
         centroid=_to_vector3(face.centroid) or Vector3(x=0.0, y=0.0, z=0.0),
         normal=_to_vector3(face.normal) or Vector3(x=0.0, y=0.0, z=0.0),
         surface_type=getattr(face.surface_type, "value", str(face.surface_type)),
+        radius=float(face.radius) if face.radius is not None else None,
+        axis=_to_vector3(face.axis) if face.axis is not None else None,
+        origin=_to_vector3(face.origin) if face.origin is not None else None,
     )
 
 

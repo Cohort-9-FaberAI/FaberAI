@@ -39,30 +39,56 @@ def graph_to_faces_and_edges(face_graph, vertices_array, face_indices_array):
     # Convert nodes (faces) to Face objects
     for node_id, attrs in face_graph.nodes(data=True):
         surface_type_str = attrs.get("surface_type", "UNKNOWN").lower()
-        surface_type = SurfaceType[surface_type_str.upper()] if surface_type_str.upper() in SurfaceType.__members__ else SurfaceType.UNKNOWN
-        
+        surface_type = (
+            SurfaceType[surface_type_str.upper()]
+            if surface_type_str.upper() in SurfaceType.__members__
+            else SurfaceType.UNKNOWN
+        )
+
         centroid = attrs.get("centroid")
         normal = attrs.get("normal")
-        
+        surface_detail = attrs.get("surface", {})
+
+        # Pull typed geometry params out of the surface detail dict so they
+        # land on the Face model's dedicated fields (radius, axis, origin).
+        radius = surface_detail.get("radius")
+        axis_dir = surface_detail.get("axis_direction")
+        axis_loc = surface_detail.get("axis_location") or surface_detail.get("center")
+
         face = Face(
             id=node_id,
             area=float(attrs.get("area", 0.0)),
             centroid=np.array(centroid) if centroid else np.zeros(3),
             normal=np.array(normal) if normal else np.zeros(3),
             surface_type=surface_type,
+            radius=float(radius) if radius is not None else None,
+            axis=np.array(axis_dir) if axis_dir is not None else None,
+            origin=np.array(axis_loc) if axis_loc is not None else None,
             adjacent_faces=[n for n in face_graph.neighbors(node_id)],
             raw=attrs.get("face"),
         )
         faces_list.append(face)
     
-    # Convert edges (graph edges) to Edge objects
-    for u, v, attrs in face_graph.edges(data=True):
+    # Convert edges (graph edges) to Edge objects.
+    # build_face_graph stores start_point / end_point on the edge when
+    # available; fall back to zeros when they were not captured.
+    for edge_id, (u, v, attrs) in enumerate(face_graph.edges(data=True)):
+        start_raw = attrs.get("start_point")
+        end_raw = attrs.get("end_point")
+
+        curve_type_str = attrs.get("curve_type", "unknown").upper()
+        curve_type = (
+            CurveType[curve_type_str]
+            if curve_type_str in CurveType.__members__
+            else CurveType.UNKNOWN
+        )
+
         edge = Edge(
-            id=len(edges_list),
+            id=edge_id,
             length=float(attrs.get("edge_length", 0.0)),
-            curve_type=CurveType.UNKNOWN,  # can be refined later
-            start_point=np.zeros(3),  # would need edge geometry to compute
-            end_point=np.zeros(3),
+            curve_type=curve_type,
+            start_point=np.array(start_raw) if start_raw is not None else np.zeros(3),
+            end_point=np.array(end_raw) if end_raw is not None else np.zeros(3),
             adjacent_faces=(u, v),
             convex=attrs.get("convex"),
             dihedral_angle=float(attrs.get("angle", 0.0)),
