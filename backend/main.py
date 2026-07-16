@@ -195,6 +195,19 @@ def analyze_mock():
                 "max": {"x": 120.0, "y": 80.0, "z": 45.0}
             }
         },
+        # --- NOVO CAMPO ADICIONADO AQUI ---
+        "geometry_data": {
+            "source_format": "stl",
+            "bounding_box": {
+                "min": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "max": {"x": 120.0, "y": 80.0, "z": 45.0}
+            },
+            "volume_mm3": 15420.5,
+            "surface_area_mm2": 8930.2,
+            "measurements_reliable": True,
+            "center_mass": {"x": 60.0, "y": 40.0, "z": 22.5}
+        },
+        # ----------------------------------
         "issues": [
             {
                 "issue_id": "issue-001",
