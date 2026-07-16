@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
 from enum import Enum
 import uuid
 
@@ -57,6 +57,10 @@ class AnalysisResult(BaseModel):
     summary: Optional[str] = None
     part_metadata: Optional[PartMetadata] = None
     issues: List[Issue] = []
+    # Raw geometry engine output — passed through as-is, no nested validation.
+    # Carries the full GeometryEngineResponse payload (bounding_box, volume_mm3,
+    # faces, edges, wall_samples, etc.) so nothing gets silently stripped.
+    geometry_data: Optional[Any] = None
 
 
 # --- Database Insert Schema ---

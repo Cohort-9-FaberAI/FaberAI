@@ -81,12 +81,22 @@ def extract_geometry_task(self, file_url: str, original_filename: str, analysis_
         result = run_geometry_engine(tmp_path, original_filename)
         print(f"[WORKER] Processing complete for: {original_filename}")
 
+        # Build a complete AnalysisResult that carries the geometry payload
+        # inside geometry_data so the API can round-trip it without stripping fields.
+        analysis_result = AnalysisResult(
+            analysis_id=analysis_id,
+            filename=original_filename,
+            status=AnalysisStatus.completed,
+            manufacturability_score=result.get("mock_score"),
+            geometry_data=result,
+        )
+
         update_analysis_status(
             analysis_id,
             AnalysisStatus.completed.value,
             extra_fields={
                 "manufacturability_score": result.get("mock_score"),
-                "results_json": result,
+                "results_json": analysis_result.model_dump(),
             }
         )
         print(f"[WORKER] Status set to completed for: {analysis_id}")
