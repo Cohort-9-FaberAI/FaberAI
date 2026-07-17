@@ -9,16 +9,43 @@ Metrics help downstream DFM checks identify problematic geometry:
 from __future__ import annotations
 from dataclasses import dataclass
 
+
 @dataclass
 class MeshQuality:
-    "This is the summary of the mesh quality"
-    is_watertight:bool
-    is_winding_consistent:bool
-    is_volume:bool
+    """Summary of mesh quality flags for a trimesh.Trimesh object."""
+
+    is_watertight: bool
+    is_winding_consistent: bool
+    is_volume: bool
+
 
 def check_mesh_quality(mesh) -> MeshQuality:
-    return MeshQuality(
-        is_watertight=mesh.is_watertight,
-        is_winding_consistent=mesh.is_winding_consistent,
-        is_volume=mesh.is_volume
-    )
+    """
+    Inspect a trimesh.Trimesh and return its quality flags.
+
+    Parameters
+    ----------
+    mesh : trimesh.Trimesh
+        The mesh to inspect.
+
+    Returns
+    -------
+    MeshQuality
+        Populated quality summary.
+
+    Raises
+    ------
+    AttributeError
+        If ``mesh`` does not expose the expected trimesh properties.
+    """
+    try:
+        return MeshQuality(
+            is_watertight=bool(mesh.is_watertight),
+            is_winding_consistent=bool(mesh.is_winding_consistent),
+            is_volume=bool(mesh.is_volume),
+        )
+    except AttributeError as exc:
+        raise AttributeError(
+            f"check_mesh_quality expects a trimesh.Trimesh object; "
+            f"got {type(mesh).__name__}. Original error: {exc}"
+        ) from exc

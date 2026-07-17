@@ -11,6 +11,7 @@ from .bounding_box import BoundingBox
 from .edge import Edge
 from .enums import SourceFormat
 from .face import Face
+from .mesh_quality import MeshQuality
 from .wall_sample import WallSample
 
 
@@ -51,6 +52,17 @@ class GeometryModel:
     wall_samples: list[WallSample] = field(default_factory=list)
     nominal_wall: Optional[float] = None
     face_graph: Optional[dict[int, list[int]]] = None
+
+    # Wall thickness statistics (populated by compute_wall_thickness_occ/mesh)
+    # Imported lazily to avoid circular imports at the type-hint level.
+    wall_thickness_stats: Optional[Any] = None  # WallThicknessStats
+
+    # Mesh quality flags (STL path only; None for STEP)
+    mesh_quality: Optional[MeshQuality] = None
+
+    # Print orientation analysis for the 6 candidate axes
+    # Imported lazily to avoid circular imports at the type-hint level.
+    print_orientations: Optional[Any] = None  # PrintOrientationAnalysis
 
     def as_dict(self) -> dict:
         """Flat, JSON-friendly summary — handy for API responses/tests."""

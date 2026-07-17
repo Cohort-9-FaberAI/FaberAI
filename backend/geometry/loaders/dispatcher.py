@@ -18,7 +18,6 @@ from geometry.measurements import (
     is_mesh_reliable,
 )
 from .step_loader_pythonocc import load_step
-
 from .stl_loader_trimesh import load_stl
 
 
@@ -44,57 +43,138 @@ def load_geometry(path: str) -> GeometryModel:
 
     Dispatches on extension:
         .step / .stp -> pythonOCC path
-        .stl         -> trimesh path (Daniel's stl_loader.py if present)
+        .stl         -> trimesh path
     """
     fmt = get_file_format(path)
 
     if fmt == SourceFormat.STEP:
-        shape = load_step(path)
-        model = GeometryModel(
-            source_format=SourceFormat.STEP, source_path=path, raw=shape
+        return _load_step(path)
+    else:
+        return _load_stl(path)
+
+
+# ---------------------------------------------------------------------------
+# STEP / OCC path
+# ---------------------------------------------------------------------------
+
+def _load_step(path: str) -> GeometryModel:
+    shape = load_step(path)
+    model = GeometryModel(
+        source_format=SourceFormat.STEP, source_path=path, raw=shape
+    )
+
+    # Core measurements
+    model.bounding_box = compute_bbox_occ(shape)
+    model.oriented_bbox = None  # not produced on the OCC path
+    model.volume_mm3 = compute_volume_occ(shape)
+    model.surface_area_mm2 = compute_surface_area_occ(shape)
+    model.center_mass = compute_center_mass_occ(shape)
+    model.moment_of_inertia = compute_moment_inertia_occ(shape)
+
+    # Topology: faces, edges, face graph
+    try:
+        from geometry.measurements.face_extraction import (
+            extract_faces_occ,
+            graph_to_faces_and_edges,
         )
-        model.bounding_box = compute_bbox_occ(shape)
-        model.oriented_bbox = None  # not produced on the OCC path (see measurements)
-        model.volume_mm3 = compute_volume_occ(shape)
-        model.surface_area_mm2 = compute_surface_area_occ(shape)
-        model.center_mass = compute_center_mass_occ(shape)
-        model.moment_of_inertia = compute_moment_inertia_occ(shape)
+        from geometry.measurements.face_graph import build_face_graph
+
+        vertices, indices = extract_faces_occ(shape)
+        face_graph = build_face_graph(shape.faces(), shape)
+        faces_list, edges_list = graph_to_faces_and_edges(face_graph, vertices, indices)
+
+        model.faces = faces_list
+        model.edges = edges_list
+        model.face_graph = {
+            node: list(face_graph.neighbors(node))
+            for node in face_graph.nodes()
+        }
+    except Exception as e:
+        print(f"Warning: face/edge extraction failed for {path}: {e}")
+        model.faces = []
+        model.edges = []
+        model.face_graph = None
+
+    # Wall thickness sampling
+    try:
+        from geometry.measurements.wall_thickness import compute_wall_thickness_occ
+        samples, stats = compute_wall_thickness_occ(shape)
+        model.wall_samples = samples
+        model.wall_thickness_stats = stats
+        model.nominal_wall = stats.median_wall if stats else None
+    except Exception as e:
+        print(f"Warning: wall thickness (OCC) failed for {path}: {e}")
+
+    # Print orientation analysis (requires faces to be populated)
+    if model.faces:
         try:
-            from geometry.measurements.face_extraction import extract_faces_occ
-            from geometry.measurements.face_graph import build_face_graph
-            from geometry.measurements.face_extraction import graph_to_faces_and_edges
-
-            vertices, indices = extract_faces_occ(shape)
-            face_graph = build_face_graph(shape.faces(), shape)
-            faces_list, edges_list = graph_to_faces_and_edges(face_graph, vertices, indices)
-
-            model.faces = faces_list
-            model.edges = edges_list
-            # Serialize the adjacency graph as {face_id: [neighbour_ids, ...]}
-            # so downstream consumers (adapter, API) don't need networkx.
-            # import networkx as nx
-            model.face_graph = {
-                node: list(face_graph.neighbors(node))
-                for node in face_graph.nodes()
-            }
+            from geometry.measurements.print_orientations import compute_print_orientations
+            model.print_orientations = compute_print_orientations(model.faces)
         except Exception as e:
-            # Topology extraction is optional; log and continue
-            print(f"Warning: face/edge extraction failed for {path}: {e}")
-            model.faces = []
-            model.edges = []
-            model.face_graph = None
-        return model
+            print(f"Warning: print orientation analysis failed for {path}: {e}")
 
-    else:  # SourceFormat.STL
-        mesh = load_stl(path)
-        model = GeometryModel(
-            source_format=SourceFormat.STL, source_path=path, raw=mesh
-        )
-        model.bounding_box = compute_bbox_mesh(mesh)
-        model.oriented_bbox = compute_oriented_bbox_mesh(mesh)
-        model.volume_mm3 = compute_volume_mesh(mesh)  # attempts repair in-place
-        model.surface_area_mm2 = compute_surface_area_mesh(mesh)
-        model.center_mass = compute_center_mass_mesh(mesh)
-        model.moment_of_inertia = compute_moment_inertia_mesh(mesh)
-        model.measurements_reliable = is_mesh_reliable(mesh)  # check AFTER repair
-        return model
+    return model
+
+
+# ---------------------------------------------------------------------------
+# STL / trimesh path
+# ---------------------------------------------------------------------------
+
+def _load_stl(path: str) -> GeometryModel:
+    mesh = load_stl(path)
+    model = GeometryModel(
+        source_format=SourceFormat.STL, source_path=path, raw=mesh
+    )
+
+    # Core measurements
+    model.bounding_box = compute_bbox_mesh(mesh)
+    model.oriented_bbox = compute_oriented_bbox_mesh(mesh)
+    model.volume_mm3 = compute_volume_mesh(mesh)   # attempts repair in-place
+    model.surface_area_mm2 = compute_surface_area_mesh(mesh)
+    model.center_mass = compute_center_mass_mesh(mesh)
+    model.moment_of_inertia = compute_moment_inertia_mesh(mesh)
+    model.measurements_reliable = is_mesh_reliable(mesh)  # check AFTER repair
+
+    # Mesh quality flags
+    try:
+        from geometry.models.mesh_quality import check_mesh_quality
+        model.mesh_quality = check_mesh_quality(mesh)
+    except Exception as e:
+        print(f"Warning: mesh quality check failed for {path}: {e}")
+
+    # Wall thickness sampling
+    try:
+        from geometry.measurements.wall_thickness import compute_wall_thickness_mesh
+        samples, stats = compute_wall_thickness_mesh(mesh)
+        model.wall_samples = samples
+        model.wall_thickness_stats = stats
+        model.nominal_wall = stats.median_wall if stats else None
+    except Exception as e:
+        print(f"Warning: wall thickness (mesh) failed for {path}: {e}")
+
+    # Face normals from trimesh as lightweight Face objects for orientation analysis
+    try:
+        from geometry.measurements.print_orientations import compute_print_orientations
+        from geometry.models.face import Face
+        from geometry.models.enums import SurfaceType
+        import numpy as np
+
+        face_normals = mesh.face_normals          # (M, 3)
+        face_areas = mesh.area_faces              # (M,)
+        centroids = mesh.vertices[mesh.faces].mean(axis=1)  # (M, 3)
+
+        pseudo_faces = [
+            Face(
+                id=i,
+                area=float(face_areas[i]),
+                centroid=centroids[i],
+                normal=face_normals[i],
+                surface_type=SurfaceType.UNKNOWN,
+            )
+            for i in range(len(face_normals))
+        ]
+        model.print_orientations = compute_print_orientations(pseudo_faces)
+    except Exception as e:
+        print(f"Warning: print orientation analysis failed for {path}: {e}")
+
+    return model
