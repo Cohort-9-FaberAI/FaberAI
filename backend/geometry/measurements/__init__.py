@@ -16,6 +16,9 @@ from .area import compute_surface_area_occ, compute_surface_area_mesh
 from .centroid import compute_center_mass_occ, compute_center_mass_mesh
 from .inertia import compute_moment_inertia_occ, compute_moment_inertia_mesh
 from .reliability import is_mesh_reliable, attempt_mesh_repair
+from .faceangles import compute_face_angles
+from .wall_thickness import compute_wall_thickness_occ, compute_wall_thickness_mesh, WallThicknessStats
+from .print_orientations import compute_print_orientations, PrintOrientationAnalysis, PrintOrientationResult
 
 
 __all__ = [
@@ -32,4 +35,11 @@ __all__ = [
     "compute_moment_inertia_mesh",
     "is_mesh_reliable",
     "attempt_mesh_repair",
+    "compute_face_angles",
+    "compute_wall_thickness_occ",
+    "compute_wall_thickness_mesh",
+    "WallThicknessStats",
+    "compute_print_orientations",
+    "PrintOrientationAnalysis",
+    "PrintOrientationResult",
 ]
