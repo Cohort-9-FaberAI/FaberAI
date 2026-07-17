@@ -1,3 +1,5 @@
+import logging
+
 from celery.result import AsyncResult
 from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
@@ -9,6 +11,8 @@ from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id
 from app.services.storage import upload_cad_file_to_storage
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="FaberAI Backend",
@@ -139,10 +143,14 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
                 return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
 
     if state == "FAILURE":
+        # Keep the raw exception in server logs only; never expose it to clients.
+        logger.error(
+            "Task %s failed: %s\n%s", task_id, task_result.result, task_result.traceback
+        )
         return {
             "task_id": task_id,
             "status": "FAILURE",
-            "error": str(task_result.result),
+            "error": "Analysis failed. Please try again later.",
         }
 
     if state == "SUCCESS":

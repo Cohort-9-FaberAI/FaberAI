@@ -98,6 +98,47 @@ class TestUpload:
         assert response.status_code == 422
 
 
+class TestGetTaskStatus:
+    def _mock_async_result(self, state, result=None, traceback=None):
+        return SimpleNamespace(state=state, result=result, traceback=traceback)
+
+    def test_failure_does_not_leak_exception_details(self, client):
+        secret = "psycopg2 connect failed: host=internal-db.faber.local /srv/uploads/part.stl"
+        with patch.object(
+            main,
+            "AsyncResult",
+            return_value=self._mock_async_result("FAILURE", RuntimeError(secret)),
+        ):
+            response = client.get("/tasks/task-123")
+
+        assert response.status_code == 200
+        assert secret not in response.text
+        assert "internal-db" not in response.text
+
+    def test_failure_returns_generic_error_message(self, client):
+        with patch.object(
+            main,
+            "AsyncResult",
+            return_value=self._mock_async_result("FAILURE", RuntimeError("boom")),
+        ):
+            body = client.get("/tasks/task-123").json()
+
+        assert body == {
+            "task_id": "task-123",
+            "status": "FAILURE",
+            "error": "Analysis failed. Please try again later.",
+        }
+
+    def test_pending_polling_behavior_unchanged(self, client):
+        with patch.object(
+            main, "AsyncResult", return_value=self._mock_async_result("PENDING")
+        ):
+            response = client.get("/tasks/task-123")
+
+        assert response.status_code == 200
+        assert response.json() == {"task_id": "task-123", "status": "PENDING"}
+
+
 class TestErrorHandlers:
     def test_422_uses_standard_error_envelope(self, client):
         # Posting /upload/ without a file triggers a request validation error.
