@@ -6,11 +6,15 @@ storage bucket or Redis broker is required, and Supabase credentials are faked
 in conftest.py so no database is touched.
 """
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import main
+from app.services import storage
+from app.services.storage import validate_upload_filename
 
 
 class TestHealthCheck:
@@ -96,6 +100,147 @@ class TestUpload:
     def test_missing_file_returns_422(self, client):
         response = client.post("/upload/")
         assert response.status_code == 422
+
+
+class TestUploadValidation:
+    """
+    Exercises the real upload_cad_file_to_storage validation through the
+    /upload/ route, with only the Supabase client mocked so no storage
+    bucket is required. Invalid uploads must fail before Supabase is
+    touched or a Celery task is dispatched.
+    """
+
+    def _upload(self, client, filename, content=b"solid mock-geometry"):
+        return client.post(
+            "/upload/",
+            files={"file": (filename, content, "application/octet-stream")},
+        )
+
+    def test_missing_filename_raises_400(self):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_upload_filename(None)
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "Filename is required."
+
+    def test_empty_filename_raises_400(self):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_upload_filename("")
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "Filename is required."
+
+    def test_filename_without_extension_returns_400(self, client):
+        with patch.object(storage, "supabase") as mock_supabase:
+            response = self._upload(client, "bracket")
+
+        assert response.status_code == 400
+        error = response.json()["error"]
+        assert error["code"] == 400
+        assert error["message"] == "Filename must include a file extension."
+        mock_supabase.storage.from_.assert_not_called()
+
+    def test_unsupported_extension_returns_400_listing_formats(self, client):
+        with patch.object(storage, "supabase") as mock_supabase:
+            response = self._upload(client, "bracket.exe")
+
+        assert response.status_code == 400
+        message = response.json()["error"]["message"]
+        assert "Unsupported file extension '.exe'" in message
+        for ext in (".step", ".stp", ".stl"):
+            assert ext in message
+        mock_supabase.storage.from_.assert_not_called()
+
+    def test_upload_over_size_limit_returns_413(self, client, monkeypatch):
+        monkeypatch.setattr(storage, "MAX_UPLOAD_SIZE_BYTES", 10)
+        with patch.object(storage, "supabase") as mock_supabase:
+            response = self._upload(client, "bracket.stl", content=b"x" * 11)
+
+        assert response.status_code == 413
+        assert "maximum upload size" in response.json()["error"]["message"]
+        mock_supabase.storage.from_.assert_not_called()
+
+    def test_upload_at_size_limit_is_accepted(self, client, monkeypatch):
+        monkeypatch.setattr(storage, "MAX_UPLOAD_SIZE_BYTES", 10)
+        mock_supabase = MagicMock()
+        with patch.object(storage, "supabase", mock_supabase), patch.object(
+            main, "insert_analysis_result"
+        ), patch.object(
+            main.extract_geometry_task,
+            "delay",
+            return_value=SimpleNamespace(id="task-456"),
+        ):
+            response = self._upload(client, "bracket.stl", content=b"x" * 10)
+
+        assert response.status_code == 202
+
+    def test_supported_upload_succeeds_through_real_storage_function(self, client):
+        mock_supabase = MagicMock()
+        mock_supabase.storage.from_.return_value.get_public_url.return_value = (
+            TestUpload.STORAGE_RESULT["public_url"]
+        )
+        with patch.object(storage, "supabase", mock_supabase), patch.object(
+            main, "insert_analysis_result"
+        ), patch.object(
+            main.extract_geometry_task,
+            "delay",
+            return_value=SimpleNamespace(id="task-456"),
+        ):
+            response = self._upload(client, "bracket.stl")
+
+        assert response.status_code == 202
+        body = response.json()
+        assert body["task_id"] == "task-456"
+        assert body["filename"] == "bracket.stl"
+        assert body["status"] == "pending"
+
+        # The file content reaches Supabase intact, under a unique .stl path.
+        upload_call = mock_supabase.storage.from_.return_value.upload
+        upload_call.assert_called_once()
+        assert upload_call.call_args.kwargs["file"] == b"solid mock-geometry"
+        assert upload_call.call_args.kwargs["path"].startswith("uploads/")
+        assert upload_call.call_args.kwargs["path"].endswith(".stl")
+
+
+class TestGetTaskStatus:
+    def _mock_async_result(self, state, result=None, traceback=None):
+        return SimpleNamespace(state=state, result=result, traceback=traceback)
+
+    def test_failure_does_not_leak_exception_details(self, client):
+        secret = "psycopg2 connect failed: host=internal-db.faber.local /srv/uploads/part.stl"
+        with patch.object(
+            main,
+            "AsyncResult",
+            return_value=self._mock_async_result("FAILURE", RuntimeError(secret)),
+        ):
+            response = client.get("/tasks/task-123")
+
+        assert response.status_code == 200
+        assert secret not in response.text
+        assert "internal-db" not in response.text
+
+    def test_failure_returns_generic_error_message(self, client):
+        with patch.object(
+            main,
+            "AsyncResult",
+            return_value=self._mock_async_result("FAILURE", RuntimeError("boom")),
+        ):
+            body = client.get("/tasks/task-123").json()
+
+        assert body == {
+            "task_id": "task-123",
+            "status": "FAILURE",
+            "error": "Analysis failed. Please try again later.",
+        }
+
+    def test_pending_polling_behavior_unchanged(self, client):
+        with patch.object(
+            main, "AsyncResult", return_value=self._mock_async_result("PENDING")
+        ):
+            response = client.get("/tasks/task-123")
+
+        assert response.status_code == 200
+        assert response.json() == {"task_id": "task-123", "status": "PENDING"}
 
 
 class TestErrorHandlers:

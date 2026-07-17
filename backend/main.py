@@ -1,3 +1,5 @@
+import logging
+
 from celery.result import AsyncResult
 from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
@@ -9,6 +11,8 @@ from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id
 from app.services.storage import upload_cad_file_to_storage
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="FaberAI Backend",
@@ -106,35 +110,59 @@ async def upload_cad_file(file: UploadFile):
     }
 
 @app.get("/tasks/{task_id}", tags=["Tasks"])
-def get_task_status(task_id: str):
+def get_task_status(task_id: str, analysis_id: str | None = None):
     """
     Polls the status of a background analysis task.
 
-    Returns the current Celery state (PENDING, PROCESSING, SUCCESS, FAILURE).
-    On SUCCESS, fetches the final validated analysis result from Supabase.
-    Note: Celery reports unknown task ids as PENDING, so a 404 is only
-    possible once a task has finished but no stored result can be found.
+    Returns the current task state. When an analysis_id is supplied, the API
+    prefers the Supabase analysis record so the UI can see completed/failed
+    status immediately even if Celery still reports PENDING for a moment.
     """
     task_result = AsyncResult(task_id, app=celery_app)
     state = task_result.state
 
+    if analysis_id:
+        try:
+            record = get_analysis_by_id(analysis_id)
+        except APIError:
+            record = None
+
+        if record is not None:
+            db_status = record.get("status")
+            if db_status == "completed":
+                results_json = record.get("results_json")
+                if results_json:
+                    analysis = AnalysisResult.model_validate(results_json)
+                    return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id, "result": analysis}
+                return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id}
+
+            if db_status == "failed":
+                return {"task_id": task_id, "status": "FAILED", "analysis_id": analysis_id}
+
+            if db_status in {"pending", "processing"}:
+                return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
+
     if state == "FAILURE":
+        # Keep the raw exception in server logs only; never expose it to clients.
+        logger.error(
+            "Task %s failed: %s\n%s", task_id, task_result.result, task_result.traceback
+        )
         return {
             "task_id": task_id,
             "status": "FAILURE",
-            "error": str(task_result.result),
+            "error": "Analysis failed. Please try again later.",
         }
 
     if state == "SUCCESS":
         task_output = task_result.result
-        analysis_id = (
-            task_output.get("analysis_id", task_id)
+        resolved_analysis_id = (
+            task_output.get("analysis_id", analysis_id or task_id)
             if isinstance(task_output, dict)
-            else task_id
+            else analysis_id or task_id
         )
 
         try:
-            record = get_analysis_by_id(analysis_id)
+            record = get_analysis_by_id(resolved_analysis_id)
         except APIError:
             record = None
 
@@ -145,7 +173,7 @@ def get_task_status(task_id: str):
             )
 
         analysis = AnalysisResult.model_validate(record["results_json"])
-        return {"task_id": task_id, "status": "SUCCESS", "result": analysis}
+        return {"task_id": task_id, "status": "SUCCESS", "analysis_id": resolved_analysis_id, "result": analysis}
 
     # Celery uses STARTED/RETRY for in-flight tasks; expose them as PROCESSING
     status_map = {"STARTED": "PROCESSING", "RETRY": "PROCESSING"}
@@ -175,6 +203,19 @@ def analyze_mock():
                 "max": {"x": 120.0, "y": 80.0, "z": 45.0}
             }
         },
+        # --- NOVO CAMPO ADICIONADO AQUI ---
+        "geometry_data": {
+            "source_format": "stl",
+            "bounding_box": {
+                "min": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "max": {"x": 120.0, "y": 80.0, "z": 45.0}
+            },
+            "volume_mm3": 15420.5,
+            "surface_area_mm2": 8930.2,
+            "measurements_reliable": True,
+            "center_mass": {"x": 60.0, "y": 40.0, "z": 22.5}
+        },
+        # ----------------------------------
         "issues": [
             {
                 "issue_id": "issue-001",

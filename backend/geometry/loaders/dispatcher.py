@@ -63,18 +63,26 @@ def load_geometry(path: str) -> GeometryModel:
             from geometry.measurements.face_extraction import extract_faces_occ
             from geometry.measurements.face_graph import build_face_graph
             from geometry.measurements.face_extraction import graph_to_faces_and_edges
-            
+
             vertices, indices = extract_faces_occ(shape)
             face_graph = build_face_graph(shape.faces(), shape)
             faces_list, edges_list = graph_to_faces_and_edges(face_graph, vertices, indices)
-            
+
             model.faces = faces_list
             model.edges = edges_list
+            # Serialize the adjacency graph as {face_id: [neighbour_ids, ...]}
+            # so downstream consumers (adapter, API) don't need networkx.
+            # import networkx as nx
+            model.face_graph = {
+                node: list(face_graph.neighbors(node))
+                for node in face_graph.nodes()
+            }
         except Exception as e:
             # Topology extraction is optional; log and continue
             print(f"Warning: face/edge extraction failed for {path}: {e}")
             model.faces = []
             model.edges = []
+            model.face_graph = None
         return model
 
     else:  # SourceFormat.STL
