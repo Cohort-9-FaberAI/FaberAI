@@ -157,8 +157,7 @@ def _load_stl(path: str) -> GeometryModel:
         from geometry.measurements.print_orientations import compute_print_orientations
         from geometry.models.face import Face
         from geometry.models.enums import SurfaceType
-        import numpy as np
-
+        
         face_normals = mesh.face_normals          # (M, 3)
         face_areas = mesh.area_faces              # (M,)
         centroids = mesh.vertices[mesh.faces].mean(axis=1)  # (M, 3)
