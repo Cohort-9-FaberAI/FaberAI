@@ -146,8 +146,7 @@ def compute_wall_thickness_mesh(mesh) -> tuple[list[WallSample], Optional[WallTh
         samples : list[WallSample]
         stats   : WallThicknessStats or None if no valid samples were found.
     """
-    import trimesh
-
+    
     vertices: np.ndarray = mesh.vertices          # (N, 3)
     tri_indices: np.ndarray = mesh.faces          # (M, 3)
     face_normals: np.ndarray = mesh.face_normals  # (M, 3) — unit outward normals
