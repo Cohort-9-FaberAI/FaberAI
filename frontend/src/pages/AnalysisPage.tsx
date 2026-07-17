@@ -72,9 +72,8 @@ export default function AnalysisPage() {
       </div>
 
       <div className="analysis-layout">
-        {/* Left thumbnail rail */}
         <div className="analysis-thumb-rail">
-          {/* TODO: clarify with design what these 4 thumbnails represent */}
+          {/* TODO: make these 4 thumbnails the new left sidebar for the upload, projects, library, history buttons */}
           {[1, 2, 3, 4].map((n) => (
             <div key={n} className="analysis-thumb" />
           ))}

@@ -28,6 +28,12 @@ export default function Sidebar() {
           ),
         )}
       </nav>
+      <NavLink
+        to="/debug"
+        className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
+      >
+        API Debug
+      </NavLink>
     </aside>
   )
 }

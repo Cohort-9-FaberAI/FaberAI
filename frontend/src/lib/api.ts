@@ -28,6 +28,32 @@ export async function getTaskStatus(taskId: string) {
   return res.json()
 }
 
+export async function getHealthCheck() {
+  const res = await fetch(`${API_BASE}/`)
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message || `Health check failed (${res.status})`)
+  }
+
+  return res.json()
+}
+
+export async function createAnalysis(data: Record<string, unknown>) {
+  const res = await fetch(`${API_BASE}/analysis/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message || `Create analysis failed (${res.status})`)
+  }
+
+  return res.json()
+}
+
 export async function getMockAnalysis() {
   const res = await fetch(`${API_BASE}/analyze-mock`, { method: 'POST' })
 

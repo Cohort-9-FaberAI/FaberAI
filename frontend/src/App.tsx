@@ -3,6 +3,7 @@ import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import ExtraInfoPage from './pages/ExtraInfoPage'
 import AnalysisPage from './pages/AnalysisPage'
+import DebugApiPage from './pages/DebugApiPage'
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <Route path="/home" element={<HomePage />} />
       <Route path="/extra-info" element={<ExtraInfoPage />} />
       <Route path="/analysis" element={<AnalysisPage />} />
+      <Route path="/debug" element={<DebugApiPage />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

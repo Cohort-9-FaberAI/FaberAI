@@ -657,3 +657,130 @@ textarea {
   font-size: 12px;
   color: var(--text);
 }
+
+/* ======================== DEBUG API ======================== */
+
+.debug-page {
+  max-width: 720px;
+}
+
+.debug-page h1 {
+  margin-bottom: 4px;
+}
+
+.debug-subtitle {
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.debug-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.debug-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-method {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.debug-endpoint-name {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.debug-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.debug-badge.pass {
+  background: #d4edda;
+  color: #155724;
+}
+
+.debug-badge.fail {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.debug-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.debug-card-controls button {
+  font-size: 13px;
+  padding: 6px 16px;
+  flex-shrink: 0;
+}
+
+.debug-file-input {
+  font-size: 13px;
+  border: none;
+  padding: 0;
+}
+
+.debug-file-name {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.debug-task-input {
+  font-family: var(--mono);
+  font-size: 13px;
+  max-width: 360px;
+}
+
+.debug-card-result {
+  border-top: 1px solid var(--border);
+}
+
+.debug-meta {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-json {
+  margin: 0;
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 150%;
+  overflow-x: auto;
+  background: #1a1a2e;
+  color: #d4d4d4;
+}
+
+.debug-error {
+  color: #ff6b6b;
+}
