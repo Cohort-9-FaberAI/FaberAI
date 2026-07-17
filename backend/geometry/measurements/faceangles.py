@@ -19,21 +19,34 @@ def compute_face_angles(
     faces : Iterable[Face]
         Collection of Face objects.
     axis : np.ndarray
-        Build direction as a 3D vector.
+        Build direction as a 3D vector. Must be non-zero.
 
     Returns
     -------
     dict[int, float]
-        Mapping of face_id -> angle (degrees).
-    """
+        Mapping of face_id -> angle in degrees [0, 180].
 
-    axis = axis / np.linalg.norm(axis)
-    face_angles = {}
+    Raises
+    ------
+    ValueError
+        If ``axis`` is a zero vector.
+    """
+    axis = np.asarray(axis, dtype=float)
+    axis_norm = np.linalg.norm(axis)
+    if axis_norm < 1e-9:
+        raise ValueError("axis must be a non-zero vector.")
+    axis = axis / axis_norm
+
+    face_angles: dict[int, float] = {}
 
     for face in faces:
-        normal = face.normal / np.linalg.norm(face.normal)
+        normal = np.asarray(face.normal, dtype=float)
+        normal_norm = np.linalg.norm(normal)
+        if normal_norm < 1e-9:
+            # Degenerate face — skip rather than produce nan
+            continue
+        normal = normal / normal_norm
         dot = np.clip(np.dot(normal, axis), -1.0, 1.0)
-        angle = np.degrees(np.arccos(dot))
-        face_angles[face.id] = angle
+        face_angles[face.id] = float(np.degrees(np.arccos(dot)))
 
     return face_angles
