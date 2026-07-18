@@ -3,6 +3,9 @@ import uuid
 from fastapi import HTTPException, UploadFile, status
 from app.database import supabase
 from geometry.loaders.dispatcher import STEP_EXTENSIONS, STL_EXTENSIONS, get_file_format
+import logging
+
+logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "cad-uploads"
 
@@ -77,10 +80,10 @@ def upload_cad_file_to_storage(file: UploadFile) -> dict:
     """
     Uploads a CAD file (STEP or STL) to Supabase Storage.
 
-    Validates the filename/extension and enforces the maximum upload size
-    before touching Supabase, so invalid uploads fail fast with 400/413.
-    Generates a unique storage path to prevent filename collisions.
-    Returns the storage path and the public URL of the uploaded file.
+    Here the Supabase upload is in a try/except so that when the
+    storage3 library crashes while formatting its own error response, the
+    real storage failure is logged and a clean 503 is returned to the
+    client instead of an unhandled 500.
     """
     file_extension = validate_upload_filename(file.filename)
     file_bytes = _read_upload_within_limit(file)
@@ -88,11 +91,26 @@ def upload_cad_file_to_storage(file: UploadFile) -> dict:
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
     storage_path = f"uploads/{unique_filename}"
 
-    supabase.storage.from_(BUCKET_NAME).upload(
-        path=storage_path,
-        file=file_bytes,
-        file_options={"content-type": file.content_type or "application/octet-stream"},
-    )
+    try:
+        supabase.storage.from_(BUCKET_NAME).upload(
+            path=storage_path,
+            file=file_bytes,
+            file_options={"content-type": file.content_type or "application/octet-stream"},
+        )
+    except Exception as exc:
+        # The storage3 library can crash while formatting its own error
+        # response (AttributeError: 'dict' object has no attribute 'text'),
+        # which masks the real storage failure. Logs cause here.
+        logger.error(
+            "Supabase Storage upload failed for path '%s': %s",
+            storage_path,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is temporarily unavailable. Please try again.",
+        )
 
     public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)
 

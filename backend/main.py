@@ -1,7 +1,7 @@
 import logging
 
 from celery.result import AsyncResult
-from fastapi import FastAPI, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -166,14 +166,32 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
         except APIError:
             record = None
 
-        if record is None or not record.get("results_json"):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No analysis result found for task '{task_id}'.",
-            )
-
-        analysis = AnalysisResult.model_validate(record["results_json"])
-        return {"task_id": task_id, "status": "SUCCESS", "analysis_id": resolved_analysis_id, "result": analysis}
+        if record is not None and record.get("results_json"):
+            analysis = AnalysisResult.model_validate(record["results_json"])
+            return {
+                "task_id": task_id,
+                "status": "SUCCESS",
+                "analysis_id": resolved_analysis_id,
+                "result": analysis,
+            }
+ 
+        # Fix 1.10: DB record missing or results_json empty — task completed
+        # in Celery but the result was not persisted (DB write failed, record
+        # deleted, or Supabase was down). Return the Celery payload directly
+        # so the client gets a terminal SUCCESS instead of a misleading 404.
+        logger.warning(
+            "Task %s succeeded in Celery but no DB record found for analysis_id '%s'. "
+            "Returning Celery result payload directly.",
+            task_id,
+            resolved_analysis_id,
+        )
+        return {
+            "task_id": task_id,
+            "status": "SUCCESS",
+            "analysis_id": resolved_analysis_id,
+            "result": task_output if isinstance(task_output, dict) else None,
+            "warning": "Result was not persisted to the database. Contact support if this persists.",
+        }
 
     # Celery uses STARTED/RETRY for in-flight tasks; expose them as PROCESSING
     status_map = {"STARTED": "PROCESSING", "RETRY": "PROCESSING"}
