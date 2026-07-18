@@ -5,7 +5,6 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from postgrest.exceptions import APIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult, AnalysisStatus
@@ -122,25 +121,26 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
     state = task_result.state
 
     if analysis_id:
-        try:
-            record = get_analysis_by_id(analysis_id)
-        except APIError:
-            record = None
+        record = get_analysis_by_id(analysis_id)
+        if record is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No analysis result found for the provided analysis_id.",
+            )
 
-        if record is not None:
-            db_status = record.get("status")
-            if db_status == "completed":
-                results_json = record.get("results_json")
-                if results_json:
-                    analysis = AnalysisResult.model_validate(results_json)
-                    return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id, "result": analysis}
-                return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id}
+        db_status = record.get("status")
+        if db_status == "completed":
+            results_json = record.get("results_json")
+            if results_json:
+                analysis = AnalysisResult.model_validate(results_json)
+                return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id, "result": analysis}
+            return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id}
 
-            if db_status == "failed":
-                return {"task_id": task_id, "status": "FAILED", "analysis_id": analysis_id}
+        if db_status == "failed":
+            return {"task_id": task_id, "status": "FAILED", "analysis_id": analysis_id}
 
-            if db_status in {"pending", "processing"}:
-                return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
+        if db_status in {"pending", "processing"}:
+            return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
 
     if state == "FAILURE":
         # Keep the raw exception in server logs only; never expose it to clients.
@@ -161,12 +161,14 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
             else analysis_id or task_id
         )
 
-        try:
-            record = get_analysis_by_id(resolved_analysis_id)
-        except APIError:
-            record = None
+        record = get_analysis_by_id(resolved_analysis_id)
+        if record is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No analysis result found for the provided analysis_id.",
+            )
 
-        if record is None or not record.get("results_json"):
+        if not record.get("results_json"):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No analysis result found for task '{task_id}'.",

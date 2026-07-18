@@ -31,18 +31,29 @@ def insert_analysis_result(result: AnalysisResult) -> dict:
 def get_analysis_by_id(analysis_id: str) -> dict | None:
     """
     Fetches a single analysis record from Supabase by analysis_id.
-    Returns None if not found.
+
+    Args:
+        analysis_id: The UUID of the analysis record to fetch.
+
+    Returns:
+        The analysis record as a dict if found, or None if no matching
+        record exists.
+
+    Raises:
+        postgrest.exceptions.APIError: If the database request itself fails
+        (e.g. invalid credentials, RLS rejection, connectivity issues).
     """
+    # maybe_single() returns None for the whole response when no row matches.
     response = (
         supabase
         .table(TABLE_NAME)
         .select("*")
         .eq("analysis_id", analysis_id)
-        .single()
+        .maybe_single()
         .execute()
     )
 
-    return response.data if response.data else None
+    return response.data if response else None
 
 def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = None) -> dict:
     """
