@@ -8,7 +8,7 @@ import os
 import requests
 
 # Connection to Redis
-REDIS_URL = "redis://localhost:6379/0"
+REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery(
     "faberai_worker",
