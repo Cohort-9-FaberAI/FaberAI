@@ -3,6 +3,7 @@ from app.database import supabase
 from app.crud import insert_analysis_result, update_analysis_status
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.services.geometry_engine_adapter import run_geometry_engine
+from geometry.loaders import StepSupportUnavailableError
 import tempfile
 import os
 import requests
@@ -103,6 +104,14 @@ def extract_geometry_task(self, file_url: str, original_filename: str, analysis_
         print(f"[WORKER] Status set to completed for: {analysis_id}")
 
         return {**result, "analysis_id": analysis_id}
+
+    except StepSupportUnavailableError as exc:
+        # Missing optional STEP dependencies won't be fixed by retrying:
+        # mark the analysis failed immediately so the client sees FAILED
+        # instead of a record stuck in "processing".
+        print(f"[WORKER] Cannot process {original_filename}: {exc}")
+        update_analysis_status(analysis_id, AnalysisStatus.failed.value)
+        raise
 
     except Exception as exc:
         if self.request.retries >= self.max_retries:

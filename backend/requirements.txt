@@ -62,3 +62,15 @@ vine==5.1.0
 wcwidth==0.8.2
 websockets==15.0.1
 yarl==1.24.2
+
+# --- Optional STEP support (intentionally NOT installed by this file) ---
+# STEP/.stp file analysis needs two optional dependencies:
+#   * pythonocc-core — cannot be listed here: it is not published on PyPI and
+#     is only distributed via Conda:
+#       conda install -c conda-forge pythonocc-core
+#   * build123d — pip-installable (pip install build123d) but kept optional
+#     so non-STEP users don't need it.
+# For a full STEP-capable environment use the Conda spec in
+# backend/environment-ds.yml (conda env create -f environment-ds.yml).
+# Without these packages the backend starts and analyzes STL normally; STEP
+# uploads fail gracefully with geometry.loaders.StepSupportUnavailableError.

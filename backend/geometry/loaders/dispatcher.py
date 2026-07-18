@@ -44,6 +44,11 @@ def load_geometry(path: str) -> GeometryModel:
     Dispatches on extension:
         .step / .stp -> pythonOCC path
         .stl         -> trimesh path
+
+    STEP support is optional: if pythonocc-core is not installed, the STEP
+    path raises StepSupportUnavailableError with installation instructions
+    instead of an unhandled ImportError. The STL path has no optional
+    dependencies and always works.
     """
     fmt = get_file_format(path)
 
