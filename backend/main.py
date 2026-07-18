@@ -1,7 +1,7 @@
 import logging
 
 from celery.result import AsyncResult
-from fastapi import FastAPI, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse

@@ -11,10 +11,9 @@ from unittest.mock import MagicMock, patch, call
 import pytest
 import httpx
 import requests
-from core.workers import extract_geometry_task, update_analysis_status
+from core.workers import extract_geometry_task
 from app.schemas import AnalysisStatus
 
-from fastapi.testclient import TestClient
 import main
 
 
