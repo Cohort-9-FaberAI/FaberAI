@@ -13,6 +13,8 @@ from typing import Any, List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from geometry.loaders import load_geometry
+import logging
+logger = logging.getLogger(__name__)
 
 
 # --- Contract schemas for the geometry engine response ---
@@ -196,7 +198,7 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         source_path=model.source_path,
         bounding_box=_to_bbox_summary(model.bounding_box),
         oriented_bbox=_to_bbox_summary(model.oriented_bbox),
-        volume_mm3=model.volume_mm3,
+        volume_mm3=_clamp_volume(model.volume_mm3, model.measurements_reliable),
         surface_area_mm2=model.surface_area_mm2,
         measurements_reliable=model.measurements_reliable,
         center_mass=_to_vector3(model.center_mass),
@@ -211,3 +213,25 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
     )
 
     return response.model_dump()
+
+def _clamp_volume(volume: float | None, measurements_reliable: bool) -> float | None:
+    """
+    Here the physically impossible negative volumes are made None.
+ 
+    A negative volume indicates the mesh has inverted normals or is
+    non-watertight (trimesh computes a signed volume). When
+    measurements_reliable is already False the caller knows the
+    measurements are suspect; returning None instead of a raw negative
+    prevents downstream consumers (score calculation, UI display) from
+    receiving a physically impossible value.
+    """
+    if volume is None:
+        return None
+    if volume < 0:
+        logger.warning(
+            "Negative volume detected (%.4f mm³) - mesh may have inverted normals "
+            "or be non-watertight. Clamping to None.",
+            volume,
+        )
+        return None
+    return volume
