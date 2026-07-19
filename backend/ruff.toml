@@ -6,8 +6,6 @@
 [lint.per-file-ignores]
 # Imports app.database for its side effects / re-export.
 "core/workers.py" = ["F401"]
-# Legacy build123d loader kept alongside the pythonocc one; uses star imports.
-"geometry/loaders/step_loader.py" = ["F401", "F403", "F405"]
 # Env vars must be set before importing main, forcing late imports.
 "tests/conftest.py" = ["E402"]
 # `I` is the conventional name for an inertia tensor; unused OCC import.
