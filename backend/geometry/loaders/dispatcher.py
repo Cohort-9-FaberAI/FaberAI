@@ -17,7 +17,6 @@ from geometry.measurements import (
     compute_moment_inertia_mesh,
     is_mesh_reliable,
 )
-from .step_loader_pythonocc import load_step
 from .stl_loader_trimesh import load_stl
 
 
