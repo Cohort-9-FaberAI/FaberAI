@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 
@@ -123,12 +124,27 @@ def main():
                 payload = status_response.json()
                 st.session_state["last_task_result"] = payload
                 st.json(payload)
+                st.download_button(
+                    label="⬇ Download result as JSON",
+                    data=json.dumps(payload, indent=2),
+                    file_name=f"faberai_{task_id}.json",
+                    mime="application/json",
+                    key="download_status_check",
+                )
             except requests.RequestException as exc:
                 st.error(f"Failed to fetch task status: {exc}")
 
         if st.session_state.get("last_task_result"):
             st.subheader("Latest task result")
-            st.json(st.session_state["last_task_result"])
+            result = st.session_state["last_task_result"]
+            st.json(result)
+            st.download_button(
+                label="⬇ Download latest result as JSON",
+                data=json.dumps(result, indent=2),
+                file_name=f"faberai_{task_id}_latest.json",
+                mime="application/json",
+                key="download_latest_result",
+            )
 
 
 if __name__ == "__main__":
