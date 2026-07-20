@@ -10,8 +10,9 @@ def compute_volume_occ(shape) -> float:
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
+    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.VolumeProperties(shape, props)
+    brepgprop.VolumeProperties(topo, props)
     return float(props.Mass())  # "Mass" with unit density == volume
 
 

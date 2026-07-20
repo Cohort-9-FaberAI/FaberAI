@@ -12,8 +12,9 @@ def compute_bbox_occ(shape) -> BoundingBox:
     from OCC.Core.Bnd import Bnd_Box
     from OCC.Core.BRepBndLib import brepbndlib
 
+    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     box = Bnd_Box()
-    brepbndlib.Add(shape, box)
+    brepbndlib.Add(topo, box)
     xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
     return BoundingBox(
         min_corner=np.array([xmin, ymin, zmin]),

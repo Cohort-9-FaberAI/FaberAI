@@ -63,12 +63,27 @@ def load_geometry(path: str) -> GeometryModel:
 # ---------------------------------------------------------------------------
 
 def _load_step(path: str) -> GeometryModel:
-    shape = load_step(path)
+    # Use the build123d loader so the returned object exposes the build123d
+    # Shape API (.faces(), .tessellate(), face.wrapped, face.center(), etc.)
+    # that all downstream topology and measurement code depends on.
+    # build123d wraps pythonOCC internally, so OCC measurement functions that
+    # do `shape.wrapped if hasattr(shape, "wrapped") else shape` work fine.
+    try:
+        from geometry.loaders.step_loader import load_step as load_step_b123d
+        shape = load_step_b123d(path)
+    except Exception:
+        # Fallback to the raw OCC loader if build123d is not available.
+        # Topology extraction (faces/edges/face_graph) will be skipped, but
+        # scalar measurements still work on a TopoDS_Shape.
+        from geometry.loaders.step_loader_pythonocc import load_step as load_step_occ
+        shape = load_step_occ(path)
+
     model = GeometryModel(
         source_format=SourceFormat.STEP, source_path=path, raw=shape
     )
 
-    # Core measurements
+    # Core measurements — these accept both build123d Shape and TopoDS_Shape
+    # (each function does `shape.wrapped if hasattr(shape, "wrapped") else shape`)
     model.bounding_box = compute_bbox_occ(shape)
     model.oriented_bbox = None  # not produced on the OCC path
     model.volume_mm3 = compute_volume_occ(shape)
