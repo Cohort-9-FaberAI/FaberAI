@@ -11,17 +11,13 @@ import numpy as np
 
 
 def compute_moment_inertia_occ(shape) -> np.ndarray:
-    """3x3 inertia matrix (about the center of mass) of a TopoDS_Shape.
-
-    Reuses the same GProp_GProps/VolumeProperties call as
-    compute_center_mass_occ — inertia is populated as a side effect of
-    that same volume-properties computation, not a separate query.
-    """
+    """3x3 inertia matrix (about the center of mass) of a TopoDS_Shape."""
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
+    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.VolumeProperties(shape, props)
+    brepgprop.VolumeProperties(topo, props)
     mat = props.MatrixOfInertia()
     return np.array([[mat.Value(i, j) for j in range(1, 4)] for i in range(1, 4)])
 

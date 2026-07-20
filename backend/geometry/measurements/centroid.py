@@ -10,8 +10,9 @@ def compute_center_mass_occ(shape) -> np.ndarray:
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
+    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.VolumeProperties(shape, props)
+    brepgprop.VolumeProperties(topo, props)
     pnt = props.CentreOfMass()
     return np.array([pnt.X(), pnt.Y(), pnt.Z()])
 

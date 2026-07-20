@@ -8,8 +8,9 @@ def compute_surface_area_occ(shape) -> float:
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
+    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.SurfaceProperties(shape, props)
+    brepgprop.SurfaceProperties(topo, props)
     return float(props.Mass())
 
 
