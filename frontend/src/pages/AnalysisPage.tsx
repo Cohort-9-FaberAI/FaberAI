@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AppShell from '../components/layout/AppShell'
 import StepIndicator from '../components/layout/StepIndicator'
-import ModelPreviewPlaceholder from '../components/common/ModelPreviewPlaceholder'
+import ModelPreview from '../components/ModelPreview/ModelPreview'
 import SeverityLegend from '../components/analysis/SeverityLegend'
 import IssueAccordion from '../components/analysis/IssueAccordion'
 import { getMockAnalysis } from '../lib/api'
@@ -79,7 +79,7 @@ export default function AnalysisPage() {
           ))}
         </div>
 
-        <ModelPreviewPlaceholder />
+        <ModelPreview />
 
         <div className="analysis-right-panel">
           <SeverityLegend />
