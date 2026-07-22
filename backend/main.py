@@ -12,7 +12,7 @@ from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id
 from app.services.storage import upload_cad_file_to_storage
-
+from fastapi.responses import FileResponse
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -21,7 +21,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# 🚨 Configuração do CORS para não travar as requisições do frontend localmente
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -222,7 +221,7 @@ def analyze_mock():
         "status": "completed",
         "manufacturability_score": 72,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
-        "file_url": "https://drive.google.com/file/d/1CxuLQhR7xuSUT7sjMwX19syeovZoZf6P/view?usp=sharing",
+       "file_url": "http://127.0.0.1:8000/mock-file",
         "part_metadata": {
             "units": "mm",
             "volume": 15420.5,
@@ -279,3 +278,12 @@ def create_analysis(result: AnalysisResult):
     """
     inserted = insert_analysis_result(result)
     return {"message": "Analysis result saved successfully.", "data": inserted}
+
+@app.get("/mock-file", tags=["Analysis (Mock)"])
+def get_mock_file():
+    """
+    Serves the mock STL file directly to bypass CORS during local development.
+    """
+    
+    file_path = "datasets/STL/box_prism.stl" 
+    return FileResponse(path=file_path, media_type="application/octet-stream", filename="box_prism.stl")
