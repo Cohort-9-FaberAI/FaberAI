@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import math
@@ -89,7 +90,6 @@ def detect_cylindrical_holes(faces: list, edges: Optional[list] = None) -> list:
     among a shape's faces. Returns groups, not yet classified — see
     classify_hole()/measure_hole() for the next steps, or just use
     detect_holes() for the fully classified result."""
-    faces_by_id = _faces_by_id(faces)
     cylindrical = [f for f in faces if f.is_cylindrical() and f.axis is not None
                    and f.origin is not None]
     hole_faces = [f for f in cylindrical if _is_hole_face(f)]

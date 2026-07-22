@@ -8,7 +8,6 @@ from geometry.models import Boss
 
 from .holes import (
     _axis_projection,
-    _same_axis,
     _group_coaxial_faces,
     _faces_by_id,
     _edges_touching_face,

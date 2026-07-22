@@ -6,7 +6,7 @@ import numpy as np
 
 from geometry.models import Cavity
 
-from .holes import _faces_by_id, _neighbor_face_ids
+from .holes import _faces_by_id
 
 WALL_PERP_TOL = 0.15   # |dot(wall.normal, bottom.normal)| must be below this
 OPENING_PARALLEL_TOL = 0.9  # dot(opening.normal, bottom.normal) must exceed this
