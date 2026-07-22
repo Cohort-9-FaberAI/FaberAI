@@ -9,6 +9,9 @@ from .face import Face
 from .edge import Edge
 from .wall_sample import WallSample
 from .mesh_quality import MeshQuality, check_mesh_quality
+from .hole import Hole
+from .boss import Boss
+from .cavity import Cavity
 
 
 __all__ = [
@@ -16,4 +19,5 @@ __all__ = [
     "BoundingBox", "GeometryModel",
     "Face", "Edge", "WallSample",
     "MeshQuality", "check_mesh_quality",
+    "Edge", "Hole", "Boss", "Cavity",
 ]
