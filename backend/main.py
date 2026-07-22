@@ -218,11 +218,11 @@ def analyze_mock():
     """
     return {
         "analysis_id": "mock-analysis-0001",
-        "filename": "sample_bracket.stl",
+        "filename": "box_prism.stl", 
         "status": "completed",
         "manufacturability_score": 72,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
-        "file_url": "https://storage.googleapis.com/makerbot-public-assets/cad-models/hinge.stl",
+        "file_url": "https://drive.google.com/file/d/1CxuLQhR7xuSUT7sjMwX19syeovZoZf6P/view?usp=sharing",
         "part_metadata": {
             "units": "mm",
             "volume": 15420.5,
