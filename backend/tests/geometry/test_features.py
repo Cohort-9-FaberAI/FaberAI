@@ -19,7 +19,6 @@ required, since build123d bundles its own OCP binding.
 import math
 
 import numpy as np
-import pytest
 from build123d import Box, Cylinder, Pos
 
 from geometry.measurements.face_graph import build_face_graph
@@ -34,6 +33,7 @@ REL_TOL = 1e-6
 def _faces_and_edges(shape):
     graph = build_face_graph(shape.faces(), shape)
     return graph_to_faces_and_edges(graph, None, None)
+
 
 def test_through_hole():
     """50x50x40 block, through-hole radius 5 along Z."""
@@ -164,7 +164,6 @@ def test_no_cavities_on_plain_block():
     shape = Box(50, 50, 40)
     faces, edges = _faces_and_edges(shape)
     assert detect_cavities_full(faces, edges) == []
-
 
 def test_hole_shape_has_no_bosses_or_cavities():
     shape = Box(50, 50, 40) - Cylinder(radius=5, height=60)
