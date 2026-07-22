@@ -65,6 +65,8 @@ vine==5.1.0
 wcwidth==0.8.2
 websockets==15.0.1
 yarl==1.24.2
+build123d>=0.5
+networkx>=3.0
 
 # --- Optional STEP support (intentionally NOT installed by this file) ---
 # STEP/.stp file analysis needs two optional dependencies:
