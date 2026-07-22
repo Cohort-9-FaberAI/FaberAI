@@ -41,14 +41,15 @@ class TestAnalyzeMock:
         assert "part_metadata" in body
         assert "bounding_box" in body["part_metadata"]
 
-    def test_issues_include_three_js_highlights(self, client):
+    def test_mock_issues_format(self, client):
         body = client.post("/analyze-mock").json()
 
-        assert len(body["issues"]) == 2
+        assert len(body["issues"]) == 3
         for issue in body["issues"]:
-            highlight = issue["three_js_highlight"]
-            assert highlight["type"] == "bounding_box"
-            assert {"min", "max", "center", "color"} <= highlight.keys()
+            assert "severity" in issue
+            assert "centroid" in issue
+            assert len(issue["centroid"]) == 3
+            assert "face_id" in issue or "edge_id" in issue
 
 
 class TestUpload:
