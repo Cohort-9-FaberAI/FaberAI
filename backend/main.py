@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from postgrest.exceptions import APIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
@@ -18,6 +19,15 @@ app = FastAPI(
     title="FaberAI Backend",
     description="AI-powered manufacturability review API for CAD parts.",
     version="0.1.0",
+)
+
+# 🚨 Configuração do CORS para não travar as requisições do frontend localmente
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -203,7 +213,7 @@ def analyze_mock():
     """
     Temporary mock endpoint to unblock the Frontend team.
     Returns a hardcoded analysis response matching the agreed API contract,
-    including dummy three_js_highlight bounding boxes for the 3D canvas.
+    including a placeholder STL and geometric issues using centroids and IDs.
     Will be replaced by the real geometry engine analysis endpoint.
     """
     return {
@@ -211,7 +221,8 @@ def analyze_mock():
         "filename": "sample_bracket.stl",
         "status": "completed",
         "manufacturability_score": 72,
-        "summary": "Part is mostly manufacturable. 2 issues found that may require design changes.",
+        "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
+        "file_url": "https://storage.googleapis.com/makerbot-public-assets/cad-models/hinge.stl",
         "part_metadata": {
             "units": "mm",
             "volume": 15420.5,
@@ -221,7 +232,6 @@ def analyze_mock():
                 "max": {"x": 120.0, "y": 80.0, "z": 45.0}
             }
         },
-        # --- NOVO CAMPO ADICIONADO AQUI ---
         "geometry_data": {
             "source_format": "stl",
             "bounding_box": {
@@ -233,35 +243,30 @@ def analyze_mock():
             "measurements_reliable": True,
             "center_mass": {"x": 60.0, "y": 40.0, "z": 22.5}
         },
-        # ----------------------------------
         "issues": [
             {
-                "issue_id": "issue-001",
-                "type": "thin_wall",
-                "severity": "high",
-                "message": "Wall thickness of 0.8mm is below the minimum of 1.5mm for CNC machining.",
-                "recommendation": "Increase wall thickness to at least 1.5mm.",
-                "three_js_highlight": {
-                    "type": "bounding_box",
-                    "color": "#ff4d4d",
-                    "min": {"x": 10.0, "y": 15.0, "z": 5.0},
-                    "max": {"x": 35.0, "y": 40.0, "z": 12.0},
-                    "center": {"x": 22.5, "y": 27.5, "z": 8.5}
-                }
+                "issue_id": "err_001",
+                "severity": "blocker",
+                "title": "Wall Thickness Too Thin",
+                "description": "This wall is under the 2mm minimum thickness for injection molding.",
+                "face_id": 104,
+                "centroid": [15.2, 4.1, 0.0]
             },
             {
-                "issue_id": "issue-002",
-                "type": "deep_pocket",
-                "severity": "medium",
-                "message": "Pocket depth-to-width ratio of 5:1 exceeds the recommended 4:1 for standard tooling.",
-                "recommendation": "Reduce pocket depth or widen the pocket opening.",
-                "three_js_highlight": {
-                    "type": "bounding_box",
-                    "color": "#ffb84d",
-                    "min": {"x": 60.0, "y": 20.0, "z": 0.0},
-                    "max": {"x": 85.0, "y": 55.0, "z": 30.0},
-                    "center": {"x": 72.5, "y": 37.5, "z": 15.0}
-                }
+                "issue_id": "err_002",
+                "severity": "major",
+                "title": "Sharp Internal Corner",
+                "description": "Requires a fillet to reduce stress concentration.",
+                "edge_id": 232,
+                "centroid": [-5.0, 10.5, 3.2]
+            },
+            {
+                "issue_id": "err_003",
+                "severity": "minor",
+                "title": "Non-Standard Draft Angle",
+                "description": "Draft angle is 1.5 degrees, but recommended is 2.0.",
+                "face_id": 45,
+                "centroid": [0.0, -12.3, 5.0]
             }
         ]
     }
