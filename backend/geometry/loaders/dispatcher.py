@@ -57,23 +57,14 @@ def load_geometry(path: str) -> GeometryModel:
         return _load_stl(path)
 
 
-# ---------------------------------------------------------------------------
+
 # STEP / OCC path
-# ---------------------------------------------------------------------------
 
 def _load_step(path: str) -> GeometryModel:
-    # Use the build123d loader so the returned object exposes the build123d
-    # Shape API (.faces(), .tessellate(), face.wrapped, face.center(), etc.)
-    # that all downstream topology and measurement code depends on.
-    # build123d wraps pythonOCC internally, so OCC measurement functions that
-    # do `shape.wrapped if hasattr(shape, "wrapped") else shape` work fine.
     try:
         from geometry.loaders.step_loader import load_step as load_step_b123d
         shape = load_step_b123d(path)
     except Exception:
-        # Fallback to the raw OCC loader if build123d is not available.
-        # Topology extraction (faces/edges/face_graph) will be skipped, but
-        # scalar measurements still work on a TopoDS_Shape.
         from geometry.loaders.step_loader_pythonocc import load_step as load_step_occ
         shape = load_step_occ(path)
 
@@ -81,10 +72,8 @@ def _load_step(path: str) -> GeometryModel:
         source_format=SourceFormat.STEP, source_path=path, raw=shape
     )
 
-    # Core measurements — these accept both build123d Shape and TopoDS_Shape
-    # (each function does `shape.wrapped if hasattr(shape, "wrapped") else shape`)
     model.bounding_box = compute_bbox_occ(shape)
-    model.oriented_bbox = None  # not produced on the OCC path
+    model.oriented_bbox = None
     model.volume_mm3 = compute_volume_occ(shape)
     model.surface_area_mm2 = compute_surface_area_occ(shape)
     model.center_mass = compute_center_mass_occ(shape)
@@ -108,11 +97,33 @@ def _load_step(path: str) -> GeometryModel:
             node: list(face_graph.neighbors(node))
             for node in face_graph.nodes()
         }
+
+        # Cylindrical manufacturing feature detection (holes/bosses/cavities)
+        # Requires faces_list/edges_list from the block above, so it's
+        # nested in the same try — if topology extraction fails, feature
+        # detection can't run either.
+        try:
+            from geometry.features.holes import detect_holes
+            from geometry.features.bosses import detect_bosses_full
+            from geometry.features.cavities import detect_cavities_full
+
+            model.holes = detect_holes(faces_list, edges_list)
+            model.bosses = detect_bosses_full(faces_list, edges_list, holes=model.holes)
+            model.cavities = detect_cavities_full(faces_list, edges_list)
+        except Exception as e:
+            print(f"Warning: feature detection (holes/bosses/cavities) failed for {path}: {e}")
+            model.holes = []
+            model.bosses = []
+            model.cavities = []
+
     except Exception as e:
         print(f"Warning: face/edge extraction failed for {path}: {e}")
         model.faces = []
         model.edges = []
         model.face_graph = None
+        model.holes = []
+        model.bosses = []
+        model.cavities = []
 
     # Wall thickness sampling
     try:
@@ -135,9 +146,8 @@ def _load_step(path: str) -> GeometryModel:
     return model
 
 
-# ---------------------------------------------------------------------------
+
 # STL / trimesh path
-# ---------------------------------------------------------------------------
 
 def _load_stl(path: str) -> GeometryModel:
     mesh = load_stl(path)
@@ -145,23 +155,27 @@ def _load_stl(path: str) -> GeometryModel:
         source_format=SourceFormat.STL, source_path=path, raw=mesh
     )
 
-    # Core measurements
     model.bounding_box = compute_bbox_mesh(mesh)
     model.oriented_bbox = compute_oriented_bbox_mesh(mesh)
-    model.volume_mm3 = compute_volume_mesh(mesh)   # attempts repair in-place
+    model.volume_mm3 = compute_volume_mesh(mesh)
     model.surface_area_mm2 = compute_surface_area_mesh(mesh)
     model.center_mass = compute_center_mass_mesh(mesh)
     model.moment_of_inertia = compute_moment_inertia_mesh(mesh)
-    model.measurements_reliable = is_mesh_reliable(mesh)  # check AFTER repair
+    model.measurements_reliable = is_mesh_reliable(mesh)
 
-    # Mesh quality flags
+    # NOTE: holes/bosses/cavities are intentionally left empty on the STL
+    # path. Mesh faces (from extract_faces_mesh) have no surface-type
+    # classification (no cylinder/plane distinction without real curvature
+    # analysis on a triangle soup), so cylindrical feature detection can't
+    # run against them yet — this matches the feature spec's STL placeholder
+    # allowance.
+
     try:
         from geometry.models.mesh_quality import check_mesh_quality
         model.mesh_quality = check_mesh_quality(mesh)
     except Exception as e:
         print(f"Warning: mesh quality check failed for {path}: {e}")
 
-    # Wall thickness sampling
     try:
         from geometry.measurements.wall_thickness import compute_wall_thickness_mesh
         samples, stats = compute_wall_thickness_mesh(mesh)
@@ -171,15 +185,14 @@ def _load_stl(path: str) -> GeometryModel:
     except Exception as e:
         print(f"Warning: wall thickness (mesh) failed for {path}: {e}")
 
-    # Face normals from trimesh as lightweight Face objects for orientation analysis
     try:
         from geometry.measurements.print_orientations import compute_print_orientations
         from geometry.models.face import Face
         from geometry.models.enums import SurfaceType
-        
-        face_normals = mesh.face_normals          # (M, 3)
-        face_areas = mesh.area_faces              # (M,)
-        centroids = mesh.vertices[mesh.faces].mean(axis=1)  # (M, 3)
+
+        face_normals = mesh.face_normals
+        face_areas = mesh.area_faces
+        centroids = mesh.vertices[mesh.faces].mean(axis=1)
 
         pseudo_faces = [
             Face(
