@@ -106,15 +106,24 @@ def _load_step(path: str) -> GeometryModel:
             from geometry.features.holes import detect_holes
             from geometry.features.bosses import detect_bosses_full
             from geometry.features.cavities import detect_cavities_full
+            from geometry.features.fillets import detect_fillets
+            from geometry.features.ribs import detect_ribs
+            from geometry.features.chamfers import detect_chamfers
 
             model.holes = detect_holes(faces_list, edges_list)
             model.bosses = detect_bosses_full(faces_list, edges_list, holes=model.holes)
             model.cavities = detect_cavities_full(faces_list, edges_list)
+            model.fillets = detect_fillets(faces_list, edges_list, max_fillet_radius=10.0) # in mm
+            model.ribs = detect_ribs(faces_list, edges_list, min_thickness=0.5, max_thickness=12.0, max_draft_deg=5.0, min_length_thickness_ratio=4.0)
+            model.chamfers = detect_chamfers(faces_list, edges_list, max_chamfer_width=8.0, min_angle_deg=15.0, max_angle_deg=75.0)
         except Exception as e:
             print(f"Warning: feature detection (holes/bosses/cavities) failed for {path}: {e}")
             model.holes = []
             model.bosses = []
             model.cavities = []
+            model.fillets = []
+            model.ribs = []
+            model.chamfers = []
 
     except Exception as e:
         print(f"Warning: face/edge extraction failed for {path}: {e}")
@@ -124,6 +133,9 @@ def _load_step(path: str) -> GeometryModel:
         model.holes = []
         model.bosses = []
         model.cavities = []
+        model.fillets = []
+        model.ribs = []
+        model.chamfers = []
 
     # Wall thickness sampling
     try:
