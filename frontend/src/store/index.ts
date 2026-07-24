@@ -19,6 +19,7 @@ interface UploadedFile {
   id: string
   name: string
   taskId: string | null
+  analysisId: string | null
   status: 'pending' | 'processing' | 'completed' | 'failed'
 }
 
@@ -26,11 +27,12 @@ interface FileSlice {
   files: UploadedFile[]
   addFile: (f: UploadedFile) => void
   updateFile: (id: string, patch: Partial<UploadedFile>) => void
+  clearFiles: () => void
 }
 
 interface AnalysisSlice {
-  analysisResult: unknown | null
-  setAnalysisResult: (r: unknown | null) => void
+  analysisResult: Record<string, unknown> | null
+  setAnalysisResult: (r: Record<string, unknown> | null) => void
 }
 
 interface ChatSlice {
@@ -39,7 +41,44 @@ interface ChatSlice {
   setOpen: (v: boolean) => void
 }
 
-type StoreState = ProjectSlice & FileSlice & AnalysisSlice & ChatSlice
+interface ModelSlice {
+  currentFileBuffer: ArrayBuffer | null
+  setCurrentFileBuffer: (buf: ArrayBuffer | null) => void
+}
+
+interface ProjectRecord {
+  id: string
+  fileName: string
+  description: string
+}
+
+interface LibraryRecord {
+  id: string
+  fileName: string
+  diagnosis: string
+  projectId?: string | null
+}
+
+interface HistoryRecord {
+  id: string
+  fileName: string
+  diagnosis: string
+  date: string
+}
+
+interface RecordsSlice {
+  projects: ProjectRecord[]
+  libraryItems: LibraryRecord[]
+  historyEntries: HistoryRecord[]
+  addProject: (p: ProjectRecord) => void
+  updateProject: (id: string, patch: Partial<ProjectRecord>) => void
+  deleteProject: (id: string) => void
+  deleteLibraryItem: (id: string) => void
+  addLibraryItem: (l: LibraryRecord) => void
+  linkLibraryItemToProject: (itemId: string, projectId: string) => void
+}
+
+type StoreState = ProjectSlice & FileSlice & AnalysisSlice & ChatSlice & ModelSlice & RecordsSlice
 
 export const useStore = create<StoreState>((set) => ({
   // Project slice
@@ -63,6 +102,7 @@ export const useStore = create<StoreState>((set) => ({
     set((s) => ({
       files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
     })),
+  clearFiles: () => set({ files: [] }),
 
   // Analysis slice
   analysisResult: null,
@@ -72,4 +112,26 @@ export const useStore = create<StoreState>((set) => ({
   isOpen: false,
   toggle: () => set((s) => ({ isOpen: !s.isOpen })),
   setOpen: (v) => set({ isOpen: v }),
+
+  // Model slice
+  currentFileBuffer: null,
+  setCurrentFileBuffer: (buf) => set({ currentFileBuffer: buf }),
+
+  // Records slice
+  projects: [],
+  libraryItems: [],
+  historyEntries: [],
+  addProject: (p) => set((s) => ({ projects: [...s.projects, p] })),
+  updateProject: (id, patch) =>
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    })),
+  deleteProject: (id) => set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
+  deleteLibraryItem: (id) =>
+    set((s) => ({ libraryItems: s.libraryItems.filter((l) => l.id !== id) })),
+  addLibraryItem: (l) => set((s) => ({ libraryItems: [...s.libraryItems, l] })),
+  linkLibraryItemToProject: (itemId, projectId) =>
+    set((s) => ({
+      libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
+    })),
 }))
