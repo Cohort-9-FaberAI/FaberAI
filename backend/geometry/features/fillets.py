@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import math
-from typing import Optional
-
 import numpy as np
 
-from geometry.models import Fillet, SurfaceType
+from geometry.models import Fillet
 
 MAX_FILLET_RADIUS_DEFAULT = 10.0   # mm — fillets are usually small-radius blends
 MIN_PLANE_NEIGHBORS = 2            # a fillet blends at least two adjacent faces

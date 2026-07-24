@@ -5,7 +5,7 @@ from typing import Optional
 
 import numpy as np
 
-from geometry.models import Rib, SurfaceType
+from geometry.models import Rib
 
 MIN_THICKNESS_DEFAULT = 0.5         # mm
 MAX_THICKNESS_DEFAULT = 12.0        # mm
