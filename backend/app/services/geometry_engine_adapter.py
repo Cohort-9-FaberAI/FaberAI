@@ -173,6 +173,49 @@ class CavitySummary(BaseModel):
     opening_area: float
 
 
+class FilletSummary(BaseModel):
+    """A detected convex rounded-edge blend feature."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    radius: float
+    length: float
+    axis: Vector3
+    center: Vector3
+    cylindrical_face: int
+    adjacent_faces: List[int] = Field(default_factory=list)
+    convex: bool
+    edge_faces: List[int] = Field(default_factory=list)
+    aspect_ratio: float
+
+
+class RibSummary(BaseModel):
+    """A detected thin, long-and-narrow support wall feature."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    thickness: float
+    length: float
+    normal: Vector3
+    center: Vector3
+    face_pair: List[int] = Field(default_factory=list)
+    shared_neighbor_faces: List[int] = Field(default_factory=list)
+    aspect_ratio: float
+
+
+class ChamferSummary(BaseModel):
+    """A detected flat (or conical) beveled-edge feature."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    width: float
+    angle: float
+    face: int
+    is_conical: bool
+    convex: bool
+    adjacent_faces: List[int] = Field(default_factory=list)
+    valid_edge_count: int
+    valid_area_count: int
+    is_symmetric_45: bool
+
+
 
 # DFM issue schemas
 
@@ -241,6 +284,11 @@ class GeometryEngineResponse(BaseModel):
     holes: List[HoleSummary] = Field(default_factory=list)
     bosses: List[BossSummary] = Field(default_factory=list)
     cavities: List[CavitySummary] = Field(default_factory=list)
+
+    # Blend / bevel manufacturing features
+    fillets: List[FilletSummary] = Field(default_factory=list)
+    ribs: List[RibSummary] = Field(default_factory=list)
+    chamfers: List[ChamferSummary] = Field(default_factory=list)
 
     # DFM issues
     issues: List[GeometryEngineIssue] = Field(default_factory=list)
@@ -403,6 +451,49 @@ def _to_cavity_summary(cavity: Any) -> CavitySummary:
     )
 
 
+def _to_fillet_summary(fillet: Any) -> FilletSummary:
+    return FilletSummary(
+        id=int(fillet.id),
+        radius=float(fillet.radius),
+        length=float(fillet.length),
+        axis=_to_vector3(fillet.axis) or Vector3(x=0.0, y=0.0, z=0.0),
+        center=_to_vector3(fillet.center) or Vector3(x=0.0, y=0.0, z=0.0),
+        cylindrical_face=int(fillet.cylindrical_face),
+        adjacent_faces=[int(f) for f in fillet.adjacent_faces],
+        convex=bool(fillet.convex),
+        edge_faces=[int(f) for f in fillet.edge_faces],
+        aspect_ratio=float(fillet.aspect_ratio()),
+    )
+
+
+def _to_rib_summary(rib: Any) -> RibSummary:
+    return RibSummary(
+        id=int(rib.id),
+        thickness=float(rib.thickness),
+        length=float(rib.length),
+        normal=_to_vector3(rib.normal) or Vector3(x=0.0, y=0.0, z=0.0),
+        center=_to_vector3(rib.center) or Vector3(x=0.0, y=0.0, z=0.0),
+        face_pair=[int(f) for f in rib.face_pair],
+        shared_neighbor_faces=[int(f) for f in rib.shared_neighbor_faces],
+        aspect_ratio=float(rib.aspect_ratio()),
+    )
+
+
+def _to_chamfer_summary(chamfer: Any) -> ChamferSummary:
+    return ChamferSummary(
+        id=int(chamfer.id),
+        width=float(chamfer.width),
+        angle=float(chamfer.angle),
+        face=int(chamfer.face),
+        is_conical=bool(chamfer.is_conical),
+        convex=bool(chamfer.convex),
+        adjacent_faces=[int(f) for f in chamfer.adjacent_faces],
+        valid_edge_count=int(chamfer.valid_edge_count),
+        valid_area_count=int(chamfer.valid_area_count),
+        is_symmetric_45=bool(chamfer.is_symmetric_45()),
+    )
+
+
 def _clamp_volume(volume: float | None, measurements_reliable: bool) -> float | None:
     """
     Here the physically impossible negative volumes are made None.
@@ -468,6 +559,10 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         holes=[_to_hole_summary(h) for h in model.holes],
         bosses=[_to_boss_summary(b) for b in model.bosses],
         cavities=[_to_cavity_summary(c) for c in model.cavities],
+        # Blend / bevel manufacturing features
+        fillets=[_to_fillet_summary(f) for f in model.fillets],
+        ribs=[_to_rib_summary(r) for r in model.ribs],
+        chamfers=[_to_chamfer_summary(c) for c in model.chamfers],
     )
 
     return response.model_dump()
