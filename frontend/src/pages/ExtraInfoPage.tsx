@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/layout/AppShell'
 import StepIndicator from '../components/layout/StepIndicator'
-import ModelPreviewPlaceholder from '../components/common/ModelPreviewPlaceholder'
+import ModelPreview from '../components/ModelPreview/ModelPreview'
 import ProcessToggle from '../components/extra-info/ProcessToggle'
 import { useStore } from '../store'
 
@@ -25,7 +25,7 @@ export default function ExtraInfoPage() {
     <AppShell>
       <StepIndicator currentStep={2} />
 
-      <ModelPreviewPlaceholder />
+      <ModelPreview />
 
       <form className="extra-info-form" onSubmit={handleSubmit}>
         <div className="form-group">
@@ -61,9 +61,9 @@ export default function ExtraInfoPage() {
           <label htmlFor="tolerance">Tolerance</label>
           <select id="tolerance" value={tolerance} onChange={(e) => setTolerance(e.target.value)}>
             <option value="">Select tolerance</option>
-            <option value="standard">Standard (±0.5mm)</option>
-            <option value="tight">Tight (±0.2mm)</option>
-            <option value="precision">Precision (±0.1mm)</option>
+            <option value="standard">Standard (&plusmn;0.5mm)</option>
+            <option value="tight">Tight (&plusmn;0.2mm)</option>
+            <option value="precision">Precision (&plusmn;0.1mm)</option>
           </select>
         </div>
 

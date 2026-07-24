@@ -10,21 +10,38 @@ interface IssueAccordionProps {
   count: number
   color: string
   items: Issue[]
+  emptyLabel?: string
 }
 
-export default function IssueAccordion({ title, count, color, items }: IssueAccordionProps) {
+export default function IssueAccordion({
+  title,
+  count,
+  color,
+  items,
+  emptyLabel,
+}: IssueAccordionProps) {
   const [open, setOpen] = useState(false)
 
   return (
     <div className="issue-accordion">
-      <button type="button" className="issue-accordion-header" onClick={() => setOpen(!open)}>
+      <button
+        type="button"
+        className="issue-accordion-header"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
         <span className="issue-accordion-dot" style={{ background: color }} />
         <span className="issue-accordion-title">{title}</span>
         <span className="issue-accordion-count">{count}</span>
-        <span className="issue-accordion-chevron">{open ? '▲' : '▼'}</span>
+        <span className="issue-accordion-chevron">&#9662;</span>
       </button>
       {open && (
         <ul className="issue-accordion-list">
+          {items.length === 0 && emptyLabel && (
+            <li className="issue-accordion-item issue-accordion-empty">
+              <p>{emptyLabel}</p>
+            </li>
+          )}
           {items.map((item, i) => (
             <li key={i} className="issue-accordion-item">
               <p className="issue-message">{item.message}</p>
