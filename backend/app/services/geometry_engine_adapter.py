@@ -17,9 +17,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
+
 # Primitive schemas
-# ---------------------------------------------------------------------------
 
 class Vector3(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -37,9 +36,8 @@ class BoundingBoxSummary(BaseModel):
     height: Optional[float] = None
 
 
-# ---------------------------------------------------------------------------
+
 # Topology schemas
-# ---------------------------------------------------------------------------
 
 class FaceSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -76,9 +74,8 @@ class WallSampleSummary(BaseModel):
     reliable: bool = True
 
 
-# ---------------------------------------------------------------------------
+
 # Wall thickness schemas
-# ---------------------------------------------------------------------------
 
 class WallThicknessStatsSummary(BaseModel):
     """Aggregate wall thickness statistics."""
@@ -90,9 +87,8 @@ class WallThicknessStatsSummary(BaseModel):
     wall_thickness_field: List[float]
 
 
-# ---------------------------------------------------------------------------
+
 # Mesh quality schema
-# ---------------------------------------------------------------------------
 
 class MeshQualitySummary(BaseModel):
     """Mesh quality flags (STL path only)."""
@@ -102,9 +98,8 @@ class MeshQualitySummary(BaseModel):
     is_volume: bool
 
 
-# ---------------------------------------------------------------------------
+
 # Print orientation schemas
-# ---------------------------------------------------------------------------
 
 class PrintOrientationSummary(BaseModel):
     """Analysis result for a single candidate build direction."""
@@ -127,9 +122,102 @@ class PrintOrientationAnalysisSummary(BaseModel):
     recommended: str = ""
 
 
-# ---------------------------------------------------------------------------
+
+# Cylindrical manufacturing feature schemas (holes / bosses / cavities)
+
+class HoleSummary(BaseModel):
+    """A detected cylindrical hole (through, blind, counterbore, countersink)."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    type: str
+    diameter: float
+    depth: float
+    axis: Vector3
+    center: Vector3
+    through: bool
+    cylindrical_faces: List[int] = Field(default_factory=list)
+    bottom_face: Optional[int] = None
+    entry_face: Optional[int] = None
+    secondary_diameter: Optional[float] = None
+    secondary_depth: Optional[float] = None
+    volume_removed: float
+    aspect_ratio: float
+
+
+class BossSummary(BaseModel):
+    """A detected cylindrical boss (protrusion)."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    outer_diameter: float
+    inner_diameter: Optional[float] = None
+    wall_thickness: Optional[float] = None
+    height: float
+    axis: Vector3
+    attached_face: Optional[int] = None
+    draft_angle: Optional[float] = None
+    fillet_radius: Optional[float] = None
+    faces: List[int] = Field(default_factory=list)
+    is_solid: bool
+    height_ratio: float
+
+
+class CavitySummary(BaseModel):
+    """A detected internal cavity / pocket (non-cylindrical recess)."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    volume: float
+    depth: float
+    opening_face: Optional[int] = None
+    bottom_faces: List[int] = Field(default_factory=list)
+    wall_faces: List[int] = Field(default_factory=list)
+    opening_area: float
+
+
+class FilletSummary(BaseModel):
+    """A detected convex rounded-edge blend feature."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    radius: float
+    length: float
+    axis: Vector3
+    center: Vector3
+    cylindrical_face: int
+    adjacent_faces: List[int] = Field(default_factory=list)
+    convex: bool
+    edge_faces: List[int] = Field(default_factory=list)
+    aspect_ratio: float
+
+
+class RibSummary(BaseModel):
+    """A detected thin, long-and-narrow support wall feature."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    thickness: float
+    length: float
+    normal: Vector3
+    center: Vector3
+    face_pair: List[int] = Field(default_factory=list)
+    shared_neighbor_faces: List[int] = Field(default_factory=list)
+    aspect_ratio: float
+
+
+class ChamferSummary(BaseModel):
+    """A detected flat (or conical) beveled-edge feature."""
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    width: float
+    angle: float
+    face: int
+    is_conical: bool
+    convex: bool
+    adjacent_faces: List[int] = Field(default_factory=list)
+    valid_edge_count: int
+    valid_area_count: int
+    is_symmetric_45: bool
+
+
+
 # DFM issue schemas
-# ---------------------------------------------------------------------------
 
 class ThreeJSHighlight(BaseModel):
     """Bounding box coordinates for highlighting a region on the 3D canvas."""
@@ -151,9 +239,8 @@ class GeometryEngineIssue(BaseModel):
     three_js_highlight: ThreeJSHighlight
 
 
-# ---------------------------------------------------------------------------
+
 # Top-level response schema
-# ---------------------------------------------------------------------------
 
 class GeometryEngineResponse(BaseModel):
     """Full response shape produced by run_geometry_engine()."""
@@ -193,13 +280,22 @@ class GeometryEngineResponse(BaseModel):
     # Print orientation analysis
     print_orientations: Optional[PrintOrientationAnalysisSummary] = None
 
+    # Cylindrical manufacturing features
+    holes: List[HoleSummary] = Field(default_factory=list)
+    bosses: List[BossSummary] = Field(default_factory=list)
+    cavities: List[CavitySummary] = Field(default_factory=list)
+
+    # Blend / bevel manufacturing features
+    fillets: List[FilletSummary] = Field(default_factory=list)
+    ribs: List[RibSummary] = Field(default_factory=list)
+    chamfers: List[ChamferSummary] = Field(default_factory=list)
+
     # DFM issues
     issues: List[GeometryEngineIssue] = Field(default_factory=list)
 
 
-# ---------------------------------------------------------------------------
+
 # Mapping helpers
-# ---------------------------------------------------------------------------
 
 def _to_vector3(values: Any) -> Optional[Vector3]:
     if values is None:
@@ -306,10 +402,102 @@ def _to_print_orientation_analysis(analysis: Any) -> Optional[PrintOrientationAn
         recommended=analysis.recommended,
     )
 
+
+def _to_hole_summary(hole: Any) -> HoleSummary:
+    return HoleSummary(
+        id=int(hole.id),
+        type=hole.type,
+        diameter=float(hole.diameter),
+        depth=float(hole.depth),
+        axis=_to_vector3(hole.axis) or Vector3(x=0.0, y=0.0, z=0.0),
+        center=_to_vector3(hole.center) or Vector3(x=0.0, y=0.0, z=0.0),
+        through=bool(hole.through),
+        cylindrical_faces=[int(f) for f in hole.cylindrical_faces],
+        bottom_face=hole.bottom_face,
+        entry_face=hole.entry_face,
+        secondary_diameter=hole.secondary_diameter,
+        secondary_depth=hole.secondary_depth,
+        volume_removed=float(hole.volume_removed()),
+        aspect_ratio=float(hole.aspect_ratio()),
+    )
+
+
+def _to_boss_summary(boss: Any) -> BossSummary:
+    return BossSummary(
+        id=int(boss.id),
+        outer_diameter=float(boss.outer_diameter),
+        inner_diameter=boss.inner_diameter,
+        wall_thickness=boss.wall_thickness,
+        height=float(boss.height),
+        axis=_to_vector3(boss.axis) or Vector3(x=0.0, y=0.0, z=0.0),
+        attached_face=boss.attached_face,
+        draft_angle=boss.draft_angle,
+        fillet_radius=boss.fillet_radius,
+        faces=[int(f) for f in boss.faces],
+        is_solid=bool(boss.is_solid()),
+        height_ratio=float(boss.height_ratio()),
+    )
+
+
+def _to_cavity_summary(cavity: Any) -> CavitySummary:
+    return CavitySummary(
+        id=int(cavity.id),
+        volume=float(cavity.volume),
+        depth=float(cavity.depth),
+        opening_face=cavity.opening_face,
+        bottom_faces=[int(f) for f in cavity.bottom_faces],
+        wall_faces=[int(f) for f in cavity.wall_faces],
+        opening_area=float(cavity.opening_area()),
+    )
+
+
+def _to_fillet_summary(fillet: Any) -> FilletSummary:
+    return FilletSummary(
+        id=int(fillet.id),
+        radius=float(fillet.radius),
+        length=float(fillet.length),
+        axis=_to_vector3(fillet.axis) or Vector3(x=0.0, y=0.0, z=0.0),
+        center=_to_vector3(fillet.center) or Vector3(x=0.0, y=0.0, z=0.0),
+        cylindrical_face=int(fillet.cylindrical_face),
+        adjacent_faces=[int(f) for f in fillet.adjacent_faces],
+        convex=bool(fillet.convex),
+        edge_faces=[int(f) for f in fillet.edge_faces],
+        aspect_ratio=float(fillet.aspect_ratio()),
+    )
+
+
+def _to_rib_summary(rib: Any) -> RibSummary:
+    return RibSummary(
+        id=int(rib.id),
+        thickness=float(rib.thickness),
+        length=float(rib.length),
+        normal=_to_vector3(rib.normal) or Vector3(x=0.0, y=0.0, z=0.0),
+        center=_to_vector3(rib.center) or Vector3(x=0.0, y=0.0, z=0.0),
+        face_pair=[int(f) for f in rib.face_pair],
+        shared_neighbor_faces=[int(f) for f in rib.shared_neighbor_faces],
+        aspect_ratio=float(rib.aspect_ratio()),
+    )
+
+
+def _to_chamfer_summary(chamfer: Any) -> ChamferSummary:
+    return ChamferSummary(
+        id=int(chamfer.id),
+        width=float(chamfer.width),
+        angle=float(chamfer.angle),
+        face=int(chamfer.face),
+        is_conical=bool(chamfer.is_conical),
+        convex=bool(chamfer.convex),
+        adjacent_faces=[int(f) for f in chamfer.adjacent_faces],
+        valid_edge_count=int(chamfer.valid_edge_count),
+        valid_area_count=int(chamfer.valid_area_count),
+        is_symmetric_45=bool(chamfer.is_symmetric_45()),
+    )
+
+
 def _clamp_volume(volume: float | None, measurements_reliable: bool) -> float | None:
     """
     Here the physically impossible negative volumes are made None.
- 
+
     A negative volume indicates the mesh has inverted normals or is
     non-watertight (trimesh computes a signed volume). When
     measurements_reliable is already False the caller knows the
@@ -329,9 +517,8 @@ def _clamp_volume(volume: float | None, measurements_reliable: bool) -> float | 
     return volume
 
 
-# ---------------------------------------------------------------------------
+
 # Public entry point
-# ---------------------------------------------------------------------------
 
 def run_geometry_engine(file_path: str, original_filename: str) -> dict:
     """Run geometry analysis and return a fully-populated response dict."""
@@ -368,6 +555,14 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         mesh_quality=_to_mesh_quality(model.mesh_quality),
         # Print orientations
         print_orientations=_to_print_orientation_analysis(model.print_orientations),
+        # Cylindrical manufacturing features
+        holes=[_to_hole_summary(h) for h in model.holes],
+        bosses=[_to_boss_summary(b) for b in model.bosses],
+        cavities=[_to_cavity_summary(c) for c in model.cavities],
+        # Blend / bevel manufacturing features
+        fillets=[_to_fillet_summary(f) for f in model.fillets],
+        ribs=[_to_rib_summary(r) for r in model.ribs],
+        chamfers=[_to_chamfer_summary(c) for c in model.chamfers],
     )
 
     return response.model_dump()

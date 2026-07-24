@@ -221,7 +221,7 @@ def analyze_mock():
         "status": "completed",
         "manufacturability_score": 72,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
-       "file_url": "http://127.0.0.1:8000/mock-file",
+        "file_url": "http://127.0.0.1:8000/mock-file", 
         "part_metadata": {
             "units": "mm",
             "volume": 15420.5,
@@ -249,7 +249,7 @@ def analyze_mock():
                 "title": "Wall Thickness Too Thin",
                 "description": "This wall is under the 2mm minimum thickness for injection molding.",
                 "face_id": 104,
-                "centroid": [15.2, 4.1, 0.0]
+                "centroid": {"x": 15.2, "y": 4.1, "z": 0.0}
             },
             {
                 "issue_id": "err_002",
@@ -257,7 +257,7 @@ def analyze_mock():
                 "title": "Sharp Internal Corner",
                 "description": "Requires a fillet to reduce stress concentration.",
                 "edge_id": 232,
-                "centroid": [-5.0, 10.5, 3.2]
+                "centroid": {"x": -5.0, "y": 10.5, "z": 3.2}
             },
             {
                 "issue_id": "err_003",
@@ -265,7 +265,7 @@ def analyze_mock():
                 "title": "Non-Standard Draft Angle",
                 "description": "Draft angle is 1.5 degrees, but recommended is 2.0.",
                 "face_id": 45,
-                "centroid": [0.0, -12.3, 5.0]
+                "centroid": {"x": 0.0, "y": -12.3, "z": 5.0}
             }
         ]
     }

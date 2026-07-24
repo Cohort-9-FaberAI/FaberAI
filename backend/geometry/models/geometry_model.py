@@ -34,6 +34,11 @@ class GeometryModel:
     center_mass: Optional[np.ndarray] = None
     moment_of_inertia: Optional[np.ndarray] = None  # 3x3, about center of mass
 
+    # Cylindrical manufacturing features (populated by geometry.features.*)
+    holes: list = field(default_factory=list)
+    bosses: list = field(default_factory=list)
+    cavities: list = field(default_factory=list)
+
     # False when the source mesh has holes/damage that couldn't be
     # auto-repaired — volume_mm3 (and to a lesser extent center_mass)
     # should NOT be trusted for DFM scoring when this is False.
@@ -93,4 +98,7 @@ class GeometryModel:
             "moment_of_inertia": self.moment_of_inertia.tolist()
             if self.moment_of_inertia is not None
             else None,
+            "num_holes": len(self.holes),
+            "num_bosses": len(self.bosses),
+            "num_cavities": len(self.cavities),
         }

@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import AppShell from '../components/layout/AppShell'
 import StepIndicator from '../components/layout/StepIndicator'
 import ModelPreview from '../components/ModelPreview/ModelPreview'
 import SeverityLegend from '../components/analysis/SeverityLegend'
 import IssueAccordion from '../components/analysis/IssueAccordion'
-import { getMockAnalysis } from '../lib/api'
+import Spinner from '../components/common/Spinner'
+import { useStore } from '../store'
+import { useTaskPolling } from '../lib/useTaskPolling'
 
 interface Issue {
   severity: 'high' | 'medium' | 'low'
@@ -12,14 +16,9 @@ interface Issue {
   recommendation: string
 }
 
-interface MockAnalysisResponse {
-  issues: Issue[]
-  [key: string]: unknown
-}
-
-const fallbackData: MockAnalysisResponse = {
-  analysis_id: 'mock-analysis-0001',
-  filename: 'sample_bracket.stl',
+const MOCK_FALLBACK: Record<string, unknown> = {
+  analysis_id: 'mock-local-fallback',
+  filename: 'local_preview.stl',
   status: 'completed',
   manufacturability_score: 72,
   issues: [
@@ -38,17 +37,51 @@ const fallbackData: MockAnalysisResponse = {
 }
 
 export default function AnalysisPage() {
-  const [data, setData] = useState<MockAnalysisResponse>(fallbackData)
+  const navigate = useNavigate()
+  const files = useStore((s) => s.files)
+  const analysisResult = useStore((s) => s.analysisResult)
+  const setAnalysisResult = useStore((s) => s.setAnalysisResult)
   const [activeTab, setActiveTab] = useState<'molding' | 'printing'>('molding')
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const latestFile = files[files.length - 1]
+  const taskId = latestFile?.taskId ?? null
+  const isDevManual = taskId === 'dev-manual'
 
   useEffect(() => {
-    getMockAnalysis()
-      .then(setData)
-      .catch(() => {})
-  }, [])
+    if (isDevManual) {
+      setAnalysisResult(MOCK_FALLBACK)
+      return
+    }
+    fallbackTimerRef.current = setTimeout(() => {
+      const current = useStore.getState().analysisResult
+      if (!current) {
+        useStore.getState().setAnalysisResult(MOCK_FALLBACK)
+      }
+    }, 8000)
+    return () => {
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const cons = (data.issues ?? []).filter((i) => i.severity === 'high')
-  const neutral = (data.issues ?? []).filter((i) => i.severity === 'medium')
+  useTaskPolling(isDevManual ? null : taskId, (data) => {
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current)
+      fallbackTimerRef.current = null
+    }
+    const result = data?.result as Record<string, unknown> | undefined
+    if (result) {
+      setAnalysisResult(result)
+    }
+  })
+
+  const issues = (analysisResult?.issues as Issue[]) ?? []
+  const loading = !isDevManual && taskId !== null && !analysisResult
+  const error =
+    latestFile?.status === 'failed' && !isDevManual ? 'Analysis failed. Please try again.' : null
+
+  const cons = issues.filter((i) => i.severity === 'high')
+  const neutral = issues.filter((i) => i.severity === 'medium')
 
   return (
     <AppShell>
@@ -71,31 +104,67 @@ export default function AnalysisPage() {
         </button>
       </div>
 
-      <div className="analysis-layout">
-        <div className="analysis-thumb-rail">
-          {/* TODO: make these 4 thumbnails the new left sidebar for the upload, projects, library, history buttons */}
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="analysis-thumb" />
-          ))}
-        </div>
+      {loading && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <Spinner label="Analyzing your CAD file..." />
+        </motion.div>
+      )}
 
-        <ModelPreview />
+      {error && (
+        <motion.p
+          className="analysis-status error"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          {error}
+        </motion.p>
+      )}
 
-        <div className="analysis-right-panel">
-          <SeverityLegend />
+      {!loading && !error && (
+        <motion.div
+          className="analysis-layout"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <ModelPreview />
+          <div className="analysis-right-panel">
+            <SeverityLegend />
+            <IssueAccordion
+              title="Pros"
+              count={0}
+              color="var(--severity-pro)"
+              items={[]}
+              emptyLabel="Positive findings will appear once analysis is complete."
+            />
+            <IssueAccordion
+              title="Neutral"
+              count={neutral.length}
+              color="var(--severity-medium)"
+              items={neutral}
+            />
+            <IssueAccordion
+              title="Cons"
+              count={cons.length}
+              color="var(--severity-high)"
+              items={cons}
+            />
+          </div>
+        </motion.div>
+      )}
 
-          <IssueAccordion title="Pros" count={0} color="#4caf50" items={[]} />
-
-          <IssueAccordion title="Neutral" count={neutral.length} color="#ffb84d" items={neutral} />
-
-          <IssueAccordion title="Cons" count={cons.length} color="#ff4d4d" items={cons} />
-        </div>
-      </div>
-
-      <button className="next-btn" type="button" disabled>
-        Next
-        {/* TODO: navigate to /conclusion once that page is built */}
-      </button>
+      {analysisResult && (
+        <motion.button
+          className="next-btn"
+          type="button"
+          onClick={() => navigate('/conclusion')}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          Next
+        </motion.button>
+      )}
     </AppShell>
   )
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Sidebar from './Sidebar'
 import UsageIndicator from './UsageIndicator'
 import AskFaberAIButton from './AskFaberAIButton'
+import ChatPanel from './ChatPanel'
 
 export default function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <AskFaberAIButton />
         </div>
       </div>
+      <ChatPanel />
     </div>
   )
 }

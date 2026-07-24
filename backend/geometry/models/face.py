@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 import numpy as np
 
 from .bounding_box import BoundingBox
@@ -40,8 +40,10 @@ class Face:
     adjacent_faces: list[int] = field(default_factory=list)
     edge_ids: list[int] = field(default_factory=list)
 
-    # Native geometry
-    raw=None
+    # Native geometry (TopoDS_Face / build123d Face)
+    # raw = None was missing a type annotation, so Face(..., raw=...) crashed immediately with unexpected keyword argument. 
+    # This silently broke face_extraction.graph_to_faces_and_edges() for anyone actually using it
+    raw: Any = field(default=None, repr=False)
 
     def is_planar(self):
         return self.surface_type == SurfaceType.PLANE
