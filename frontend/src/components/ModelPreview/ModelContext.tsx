@@ -1,4 +1,9 @@
 import { createContext } from 'react'
-import { type AnalysisResult } from '../../types/analysis'
+import { type AnalysisResult, type ManufacturabilityIssue } from '../../types/analysis'
 
-export const ModelContext = createContext<AnalysisResult | null>(null)
+export type ModelContextType = {
+  analysis: AnalysisResult
+  selectedIssueSetter: (issue: ManufacturabilityIssue | null) => void
+}
+
+export const ModelContext = createContext<ModelContextType | null>(null)
