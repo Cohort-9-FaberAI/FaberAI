@@ -10,13 +10,12 @@ from __future__ import annotations
 
 from .exceptions import StepSupportUnavailableError
 
-
 def load_step(path: str):
     """Load a STEP file into a TopoDS_Shape via pythonOCC's STEPControl_Reader."""
     try:
         from OCC.Core.STEPControl import STEPControl_Reader
         from OCC.Core.IFSelect import IFSelect_RetDone
-    except ImportError as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         raise StepSupportUnavailableError(
             "STEP support is unavailable because the optional dependency "
             "'pythonocc-core' is not installed. It cannot be installed with "

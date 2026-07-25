@@ -49,8 +49,10 @@ class GeometryModel:
     # Native object (TopoDS_Shape for STEP, trimesh.Trimesh for STL),
     # kept so later pipeline stages (DFM checks, 3D highlighting) can
     # still reach into the original geometry.
+    raw: Any = field(default=None, repr=False)
     raw_occ: Any = field(default=None, repr=False)
     raw_b123: Any = field(default=None, repr=False)
+    
 
     # Additional data structures for the faces, edges, and wall samples of the model.
     faces: list[Face] = field(default_factory=list)

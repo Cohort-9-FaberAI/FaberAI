@@ -12,11 +12,10 @@ from __future__ import annotations
 
 from .exceptions import StepSupportUnavailableError
 
-
 def load_step(file_path):
     try:
         from build123d import import_step
-    except ImportError as exc:
+    except (ImportError, ModuleNotFoundError) as exc:
         raise StepSupportUnavailableError(
             "STEP support is unavailable because the optional dependency "
             "'build123d' is not installed. Install it with 'pip install "

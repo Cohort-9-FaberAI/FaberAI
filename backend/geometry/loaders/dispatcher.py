@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from os import path
 
 from geometry.models import GeometryModel, SourceFormat
 from geometry.measurements import (
@@ -23,6 +24,7 @@ from .stl_loader_trimesh import load_stl
 STEP_EXTENSIONS = {".step", ".stp"}
 STL_EXTENSIONS = {".stl"}
 
+from .exceptions import StepSupportUnavailableError
 
 def get_file_format(path: str) -> SourceFormat:
     """Determine SourceFormat from a file's extension."""
@@ -65,32 +67,44 @@ def _load_step(path: str) -> GeometryModel:
     # We need both loaders for the different use cases.
     # So we load twice and generate two shapes, one for build123d and one for pythonOCC. 
     # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.    
+    # 
     #   
+    # --- Try build123d ---
+    shape_b123 = None
+    b123_missing = False
     try:
         from geometry.loaders.step_loader import load_step as load_step_b123d
         shape_b123 = load_step_b123d(path)
-    except Exception:
-        print(f"Warning: build123d STEP loader failed for {path}")
+    except StepSupportUnavailableError:
+        b123_missing = True
+    except Exception as e:
+        print(f"Warning: build123d STEP loader failed for {path}: {e}")
 
+    # --- Try pythonOCC ---
+    shape_occ = None
+    occ_missing = False
     try:
         from geometry.loaders.step_loader_pythonocc import load_step as load_step_occ
         shape_occ = load_step_occ(path)
-    except Exception:
-        print(f"Warning: pythonOCC STEP loader failed for {path}")
+    except StepSupportUnavailableError:
+        occ_missing = True
 
+    except Exception as e:
+        print(f"Warning: pythonOCC STEP loader failed for {path}: {e}")
+        
 
+    # If both dependencies are missing, signal that STEP support is unavailable
+    if b123_missing and occ_missing:
+        raise StepSupportUnavailableError(
+            "STEP support is unavailable because required optional dependencies "
+            "(pythonocc-core / build123d) are not installed."
+        )
+    
     # Safety net: the loaders should already reject null/None shapes, but
     # guard here too so no downstream OCC call receives an invalid shape.
-    if shape_occ is None:
+    if shape_occ is None and shape_b123 is None:
         raise ValueError(
-            f"STEP file '{path}' loaded as None by occ — the file may be empty "
-            "or corrupted."
-        )
-
-    if shape_b123 is None:
-        raise ValueError(
-            f"STEP file '{path}' loaded as None by build123d — the file may be empty "
-            "or corrupted."
+            f"STEP file '{path}' could not be loaded — the file may be empty or corrupted."
         )
     
     model = GeometryModel(
