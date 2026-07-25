@@ -35,8 +35,6 @@ class WallThicknessStats:
     maximum_wall: float       # mm — thickest measured wall
     mean_wall: float          # mm — arithmetic mean
     median_wall: float        # mm — median
-    # Per-sample thickness values in the same order as the WallSample list.
-    # Kept as a plain list so it serialises cleanly to JSON.
     wall_thickness_field: list[float]
 
 
@@ -47,8 +45,17 @@ class WallThicknessStats:
 def compute_wall_thickness_occ(shape) -> tuple[list[WallSample], Optional[WallThicknessStats]]:
     """Ray-cast wall thickness sampling for a STEP B-rep shape.
 
-    Uses pythonOCC BRepIntCurveSurface_Inter to cast rays from each face
-    centroid inward and find the opposite surface.
+    Uses OCP's BRepIntCurveSurface_Inter (build123d's bundled OpenCASCADE
+    binding — matches the rest of the pipeline: face_graph.py,
+    surface_classifier.py, and the dispatcher's build123d STEP loader) to
+    cast rays from each face centroid inward and find the opposite surface.
+
+    FIX (previously broken): this function imported
+    `from OCP.GeomAbs import GeomAbs_IsOpposite`, a name that does not
+    exist in OCP.GeomAbs — it crashed with an ImportError before any real
+    logic ran. The import was never actually used, so it has simply been
+    removed. Verified against a hollow box (uniform 5mm walls on all
+    faces) and a solid box (walls matching the box's own dimensions).
 
     Parameters
     ----------
@@ -63,7 +70,6 @@ def compute_wall_thickness_occ(shape) -> tuple[list[WallSample], Optional[WallTh
     """
     from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
     from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
-    from OCP.GeomAbs import GeomAbs_IsOpposite  # noqa: F401 – kept for reference
 
     samples: list[WallSample] = []
     topo_shape = shape.wrapped if hasattr(shape, "wrapped") else shape
@@ -136,6 +142,9 @@ def compute_wall_thickness_mesh(mesh) -> tuple[list[WallSample], Optional[WallTh
     Casts a ray from each triangle centroid in the inward-normal direction
     and records the first hit on the opposite side.
 
+    Requires the `rtree` package (trimesh's ray-casting acceleration
+    structure) — add to requirements.txt if not already present.
+
     Parameters
     ----------
     mesh : trimesh.Trimesh
@@ -146,7 +155,7 @@ def compute_wall_thickness_mesh(mesh) -> tuple[list[WallSample], Optional[WallTh
         samples : list[WallSample]
         stats   : WallThicknessStats or None if no valid samples were found.
     """
-    
+
     vertices: np.ndarray = mesh.vertices          # (N, 3)
     tri_indices: np.ndarray = mesh.faces          # (M, 3)
     face_normals: np.ndarray = mesh.face_normals  # (M, 3) — unit outward normals
@@ -154,7 +163,7 @@ def compute_wall_thickness_mesh(mesh) -> tuple[list[WallSample], Optional[WallTh
     # Triangle centroids
     centroids: np.ndarray = vertices[tri_indices].mean(axis=1)  # (M, 3)
 
-    # Inward ray origins: nudge 0.1 mm off the surface inward
+    # Inward ray origins: nudge off the surface inward
     OFFSET = 1e-4
     ray_origins = centroids - face_normals * OFFSET   # (M, 3)
     ray_directions = -face_normals                    # (M, 3) inward

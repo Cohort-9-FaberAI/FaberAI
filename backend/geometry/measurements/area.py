@@ -1,16 +1,23 @@
-"""Surface area calculations."""
+"""Surface area calculations — OCP for STEP, trimesh for STL.
+
+See bbox.py for why the STEP path uses OCP, not OCC.Core.
+"""
 
 from __future__ import annotations
 
 
-def compute_surface_area_occ(shape) -> float:
-    """Surface area of a TopoDS_Shape via BRepGProp.SurfaceProperties."""
-    from OCC.Core.GProp import GProp_GProps
-    from OCC.Core.BRepGProp import brepgprop
+def _unwrap(shape):
+    return shape.wrapped if hasattr(shape, "wrapped") else shape
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
+
+def compute_surface_area_occ(shape) -> float:
+    """Surface area of a build123d Shape via OCP's GProp_GProps."""
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+
+    topo_shape = _unwrap(shape)
     props = GProp_GProps()
-    brepgprop.SurfaceProperties(topo, props)
+    BRepGProp.SurfaceProperties_s(topo_shape, props)
     return float(props.Mass())
 
 

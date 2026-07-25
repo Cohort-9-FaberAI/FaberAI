@@ -1,5 +1,9 @@
+"""Classify a build123d Face's underlying surface type and extract its
+defining geometric parameters (radius, axis, etc.)."""
+
 from OCP.BRepAdaptor import BRepAdaptor_Surface
 from build123d import GeomType
+
 
 def classify_surface_occ(face) -> dict:
     geom_type = face.geom_type
@@ -49,12 +53,22 @@ def classify_surface_occ(face) -> dict:
         geom_object["minor_r"] = minor_r
 
     elif geom_type == GeomType.BSPLINE:
+        # FIX: Geom_BSplineSurface has no single NbPoles() method — a
+        # surface is 2D parametric, so pole counts are split into
+        # NbUPoles() and NbVPoles() (U and V directions separately).
+        # The previous code called bspline.NbPoles(), which doesn't
+        # exist and crashed face/edge extraction for any real part
+        # containing a free-form BSpline surface (confirmed against
+        # real fixture files: block_torus_fillet3.step,
+        # two_elliptical_edges.step).
         bspline = occ_geom_surface.BSpline()
-        num_poles = bspline.NbPoles()
+        num_poles_u = bspline.NbUPoles()
+        num_poles_v = bspline.NbVPoles()
         degree_u = bspline.UDegree()
         degree_v = bspline.VDegree()
         geom_object["type"] = "BSPLINE"
-        geom_object["num_poles"] = num_poles
+        geom_object["num_poles_u"] = num_poles_u
+        geom_object["num_poles_v"] = num_poles_v
         geom_object["degree_u"] = degree_u
         geom_object["degree_v"] = degree_v
 

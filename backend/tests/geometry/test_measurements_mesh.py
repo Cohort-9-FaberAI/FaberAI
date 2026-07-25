@@ -1,12 +1,11 @@
 """
-Unit tests for geometry.measurements / geometry.loaders.
+Unit tests for the mesh/STL measurement path (geometry.measurements.*_mesh
+functions) and geometry.loaders.load_geometry() for .stl files.
 
 Per the spec: cube, cylinder, sphere, hollow box — each checked against
-its analytical ground truth.
+its analytical ground truth, via trimesh.
 
-The mesh (.stl / trimesh) path always runs. The OCC (.step) path is
-skipped automatically if pythonOCC isn't installed in this environment,
-so this file is safe to run on machines without OpenCASCADE set up yet.
+For the STEP/build123d path, see test_measurements_step.py.
 """
 
 import math
@@ -24,18 +23,9 @@ from geometry.measurements import (
     compute_center_mass_mesh,
 )
 
-try:
-    import OCC.Core  # noqa: F401
-
-    HAS_OCC = True
-except ImportError:
-    HAS_OCC = False
-
 REL_TOL = 1e-6          # exact primitives (cube, hollow box)
 TESSELLATION_TOL = 0.02  # 2% — curved primitives (cylinder, sphere) are
                          # tessellated meshes, so exact match isn't expected
-OCC_BBOX_ATOL = 1e-5    # OCC's Bnd_Box adds a small internal safety gap
-                        # (observed ~1e-7), so corners aren't bit-exact zero
 
 
 @pytest.fixture
@@ -195,74 +185,3 @@ def test_load_geometry_stl_end_to_end(cube, tmp_path):
     assert math.isclose(model.volume_mm3, expected["volume"], rel_tol=REL_TOL)
     assert math.isclose(model.surface_area_mm2, expected["area"], rel_tol=REL_TOL)
     assert np.allclose(model.center_mass, expected["center_mass"])
-
-
-
-@pytest.mark.skipif(not HAS_OCC, reason="pythonOCC not installed in this environment")
-class TestOccPath:
-    """Same solids, generated via OCC's BRepPrimAPI, checked via the OCC
-    measurement functions. Requires pythonOCC / OpenCASCADE."""
-
-    def test_cube_occ(self):
-        from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox
-        from geometry.measurements import (
-            compute_bbox_occ,
-            compute_volume_occ,
-            compute_surface_area_occ,
-            compute_center_mass_occ,
-        )
-
-        shape = BRepPrimAPI_MakeBox(10, 10, 10).Shape()
-        bb = compute_bbox_occ(shape)
-        assert np.allclose(bb.min_corner, [0, 0, 0], atol=OCC_BBOX_ATOL)
-        assert np.allclose(bb.max_corner, [10, 10, 10], atol=OCC_BBOX_ATOL)
-        assert math.isclose(compute_volume_occ(shape), 1000.0, rel_tol=REL_TOL)
-        assert math.isclose(compute_surface_area_occ(shape), 600.0, rel_tol=REL_TOL)
-        assert np.allclose(compute_center_mass_occ(shape), [5, 5, 5])
-
-        from geometry.measurements import compute_moment_inertia_occ
-        I = compute_moment_inertia_occ(shape)
-        expected_diag = (1 / 6) * 1000.0 * 10.0**2
-        assert I.shape == (3, 3)
-        assert math.isclose(I[0, 0], expected_diag, rel_tol=1e-3)
-        assert math.isclose(I[1, 1], expected_diag, rel_tol=1e-3)
-        assert math.isclose(I[2, 2], expected_diag, rel_tol=1e-3)
-
-    def test_cylinder_occ(self):
-        from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeCylinder
-        from geometry.measurements import compute_volume_occ, compute_surface_area_occ
-
-        radius, height = 5.0, 20.0
-        shape = BRepPrimAPI_MakeCylinder(radius, height).Shape()
-        expected_vol = math.pi * radius**2 * height
-        expected_area = 2 * math.pi * radius * height + 2 * math.pi * radius**2
-        assert math.isclose(compute_volume_occ(shape), expected_vol, rel_tol=REL_TOL)
-        assert math.isclose(compute_surface_area_occ(shape), expected_area, rel_tol=REL_TOL)
-
-    def test_sphere_occ(self):
-        from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeSphere
-        from geometry.measurements import compute_volume_occ, compute_surface_area_occ
-
-        radius = 5.0
-        shape = BRepPrimAPI_MakeSphere(radius).Shape()
-        expected_vol = (4 / 3) * math.pi * radius**3
-        expected_area = 4 * math.pi * radius**2
-        assert math.isclose(compute_volume_occ(shape), expected_vol, rel_tol=REL_TOL)
-        assert math.isclose(compute_surface_area_occ(shape), expected_area, rel_tol=REL_TOL)
-
-    def test_hollow_box_occ(self):
-        from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeBox
-        from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut
-        from OCC.Core.gp import gp_Pnt, gp_Trsf, gp_Vec
-        from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
-        from geometry.measurements import compute_volume_occ
-
-        outer = BRepPrimAPI_MakeBox(20, 20, 20).Shape()
-        inner_raw = BRepPrimAPI_MakeBox(10, 10, 10).Shape()
-
-        trsf = gp_Trsf()
-        trsf.SetTranslation(gp_Vec(5, 5, 5))  # center the 10mm cavity
-        inner = BRepBuilderAPI_Transform(inner_raw, trsf, True).Shape()
-
-        hollow = BRepAlgoAPI_Cut(outer, inner).Shape()
-        assert math.isclose(compute_volume_occ(hollow), 20**3 - 10**3, rel_tol=1e-6)

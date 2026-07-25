@@ -1,8 +1,6 @@
-"""Moment of inertia calculations.
+"""Moment of inertia calculations — OCP for STEP, trimesh for STL.
 
-Feeds the P4 aspect-ratio / tall-thin stability check per the DFM spec
-(Part 3.1: "Volume, surface area, and center of mass / inertia for
-stability reasoning").
+See bbox.py for why the STEP path uses OCP, not OCC.Core.
 """
 
 from __future__ import annotations
@@ -10,23 +8,22 @@ from __future__ import annotations
 import numpy as np
 
 
-def compute_moment_inertia_occ(shape) -> np.ndarray:
-    """3x3 inertia matrix (about the center of mass) of a TopoDS_Shape."""
-    from OCC.Core.GProp import GProp_GProps
-    from OCC.Core.BRepGProp import brepgprop
+def _unwrap(shape):
+    return shape.wrapped if hasattr(shape, "wrapped") else shape
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
+
+def compute_moment_inertia_occ(shape) -> np.ndarray:
+    """3x3 inertia matrix (about the center of mass) of a build123d Shape."""
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+
+    topo_shape = _unwrap(shape)
     props = GProp_GProps()
-    brepgprop.VolumeProperties(topo, props)
+    BRepGProp.VolumeProperties_s(topo_shape, props)
     mat = props.MatrixOfInertia()
     return np.array([[mat.Value(i, j) for j in range(1, 4)] for i in range(1, 4)])
 
 
 def compute_moment_inertia_mesh(mesh) -> np.ndarray:
-    """3x3 inertia tensor (about the center of mass) of a trimesh.Trimesh.
-
-    Only meaningful for a watertight mesh, same caveat as volume —
-    check reliability.is_mesh_reliable() first for anything derived
-    from this.
-    """
+    """3x3 inertia tensor (about the center of mass) of a trimesh.Trimesh."""
     return np.asarray(mesh.moment_inertia)

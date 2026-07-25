@@ -1,18 +1,25 @@
-"""Center of mass calculations."""
+"""Center of mass calculations — OCP for STEP, trimesh for STL.
+
+See bbox.py for why the STEP path uses OCP, not OCC.Core.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 
 
-def compute_center_mass_occ(shape) -> np.ndarray:
-    """Center of mass of a solid TopoDS_Shape (volume-weighted centroid)."""
-    from OCC.Core.GProp import GProp_GProps
-    from OCC.Core.BRepGProp import brepgprop
+def _unwrap(shape):
+    return shape.wrapped if hasattr(shape, "wrapped") else shape
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
+
+def compute_center_mass_occ(shape) -> np.ndarray:
+    """Center of mass of a solid build123d Shape (volume-weighted centroid)."""
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+
+    topo_shape = _unwrap(shape)
     props = GProp_GProps()
-    brepgprop.VolumeProperties(topo, props)
+    BRepGProp.VolumeProperties_s(topo_shape, props)
     pnt = props.CentreOfMass()
     return np.array([pnt.X(), pnt.Y(), pnt.Z()])
 
