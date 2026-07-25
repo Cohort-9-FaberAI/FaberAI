@@ -1,0 +1,89 @@
+# FaberAI — DFM scoring configuration
+#
+# The final weights are NOT frozen (PRD §16). Everything here is a variable so
+# the numbers can be recalibrated with the domain expert without touching rule
+# code. Defaults follow the MVP guidance agreed in the team thread:
+#
+#   Sreejith: "100 point scale ... major should take off 5, minor 2/3, blocker
+#              is all the points"; UX thresholds "30/50".
+#   Joao:     "If a Blocker is found, flag the process as unfeasible."
+#   PRD/spec: "Blocker caps the process score and shows a Not viable label";
+#              proposed cap <= 25.
+#
+# The two Blocker readings (score 0 vs score capped below the redesign
+# threshold) are both supported — see `blocker.mode`. The default is `cap`,
+# which keeps a diagnostic score visible to the user while still marking the
+# process not manufacturable, matching "If a part is not manufacturable, it
+# still receives a score, but the score is capped below the redesign threshold".
+
+version: "1.0.0"
+
+start_score: 100.0
+
+# Points removed per finding, by severity tier.
+severity_weights:
+  blocker: 100.0   # only reached when blocker.mode is `deduct`
+  major: 5.0
+  minor: 2.5
+
+# Repeated instances of the same problem must not dominate the score: the
+# combined deduction from any single rule is capped here. A part with 200
+# thin-wall regions and a part with 4 both lose at most `default` points from
+# M1 — the count is still reported in full on the rule result.
+per_rule_impact_cap:
+  default: 15.0
+  # Optional per-rule overrides, e.g.  M2: 20.0
+  overrides: {}
+
+# How a Blocker is handled.
+#   mode: cap     -> score is clamped to `cap_value` (default; keeps a
+#                    diagnostic score, always below redesign_below)
+#   mode: zero    -> score becomes 0 (Joao's "score = 0" reading)
+#   mode: deduct  -> Blockers deduct severity_weights.blocker like any other
+#                    finding, capped by per_rule_impact_cap
+# In every mode `manufacturable` becomes false and the verdict label is
+# "Not viable". Only Blockers do this.
+blocker:
+  mode: cap
+  cap_value: 25.0
+
+# Roll-up of the three PRD sub-scores into the process score.
+#   mode: deductive -> process score = start_score - all capped deductions
+#                      (MVP guidance; sub-scores are reported alongside)
+#   mode: weighted  -> process score = sum(weight_i x sub_score_i), with
+#                      not-assessed buckets dropped and weights renormalised
+rollup:
+  mode: deductive
+  weights:
+    geometry: 0.5
+    tolerance_feature: 0.2
+    cost_risk: 0.3
+
+# UX bands applied to the final score.
+verdict_thresholds:
+  redesign_below: 30.0     # "needs redesign"
+  review_below: 50.0       # "needs review"
+
+verdict_labels:
+  manufacturable: "Manufacturable"
+  review: "Needs review"
+  redesign: "Redesign recommended"
+  not_viable: "Not viable"
+
+# Confidence is a coverage signal, not a score modifier — it never changes the
+# points. It tells the user how much of the check-set actually ran on real
+# data: rules that reported "Not assessed" and rules that ran on a stated
+# default both lower it.
+confidence:
+  # Multiplied by (assessed rules / total enabled rules).
+  assumption_penalty: 0.05   # per distinct stated default assumption
+  floor: 0.2
+
+# Best-process recommendation.
+#   An unmouldable undercut Blocker (M4) must push the recommendation toward
+#   printing — the two check-sets are not independent (spec §3.3 cross-link).
+recommendation:
+  # Score margin below which the two processes are called comparable.
+  tie_margin: 5.0
+  # Extra weight added to printing when molding reports an M4 Blocker.
+  m4_blocker_printing_bonus: 10.0

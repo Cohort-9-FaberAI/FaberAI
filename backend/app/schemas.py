@@ -61,6 +61,10 @@ class AnalysisResult(BaseModel):
     # Carries the full GeometryEngineResponse payload (bounding_box, volume_mm3,
     # faces, edges, wall_samples, etc.) so nothing gets silently stripped.
     geometry_data: Optional[Any] = None
+    # Manufacturability report produced by the DFM rule engine downstream of
+    # geometry (dfm.engine.run_dfm_analysis). Stored as-is so the AI endpoint
+    # can answer from it without rerunning geometry or the DFM rules.
+    dfm_report: Optional[Any] = None
 
 
 # --- Database Insert Schema ---

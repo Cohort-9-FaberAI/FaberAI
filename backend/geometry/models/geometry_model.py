@@ -39,9 +39,13 @@ class GeometryModel:
     bosses: list = field(default_factory=list)
     cavities: list = field(default_factory=list)
 
+    # Blend / bevel / thin-wall features (populated by geometry.features.* on
+    # the STEP path only). Declared here so the STL path — which never assigns
+    # them — still exposes empty lists to the adapter instead of raising
+    # AttributeError.
     fillets: list = field(default_factory=list)
-    chamfers: list = field(default_factory=list)
     ribs: list = field(default_factory=list)
+    chamfers: list = field(default_factory=list)
 
     # False when the source mesh has holes/damage that couldn't be
     # auto-repaired — volume_mm3 (and to a lesser extent center_mass)

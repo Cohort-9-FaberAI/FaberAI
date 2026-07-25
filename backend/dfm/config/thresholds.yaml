@@ -1,0 +1,353 @@
+# FaberAI — DFM threshold configuration
+#
+# Every number the rule engine compares against lives here, never inline in
+# code, so weeks 6–7 expert tuning is a config edit and not a redeploy of
+# application logic. Loaded once at FastAPI startup (dfm.config.loader).
+#
+# Values are the STARTING DEFAULTS from "FaberAI — DFM Check-Set Specification
+# v1.0". They are not frozen. Sources are cited per block so a tuner can see
+# where a number came from before changing it.
+#
+# Threshold types (spec §"How to read this document"):
+#   type_1  material / process dependent  -> looked up from a table below
+#   type_2  geometric ratio               -> fixed proportion, no lookup
+#   type_3  topological / binary          -> detection, not a number
+
+version: "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Defaults applied when the user leaves an optional field blank.
+#
+# Spec graceful-degradation rule: a missing optional input must NEVER penalise
+# the user. Each default below is stated back to the user in the report's
+# `assumptions` list, and rules that cannot fall back at all report
+# "Not assessed" instead of failing.
+# ---------------------------------------------------------------------------
+defaults:
+  # Injection molding
+  material: null                  # null -> generic engineering thermoplastic
+  surface_finish: semi_gloss      # spec: "General safe default 1–2° per side"
+  parting_direction: "+Z"         # assumed mold pull axis when none supplied
+  # 3D printing
+  printing_process: fdm           # spec: FDM is the most restrictive common case
+  build_envelope_mm: [250.0, 210.0, 220.0]   # typical desktop FDM bed
+  build_envelope_source: "typical desktop FDM bed (no printer supplied)"
+
+# ---------------------------------------------------------------------------
+# Injection molding material table (Type 1 lookups for M1 and M2)
+#
+# wall_min_mm / wall_max_mm : recommended wall range (spec M1)
+# class                     : amorphous | semi_crystalline -> picks M2's band
+# tolerance_capability_mm   : typical achievable tolerance on small features,
+#                             used by M7 alongside the ISO 20457 size table
+# ---------------------------------------------------------------------------
+materials:
+  abs:
+    display_name: "ABS"
+    class: amorphous
+    wall_min_mm: 1.5
+    wall_max_mm: 4.5
+    tolerance_capability_mm: 0.10
+  pp:
+    display_name: "Polypropylene (PP)"
+    class: semi_crystalline
+    wall_min_mm: 1.0
+    wall_max_mm: 3.8
+    tolerance_capability_mm: 0.12
+  pc:
+    display_name: "Polycarbonate (PC)"
+    class: amorphous
+    wall_min_mm: 2.0
+    wall_max_mm: 3.5
+    tolerance_capability_mm: 0.10
+  pa66:
+    display_name: "Nylon PA66"
+    class: semi_crystalline
+    wall_min_mm: 1.5
+    wall_max_mm: 3.0
+    tolerance_capability_mm: 0.15
+  pom:
+    display_name: "POM / Acetal"
+    class: semi_crystalline
+    wall_min_mm: 1.5
+    wall_max_mm: 3.0
+    tolerance_capability_mm: 0.15
+  ps:
+    display_name: "Polystyrene (PS)"
+    class: amorphous
+    wall_min_mm: 1.2
+    wall_max_mm: 4.0
+    tolerance_capability_mm: 0.10
+  pbt:
+    display_name: "PBT"
+    class: semi_crystalline
+    wall_min_mm: 1.5
+    wall_max_mm: 3.5
+    tolerance_capability_mm: 0.15
+
+# Aliases so free-text user input maps onto the table above.
+material_aliases:
+  acrylonitrile_butadiene_styrene: abs
+  polypropylene: pp
+  polycarbonate: pc
+  nylon: pa66
+  pa: pa66
+  nylon66: pa66
+  acetal: pom
+  pom_c: pom
+  pom_acetal: pom
+  polystyrene: ps
+
+# ---------------------------------------------------------------------------
+# 3D printing process table (Type 1 lookups for P1, P2, P3)
+#
+# overhang_limit_deg : max angle FROM VERTICAL before support is needed.
+#                      null = process needs no supports (powder bed).
+# min_wall_mm        : below this the feature will not resolve -> Blocker
+# min_pin_diameter_mm: minimum positive feature diameter
+# ---------------------------------------------------------------------------
+printing_processes:
+  fdm:
+    display_name: "FDM"
+    overhang_limit_deg: 45.0
+    min_wall_mm: 1.0
+    # Spec: "designing to 1.5x the minimum is the safe target"
+    safe_wall_multiplier: 1.5
+    # One nozzle perimeter — thinner than this is simply not extrudable.
+    absolute_min_wall_mm: 0.45
+    min_pin_diameter_mm: 1.8
+    needs_supports: true
+    traps_material: false     # solid infill, nothing to drain
+  sla:
+    display_name: "SLA / resin"
+    overhang_limit_deg: 45.0
+    min_wall_mm: 0.4
+    safe_wall_multiplier: 1.5
+    absolute_min_wall_mm: 0.3
+    min_pin_diameter_mm: 0.8
+    needs_supports: true
+    traps_material: true      # uncured resin must drain
+  sls:
+    display_name: "SLS"
+    overhang_limit_deg: null  # unfused powder supports overhangs
+    min_wall_mm: 0.7
+    safe_wall_multiplier: 1.5
+    absolute_min_wall_mm: 0.5
+    min_pin_diameter_mm: 0.8
+    needs_supports: false
+    traps_material: true      # unfused powder must escape
+  mjf:
+    display_name: "MJF"
+    overhang_limit_deg: null
+    min_wall_mm: 0.7
+    safe_wall_multiplier: 1.5
+    absolute_min_wall_mm: 0.5
+    min_pin_diameter_mm: 0.8
+    needs_supports: false
+    traps_material: true
+
+printing_process_aliases:
+  fff: fdm
+  filament: fdm
+  resin: sla
+  dlp: sla
+  msla: sla
+  powder_bed: sls
+  slsnylon: sls
+  multi_jet_fusion: mjf
+
+# ---------------------------------------------------------------------------
+# Per-rule thresholds
+# ---------------------------------------------------------------------------
+rules:
+
+  # --- Injection molding ---------------------------------------------------
+
+  M1:
+    name: "Minimum / Maximum Wall Thickness"
+    enabled: true
+    # Used when the user supplies no material. Spec: ~0.8 mm practical minimum
+    # for engineering thermoplastics on short flow paths.
+    generic_min_wall_mm: 0.8
+    generic_max_wall_mm: 5.0
+    # Walls between the material minimum and (minimum x risky_band_multiplier)
+    # are mouldable but short-shot prone -> Major rather than Blocker.
+    risky_band_multiplier: 1.25
+    # Spec M1 "critical subtlety": no wall below this fraction of the walls
+    # adjacent to it, or flow stalls. Spec gives a 0.4–0.6 range; 0.5 is the
+    # midpoint pending the expert's single value.
+    neighbour_ratio_min: 0.5
+    # Ignore neighbour pairs whose thicker side is under this — sub-millimetre
+    # ray-cast noise otherwise produces false neighbour failures.
+    neighbour_min_thickness_mm: 0.5
+    max_findings: 20
+
+  M2:
+    name: "Wall Thickness Uniformity"
+    enabled: true
+    # The "25% rule" — variation band around nominal, by material class.
+    variation_band:
+      amorphous: 0.25
+      semi_crystalline: 0.15
+    # Band used when no material (and therefore no class) was supplied.
+    default_band: 0.25
+    # Fraction of samples that must sit outside the band before the part is
+    # called non-uniform (a handful of outliers is ray-cast noise, not a defect).
+    out_of_band_fraction_minor: 0.10
+    out_of_band_fraction_major: 0.25
+    # Section transitions must taper 3:1 or gentler.
+    max_transition_ratio: 3.0
+    max_findings: 20
+
+  M3:
+    name: "Draft Angle on Vertical Faces"
+    enabled: true
+    # Minimum draft per side (degrees), keyed by surface finish.
+    finish_minimum_deg:
+      polished: 0.5
+      semi_gloss: 1.0
+      light_texture: 1.5
+      heavy_texture: 3.0
+    # Cavities deeper than this need at least deep_cavity_minimum_deg.
+    deep_cavity_depth_mm: 75.0
+    deep_cavity_minimum_deg: 2.0
+    # Below this a face is a near-certain ejection problem whatever the finish.
+    near_certain_deg: 0.5
+    # A face counts as "vertical-ish" (i.e. subject to draft) when its normal
+    # sits within this many degrees of perpendicular to the pull direction.
+    # Wider than this and the face is a top/bottom face, which needs no draft.
+    vertical_face_window_deg: 20.0
+    # Faces smaller than this fraction of total surface area are ignored, so a
+    # sliver face cannot dominate the verdict.
+    min_face_area_fraction: 0.001
+    max_findings: 20
+
+  M4:
+    name: "Undercuts"
+    enabled: true
+    # When geometry has not shipped undercuts[], infer from hole axes: a hole
+    # whose axis is more than this far off the pull direction cannot be cored
+    # along the parting line and needs a side-action.
+    hole_axis_tolerance_deg: 15.0
+    # Inferred (rather than detected) undercuts are capped at Major — the
+    # engine will not declare a Blocker on an inference.
+    inferred_max_severity: major
+    max_findings: 20
+
+  M5:
+    name: "Rib Thickness Ratio"
+    enabled: true
+    # rib base thickness / nominal wall. Spec: 50–60%; the common belief that
+    # 80% is safe is false.
+    major_above: 0.6
+    minor_above: 0.5
+    # An empty ribs[] array means "detector ran, found none" -> pass.
+    # Set true to treat an empty array as Not assessed instead.
+    treat_empty_as_not_assessed: false
+    max_findings: 20
+
+  M6:
+    name: "Boss Design"
+    enabled: true
+    # boss wall thickness / nominal wall — same 40–60% family as ribs.
+    major_above: 0.6
+    minor_above: 0.4
+    # A solid boss whose diameter exceeds this multiple of the nominal wall is
+    # a thick standalone mass and should be cored out.
+    solid_core_out_diameter_ratio: 2.0
+    solid_minor_diameter_ratio: 1.5
+    treat_empty_as_not_assessed: false
+    max_findings: 20
+
+  M7:
+    name: "Tolerance Feasibility"
+    enabled: true
+    # ISO 20457-style capability by nominal feature size. Each entry is
+    # [max_feature_size_mm, achievable_tolerance_mm]; the first row whose size
+    # bound is not exceeded wins. Replace wholesale once the DS team supplies
+    # the grade table they want implemented.
+    capability_by_size_mm:
+      - [10.0, 0.10]
+      - [30.0, 0.15]
+      - [100.0, 0.25]
+      - [300.0, 0.50]
+      - [null, 0.80]      # null = no upper bound
+    # Requested tolerances between capability and capability x this multiple
+    # are borderline -> Minor rather than Major.
+    borderline_multiplier: 1.25
+    max_findings: 20
+
+  # --- 3D printing ---------------------------------------------------------
+
+  P1:
+    name: "Overhang Angle"
+    enabled: true
+    # Per-process limits live in printing_processes.overhang_limit_deg.
+    # The spec maps any face past the limit to Major, so the Minor band is
+    # switched off by default (0.0). Raise it to downgrade parts whose
+    # overhanging area is below this fraction of total surface area to Minor.
+    overhang_area_fraction_minor: 0.0
+    overhang_area_fraction_major: 0.20
+    # A face this far past the limit is a sag/tear risk regardless of area.
+    severe_margin_deg: 25.0
+    max_findings: 20
+
+  P2:
+    name: "Minimum Feature Size / Thin Walls"
+    enabled: true
+    # Per-process minimums live in printing_processes.min_wall_mm.
+    # A single sample below the floor is ray-cast noise. The rule fires once
+    # `below_min_fraction` of samples are under the limit, capped at
+    # `below_min_min_count` hits so a densely sampled part is not held to an
+    # impossible bar and a coarsely sampled one is not made immune.
+    below_min_fraction: 0.02
+    below_min_min_count: 3
+    max_findings: 20
+
+  P3:
+    name: "Support Volume Estimate"
+    enabled: true
+    # Primary driver is the overhang area ratio the geometry engine already
+    # reports for the chosen orientation.
+    overhang_ratio_minor: 0.15
+    overhang_ratio_major: 0.35
+    # Fallback estimate used when geometry supplies no real support volume:
+    # V_sup ~= overhang_area x mean_drop_fraction x part height. Reported as a
+    # cost figure only — too crude to move a severity.
+    mean_drop_fraction: 0.5
+    # Applied only to a geometry-supplied (measured) support volume, which can
+    # escalate a Minor to a Major. Expressed as a fraction of part volume.
+    support_volume_ratio_minor: 0.10
+    support_volume_ratio_major: 0.30
+
+  P4:
+    name: "Aspect Ratio / Tall-Thin"
+    enabled: true
+    # height / smallest footprint dimension, in the chosen build orientation.
+    major_above: 4.0
+    minor_above: 2.0
+    # Parts shorter than this are stable regardless of ratio.
+    min_height_mm: 20.0
+    # Spec: fillets >= 1 mm at wall-to-base transitions improve adhesion.
+    recommended_base_fillet_mm: 1.0
+
+  P5:
+    name: "Trapped Volumes / No Drain"
+    enabled: true
+    # Severity by process: powder and resin must drain, FDM does not.
+    severity_by_process:
+      fdm: minor
+      sla: major
+      sls: major
+      mjf: major
+    # Ignore voids below this volume — not worth a drain hole.
+    min_cavity_volume_mm3: 10.0
+    max_findings: 20
+
+  P6:
+    name: "Bounding Box vs Build Envelope"
+    enabled: true
+    # Clearance kept between the part and the bed limits, per axis.
+    clearance_mm: 5.0
+    # Spec P6: "fits only with awkward orientation -> Major".
+    awkward_orientation_severity: major
