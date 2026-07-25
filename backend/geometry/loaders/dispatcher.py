@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
-from os import path
+#from os import path
 
 from geometry.models import GeometryModel, SourceFormat
+from .exceptions import StepSupportUnavailableError
 from geometry.measurements import (
     compute_bbox_occ,
     compute_bbox_mesh,
@@ -24,7 +25,6 @@ from .stl_loader_trimesh import load_stl
 STEP_EXTENSIONS = {".step", ".stp"}
 STL_EXTENSIONS = {".stl"}
 
-from .exceptions import StepSupportUnavailableError
 
 def get_file_format(path: str) -> SourceFormat:
     """Determine SourceFormat from a file's extension."""
