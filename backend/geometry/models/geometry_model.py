@@ -39,6 +39,10 @@ class GeometryModel:
     bosses: list = field(default_factory=list)
     cavities: list = field(default_factory=list)
 
+    fillets: list = field(default_factory=list)
+    chamfers: list = field(default_factory=list)
+    ribs: list = field(default_factory=list)
+
     # False when the source mesh has holes/damage that couldn't be
     # auto-repaired — volume_mm3 (and to a lesser extent center_mass)
     # should NOT be trusted for DFM scoring when this is False.
@@ -104,4 +108,8 @@ class GeometryModel:
             "num_holes": len(self.holes),
             "num_bosses": len(self.bosses),
             "num_cavities": len(self.cavities),
+            "num_fillets": len(self.fillets),
+            "num_chamfers": len(self.chamfers),
+            "num_ribs": len(self.ribs),
         }
+    
