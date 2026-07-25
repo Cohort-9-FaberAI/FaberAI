@@ -3,6 +3,7 @@ from app.database import supabase
 from app.crud import insert_analysis_result, update_analysis_status
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.services.geometry_engine_adapter import run_geometry_engine
+from dfm import run_dfm_analysis
 from geometry.loaders import StepSupportUnavailableError
 import tempfile
 import os
@@ -83,27 +84,44 @@ def extract_geometry_task(self, file_url: str, original_filename: str, analysis_
         result = run_geometry_engine(tmp_path, original_filename)
         print(f"[WORKER] Processing complete for: {original_filename}")
 
+        # DFM rule engine runs downstream of geometry, on its output only.
+        # A failure here must not lose the geometry result, so it degrades to
+        # no report rather than failing the task.
+        dfm_report = None
+        score = result.get("mock_score")
+        try:
+            report = run_dfm_analysis(result, analysis_id=analysis_id)
+            dfm_report = report.model_dump(mode="json")
+            score = report.manufacturability_score
+            print(
+                f"[WORKER] DFM analysis complete for {original_filename}: "
+                f"score {score}, manufacturable={report.manufacturable}"
+            )
+        except Exception as exc:
+            print(f"[WORKER] DFM analysis failed for {original_filename}: {exc}")
+
         # Build a complete AnalysisResult that carries the geometry payload
         # inside geometry_data so the API can round-trip it without stripping fields.
         analysis_result = AnalysisResult(
             analysis_id=analysis_id,
             filename=original_filename,
             status=AnalysisStatus.completed,
-            manufacturability_score=result.get("mock_score"),
+            manufacturability_score=score,
             geometry_data=result,
+            dfm_report=dfm_report,
         )
 
         update_analysis_status(
             analysis_id,
             AnalysisStatus.completed.value,
             extra_fields={
-                "manufacturability_score": result.get("mock_score"),
+                "manufacturability_score": score,
                 "results_json": analysis_result.model_dump(),
             }
         )
         print(f"[WORKER] Status set to completed for: {analysis_id}")
 
-        return {**result, "analysis_id": analysis_id}
+        return {**result, "analysis_id": analysis_id, "dfm_report": dfm_report}
 
     except StepSupportUnavailableError as exc:
         # Missing optional STEP dependencies won't be fixed by retrying:

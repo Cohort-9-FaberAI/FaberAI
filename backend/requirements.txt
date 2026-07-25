@@ -41,6 +41,8 @@ PyJWT==2.13.0
 # dev/test requirements file.
 pytest==9.1.1
 python-dateutil==2.9.0.post0
+# DFM rule engine threshold/scoring configuration (dfm/config/*.yaml).
+PyYAML==6.0.3
 python-dotenv==1.2.2
 python-multipart==0.0.32
 realtime==2.31.0
