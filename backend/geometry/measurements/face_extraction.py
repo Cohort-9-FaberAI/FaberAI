@@ -5,8 +5,8 @@ def extract_faces_mesh(mesh):
   face_indices_array = mesh.faces
   return np.array(face_indices_array), np.array(mesh.vertices)
 
-def extract_faces_occ(shape):
-  vertices, indices = shape.tessellate(tolerance=0.1)
+def extract_faces_occ(shape_b123):
+  vertices, indices = shape_b123.tessellate(tolerance=0.1)
 
   np_vertices = np.array([tuple(v) for v in vertices])
   np_indices = np.array(indices)

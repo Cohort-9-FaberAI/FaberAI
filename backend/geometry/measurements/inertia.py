@@ -10,14 +10,13 @@ from __future__ import annotations
 import numpy as np
 
 
-def compute_moment_inertia_occ(shape) -> np.ndarray:
+def compute_moment_inertia_occ(shape_occ) -> np.ndarray:
     """3x3 inertia matrix (about the center of mass) of a TopoDS_Shape."""
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.VolumeProperties(topo, props)
+    brepgprop.VolumeProperties(shape_occ, props)
     mat = props.MatrixOfInertia()
     return np.array([[mat.Value(i, j) for j in range(1, 4)] for i in range(1, 4)])
 

@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 
-def compute_surface_area_occ(shape) -> float:
+
+def compute_surface_area_occ(shape_occ) -> float:
     """Surface area of a TopoDS_Shape via BRepGProp.SurfaceProperties."""
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.SurfaceProperties(topo, props)
+    brepgprop.SurfaceProperties(shape_occ, props)
     return float(props.Mass())
 
 

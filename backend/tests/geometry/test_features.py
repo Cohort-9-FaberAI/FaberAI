@@ -16,6 +16,10 @@ this test suite runs anywhere build123d installs — no pythonOCC/conda
 required, since build123d bundles its own OCP binding.
 """
 
+import pytest
+
+# ✅ Skip this entire test module if build123d is not installed
+pytest.importorskip("build123d")
 import math
 
 import numpy as np
