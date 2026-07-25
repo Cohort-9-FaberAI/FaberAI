@@ -61,23 +61,48 @@ def load_geometry(path: str) -> GeometryModel:
 # STEP / OCC path
 
 def _load_step(path: str) -> GeometryModel:
+    # STEP loading is tricky because there are two competing loaders: build123d and pythonOCC. 
+    # We need both loaders for the different use cases.
+    # So we load twice and generate two shapes, one for build123d and one for pythonOCC. 
+    # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.    
+    #   
     try:
         from geometry.loaders.step_loader import load_step as load_step_b123d
-        shape = load_step_b123d(path)
+        shape_b123 = load_step_b123d(path)
     except Exception:
-        from geometry.loaders.step_loader_pythonocc import load_step as load_step_occ
-        shape = load_step_occ(path)
+        print(f"Warning: build123d STEP loader failed for {path}")
 
+    try:
+        from geometry.loaders.step_loader_pythonocc import load_step as load_step_occ
+        shape_occ = load_step_occ(path)
+    except Exception:
+        print(f"Warning: pythonOCC STEP loader failed for {path}")
+
+
+    # Safety net: the loaders should already reject null/None shapes, but
+    # guard here too so no downstream OCC call receives an invalid shape.
+    if shape_occ is None:
+        raise ValueError(
+            f"STEP file '{path}' loaded as None by occ — the file may be empty "
+            "or corrupted."
+        )
+
+    if shape_b123 is None:
+        raise ValueError(
+            f"STEP file '{path}' loaded as None by build123d — the file may be empty "
+            "or corrupted."
+        )
+    
     model = GeometryModel(
-        source_format=SourceFormat.STEP, source_path=path, raw=shape
+        source_format=SourceFormat.STEP, source_path=path, raw_occ=shape_occ, raw_b123=shape_b123
     )
 
-    model.bounding_box = compute_bbox_occ(shape)
+    model.bounding_box = compute_bbox_occ(shape_occ)
     model.oriented_bbox = None
-    model.volume_mm3 = compute_volume_occ(shape)
-    model.surface_area_mm2 = compute_surface_area_occ(shape)
-    model.center_mass = compute_center_mass_occ(shape)
-    model.moment_of_inertia = compute_moment_inertia_occ(shape)
+    model.volume_mm3 = compute_volume_occ(shape_occ)
+    model.surface_area_mm2 = compute_surface_area_occ(shape_occ)
+    model.center_mass = compute_center_mass_occ(shape_occ)
+    model.moment_of_inertia = compute_moment_inertia_occ(shape_occ)
 
     # Topology: faces, edges, face graph
     try:
@@ -87,8 +112,8 @@ def _load_step(path: str) -> GeometryModel:
         )
         from geometry.measurements.face_graph import build_face_graph
 
-        vertices, indices = extract_faces_occ(shape)
-        face_graph = build_face_graph(shape.faces(), shape)
+        vertices, indices = extract_faces_occ(shape_b123)
+        face_graph = build_face_graph(shape_b123.faces(), shape_b123)
         faces_list, edges_list = graph_to_faces_and_edges(face_graph, vertices, indices)
 
         model.faces = faces_list
@@ -140,12 +165,12 @@ def _load_step(path: str) -> GeometryModel:
     # Wall thickness sampling
     try:
         from geometry.measurements.wall_thickness import compute_wall_thickness_occ
-        samples, stats = compute_wall_thickness_occ(shape)
+        samples, stats = compute_wall_thickness_occ(shape_b123)
         model.wall_samples = samples
         model.wall_thickness_stats = stats
         model.nominal_wall = stats.median_wall if stats else None
     except Exception as e:
-        print(f"Warning: wall thickness (OCC) failed for {path}: {e}")
+        print(f"Warning: wall thickness (OCP) failed for {path}: {e}")
 
     # Print orientation analysis (requires faces to be populated)
     if model.faces:

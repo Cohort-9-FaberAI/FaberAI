@@ -5,14 +5,13 @@ from __future__ import annotations
 from .reliability import attempt_mesh_repair
 
 
-def compute_volume_occ(shape) -> float:
+def compute_volume_occ(shape_occ) -> float:
     """Volume of a solid TopoDS_Shape via GProp_GProps/BRepGProp.VolumeProperties."""
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import brepgprop
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     props = GProp_GProps()
-    brepgprop.VolumeProperties(topo, props)
+    brepgprop.VolumeProperties(shape_occ, props)
     return float(props.Mass())  # "Mass" with unit density == volume
 
 

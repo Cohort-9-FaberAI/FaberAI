@@ -7,14 +7,13 @@ import numpy as np
 from geometry.models import BoundingBox
 
 
-def compute_bbox_occ(shape) -> BoundingBox:
+def compute_bbox_occ(shape_occ) -> BoundingBox:
     """Axis-aligned bounding box of a TopoDS_Shape via Bnd_Box/BRepBndLib."""
     from OCC.Core.Bnd import Bnd_Box
     from OCC.Core.BRepBndLib import brepbndlib
 
-    topo = shape.wrapped if hasattr(shape, "wrapped") else shape
     box = Bnd_Box()
-    brepbndlib.Add(topo, box)
+    brepbndlib.Add(shape_occ, box)
     xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
     return BoundingBox(
         min_corner=np.array([xmin, ymin, zmin]),

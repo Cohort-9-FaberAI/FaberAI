@@ -17,12 +17,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+import logging
 
 import numpy as np
 
 from geometry.models.wall_sample import WallSample
 
-
+logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Stats dataclass
 # ---------------------------------------------------------------------------
@@ -44,10 +45,10 @@ class WallThicknessStats:
 # OCC path
 # ---------------------------------------------------------------------------
 
-def compute_wall_thickness_occ(shape) -> tuple[list[WallSample], Optional[WallThicknessStats]]:
+def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[WallThicknessStats]]:
     """Ray-cast wall thickness sampling for a STEP B-rep shape.
 
-    Uses pythonOCC BRepIntCurveSurface_Inter to cast rays from each face
+    Uses build123d BRepIntCurveSurface_Inter to cast rays from each face
     centroid inward and find the opposite surface.
 
     Parameters
@@ -63,26 +64,40 @@ def compute_wall_thickness_occ(shape) -> tuple[list[WallSample], Optional[WallTh
     """
     from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
     from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
-    from OCP.GeomAbs import GeomAbs_IsOpposite  # noqa: F401 – kept for reference
+    from OCP.TopAbs import TopAbs_REVERSED
+
+
+   #from OCP.GeomAbs import GeomAbs_IsOpposite  # noqa: F401 – kept for reference
 
     samples: list[WallSample] = []
-    topo_shape = shape.wrapped if hasattr(shape, "wrapped") else shape
-    faces = list(shape.faces())
+    topo_shape = shape_b123.wrapped if hasattr(shape_b123, "wrapped") else shape_b123
+    faces = list(shape_b123.faces())
+
+    OFFSET = 1e-4
+    MIN_DISTANCE = 0.01
 
     for face_idx, face in enumerate(faces):
         try:
             centroid = face.center()
             normal = face.normal_at(centroid)
+            # Depending on the OCC face orientation, reverse the geometric normal.
+            if face.wrapped.Orientation() == TopAbs_REVERSED:
+                normal = -normal
 
             # Inward direction = reverse of outward normal
-            inward = gp_Dir(-normal.X, -normal.Y, -normal.Z)
+            #inward = gp_Dir(-normal.X, -normal.Y, -normal.Z)
+
             # Offset slightly off the surface to avoid self-intersection
             origin = gp_Pnt(
-                centroid.X + normal.X * 1e-4,
-                centroid.Y + normal.Y * 1e-4,
-                centroid.Z + normal.Z * 1e-4,
+                centroid.X + normal.X * OFFSET,
+                centroid.Y + normal.Y * OFFSET,
+                centroid.Z + normal.Z * OFFSET,
             )
-            ray = gp_Lin(origin, inward)
+
+            # Shoot toward the interior.
+            direction = gp_Dir(-normal.X, -normal.Y, -normal.Z)
+            ray = gp_Lin(origin, direction)
+            #ray = gp_Lin(origin, inward)
 
             inter = BRepIntCurveSurface_Inter()
             inter.Init(topo_shape, ray, 1e-6)
@@ -91,37 +106,54 @@ def compute_wall_thickness_occ(shape) -> tuple[list[WallSample], Optional[WallTh
             best_face_idx: Optional[int] = None
 
             while inter.More():
-                pt = inter.Pnt()
-                dist = origin.Distance(pt)
+                hit_point = inter.Pnt()
+                dist = origin.Distance(hit_point)
                 # Ignore hits that are essentially on the origin surface (<0.01 mm)
-                if dist > 0.01:
+                if dist > MIN_DISTANCE:
                     if best_dist is None or dist < best_dist:
                         best_dist = dist
                         # Try to match hit face back to our face list
                         hit_face = inter.Face()
-                        for j, f in enumerate(faces):
-                            if f.wrapped.IsSame(hit_face):
+                        best_face_idx = None
+
+                        for j, other_face in enumerate(faces):
+                            if other_face.wrapped.IsSame(hit_face):
                                 best_face_idx = j
                                 break
+                        #for j, f in enumerate(faces):
+                        #    if f.wrapped.IsSame(hit_face):
+                        #        best_face_idx = j
+                        #        break
                 inter.Next()
 
-            if best_dist is not None:
-                sample = WallSample(
+            if best_dist is None:
+                continue
+
+            samples.append(
+                WallSample(
                     id=len(samples),
                     point=np.array([centroid.X, centroid.Y, centroid.Z]),
                     normal=np.array([normal.X, normal.Y, normal.Z]),
-                    thickness=best_dist,
+                    thickness=float(best_dist),
                     face_id=face_idx,
                     opposite_face_id=best_face_idx,
-                    ray_length=best_dist,
+                    ray_length=float(best_dist),
                     reliable=True,
                 )
-                samples.append(sample)
+            )  
 
-        except Exception:
-            # A single face failure must not abort the whole scan
-            continue
-
+        except Exception as e:
+            logger.warning(
+                "Wall thickness failed on face %d/%d: %s",
+                face_idx,
+                len(faces),
+                e,
+            )
+    logger.info(
+        "Wall thickness sampling: %d valid samples out of %d faces.",
+        len(samples),
+        len(faces),
+    )
     stats = _compute_stats(samples) if samples else None
     return samples, stats
 

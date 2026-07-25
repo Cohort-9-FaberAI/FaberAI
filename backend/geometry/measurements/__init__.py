@@ -25,6 +25,7 @@ __all__ = [
     "compute_bbox_occ",
     "compute_bbox_mesh",
     "compute_oriented_bbox_mesh",
+    "extract_topo_shape",
     "compute_volume_occ",
     "compute_volume_mesh",
     "compute_surface_area_occ",

@@ -33,4 +33,17 @@ def load_step(path: str):
 
     reader.TransferRoots()
     shape = reader.OneShape()
+
+    # OneShape() can return a null TopoDS_Shape when the STEP file contains
+    # no valid geometry (e.g. empty file, corrupted data, or only
+    # non-geometric entities).  A null shape would later cause a cryptic
+    # SWIG TypeError in brepbndlib.Add / brepgprop.VolumeProperties, so we
+    # catch it here with a clear, actionable message.
+    if shape.IsNull():
+        raise ValueError(
+            f"STEP file '{path}' contains no valid geometry. "
+            "The file may be empty, corrupted, or contain only "
+            "non-geometric entities (no shapes were transferred)."
+        )
+
     return shape
