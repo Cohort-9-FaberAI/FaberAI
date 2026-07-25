@@ -112,4 +112,8 @@ class GeometryModel:
             "num_holes": len(self.holes),
             "num_bosses": len(self.bosses),
             "num_cavities": len(self.cavities),
+            "num_fillets": len(self.fillets),
+            "num_chamfers": len(self.chamfers),
+            "num_ribs": len(self.ribs),
         }
+    

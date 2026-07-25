@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from xml.parsers.expat import model
 #from os import path
 
 from geometry.models import GeometryModel, SourceFormat
@@ -220,6 +221,30 @@ def _load_stl(path: str) -> GeometryModel:
     # analysis on a triangle soup), so cylindrical feature detection can't
     # run against them yet — this matches the feature spec's STL placeholder
     # allowance.
+
+    # Topology: faces, edges, face graph
+    try:
+        from geometry.measurements.face_extraction import (
+                    extract_faces_mesh,
+                    graph_to_faces_and_edges,
+        )
+        from geometry.measurements.face_graph_mesh import build_face_graph
+
+        vertices, indices = extract_faces_mesh(mesh)
+        face_graph = build_face_graph(mesh)
+        faces_list, edges_list = graph_to_faces_and_edges(
+            face_graph,
+            vertices,
+            indices,
+        )
+        model.faces = faces_list
+        model.edges = edges_list
+        model.face_graph = {
+            node: list(face_graph.neighbors(node))
+            for node in face_graph.nodes()
+        }
+    except Exception as e:
+            print(f"Warning: face extraction failed for {path}: {e}")
 
     try:
         from geometry.models.mesh_quality import check_mesh_quality
