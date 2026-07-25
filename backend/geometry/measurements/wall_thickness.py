@@ -64,7 +64,7 @@ def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[W
     """
     from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
     from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
-    from OCP.TopAbs import TopAbs_REVERSED
+    #from OCP.TopAbs import TopAbs_REVERSED
 
 
    #from OCP.GeomAbs import GeomAbs_IsOpposite  # noqa: F401 – kept for reference
@@ -81,8 +81,8 @@ def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[W
             centroid = face.center()
             normal = face.normal_at(centroid)
             # Depending on the OCC face orientation, reverse the geometric normal.
-            if face.wrapped.Orientation() == TopAbs_REVERSED:
-                normal = -normal
+            #if face.wrapped.Orientation() == TopAbs_REVERSED:
+            #    normal = -normal
 
             # Inward direction = reverse of outward normal
             #inward = gp_Dir(-normal.X, -normal.Y, -normal.Z)
