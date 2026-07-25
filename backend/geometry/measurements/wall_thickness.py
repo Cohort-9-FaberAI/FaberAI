@@ -64,7 +64,7 @@ def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[W
     """
     from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
     from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
-    from OCP.TopAbs import TopAbs_REVERSED
+    #from OCP.TopAbs import TopAbs_REVERSED
 
 
    #from OCP.GeomAbs import GeomAbs_IsOpposite  # noqa: F401 – kept for reference
