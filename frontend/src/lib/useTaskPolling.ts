@@ -7,6 +7,7 @@ const DEFAULT_MAX_RETRIES = 10
 
 export function useTaskPolling(
   taskId: string | null,
+  analysisId: string | null | undefined,
   onResult?: (data: Record<string, unknown>) => void,
   intervalMs = DEFAULT_INTERVAL_MS,
   maxRetries = DEFAULT_MAX_RETRIES,
@@ -27,7 +28,7 @@ export function useTaskPolling(
 
     async function poll() {
       try {
-        const result = await getTaskStatus(taskId as string)
+        const result = await getTaskStatus(taskId as string, analysisId)
         if (cancelledRef.current) return
 
         retryCountRef.current = 0
@@ -54,5 +55,5 @@ export function useTaskPolling(
     return () => {
       cancelledRef.current = true
     }
-  }, [taskId, intervalMs, maxRetries])
+  }, [taskId, analysisId, intervalMs, maxRetries])
 }
