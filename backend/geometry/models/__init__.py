@@ -12,7 +12,7 @@ from .mesh_quality import MeshQuality, check_mesh_quality
 from .hole import Hole
 from .boss import Boss
 from .cavity import Cavity
-
+from .rib import Rib
 
 __all__ = [
     "SourceFormat", "SurfaceType", "CurveType",
