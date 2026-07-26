@@ -559,10 +559,11 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         holes=[_to_hole_summary(h) for h in model.holes],
         bosses=[_to_boss_summary(b) for b in model.bosses],
         cavities=[_to_cavity_summary(c) for c in model.cavities],
+        
         # Blend / bevel manufacturing features
-        fillets=[_to_fillet_summary(f) for f in model.fillets],
-        ribs=[_to_rib_summary(r) for r in model.ribs],
-        chamfers=[_to_chamfer_summary(c) for c in model.chamfers],
+        fillets=[],
+        ribs=[],
+        chamfers=[],
     )
 
     return response.model_dump()
