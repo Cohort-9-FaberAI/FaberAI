@@ -39,6 +39,14 @@ class GeometryModel:
     bosses: list = field(default_factory=list)
     cavities: list = field(default_factory=list)
 
+    # Blend / bevel / thin-wall features (populated by geometry.features.* on
+    # the STEP path only). Declared here so the STL path — which never assigns
+    # them — still exposes empty lists to the adapter instead of raising
+    # AttributeError.
+    fillets: list = field(default_factory=list)
+    ribs: list = field(default_factory=list)
+    chamfers: list = field(default_factory=list)
+
     # False when the source mesh has holes/damage that couldn't be
     # auto-repaired — volume_mm3 (and to a lesser extent center_mass)
     # should NOT be trusted for DFM scoring when this is False.
@@ -50,6 +58,9 @@ class GeometryModel:
     # kept so later pipeline stages (DFM checks, 3D highlighting) can
     # still reach into the original geometry.
     raw: Any = field(default=None, repr=False)
+    raw_occ: Any = field(default=None, repr=False)
+    raw_b123: Any = field(default=None, repr=False)
+    
 
     # Additional data structures for the faces, edges, and wall samples of the model.
     faces: list[Face] = field(default_factory=list)
@@ -101,4 +112,8 @@ class GeometryModel:
             "num_holes": len(self.holes),
             "num_bosses": len(self.bosses),
             "num_cavities": len(self.cavities),
+            "num_fillets": len(self.fillets),
+            "num_chamfers": len(self.chamfers),
+            "num_ribs": len(self.ribs),
         }
+    

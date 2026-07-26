@@ -4,22 +4,20 @@ from OCP.TopExp import TopExp
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 from OCP.TopoDS import TopoDS
 from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.GeomAbs import (
-    GeomAbs_Line, GeomAbs_Circle, GeomAbs_Ellipse,
-    GeomAbs_BSplineCurve, GeomAbs_BezierCurve,
-)
+from OCP.GeomAbs import (GeomAbs_Line, GeomAbs_Circle, GeomAbs_Ellipse,GeomAbs_BSplineCurve, GeomAbs_BezierCurve,)
 from OCP.gp import gp_Pnt, gp_Vec
 import numpy as np
 from .surface_classifier import classify_surface_occ
 from build123d import Edge
 
-def compute_face_adjacency(shape) -> TopTools_IndexedDataMapOfShapeListOfShape:
-  topo_shape = shape.wrapped if hasattr(shape, "wrapped") else shape
+def compute_face_adjacency(shape_b123) -> TopTools_IndexedDataMapOfShapeListOfShape:
+
+  topo_shape = shape_b123.wrapped if hasattr(shape_b123, "wrapped") else shape_b123
   edge_face_map = TopTools_IndexedDataMapOfShapeListOfShape()
   TopExp.MapShapesAndAncestors_s(topo_shape, TopAbs_EDGE, TopAbs_FACE, edge_face_map)
   return edge_face_map
 
-
+  
 def _match_face_index(topo_face, face_index):
   for idx, face in face_index.items():
     if face.wrapped.IsSame(topo_face):
@@ -75,7 +73,7 @@ def _edge_convexity(edge, n1, n2) -> bool:
     return None
 
 
-def build_face_graph(faces, shape=None) -> nx.Graph:
+def build_face_graph(faces, shape_b123=None) -> nx.Graph:
   graph = nx.Graph()
   face_index = {}
 
@@ -94,10 +92,10 @@ def build_face_graph(faces, shape=None) -> nx.Graph:
     )
     face_index[i] = face
 
-  if shape is None:
+  if shape_b123 is None:
     return graph
 
-  edge_face_map = compute_face_adjacency(shape)
+  edge_face_map = compute_face_adjacency(shape_b123)
 
   for i in range(1, edge_face_map.Extent() + 1):
     edge = TopoDS.Edge_s(edge_face_map.FindKey(i))

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/layout/AppShell'
 import StepIndicator from '../components/layout/StepIndicator'
@@ -11,7 +11,18 @@ export default function HomePage() {
   const navigate = useNavigate()
   const files = useStore((s) => s.files)
   const setProject = useStore((s) => s.setProject)
+  const addFile = useStore((s) => s.addFile)
+  const setCurrentFileBuffer = useStore((s) => s.setCurrentFileBuffer)
   const [modalOpen, setModalOpen] = useState(true)
+  const stlInputRef = useRef<HTMLInputElement>(null)
+
+  const completedFiles = files.filter((f) => f.status === 'completed')
+
+  function handleManualStl(file: File) {
+    const id = crypto.randomUUID()
+    addFile({ id, name: file.name, taskId: 'dev-manual', analysisId: null, status: 'completed' })
+    file.arrayBuffer().then((buffer) => setCurrentFileBuffer(buffer))
+  }
 
   return (
     <AppShell>
@@ -28,6 +39,7 @@ export default function HomePage() {
             onClick={() => {
               setProject(true)
               setModalOpen(false)
+              navigate('/projects')
             }}
           >
             Yes take me to project
@@ -45,15 +57,38 @@ export default function HomePage() {
       {files.length > 0 && (
         <div className="file-list">
           {files.map((f) => (
-            <FileCard key={f.id} name={f.name} status={f.status} />
+            <FileCard key={f.id} name={f.name} status={f.status} taskId={f.taskId} />
           ))}
         </div>
       )}
 
+      <div className="dev-section">
+        <span className="dev-badge">DEV</span>
+        <span className="dev-text">Load an STL file directly for 3D preview.</span>
+        <input
+          ref={stlInputRef}
+          type="file"
+          accept=".stl"
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleManualStl(file)
+            e.target.value = ''
+          }}
+        />
+        <button
+          className="dev-browse-btn"
+          type="button"
+          onClick={() => stlInputRef.current?.click()}
+        >
+          Browse STL
+        </button>
+      </div>
+
       <button
         className="next-btn"
         type="button"
-        disabled={files.length === 0}
+        disabled={completedFiles.length === 0}
         onClick={() => navigate('/extra-info')}
       >
         Next

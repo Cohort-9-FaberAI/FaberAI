@@ -1,24 +1,51 @@
 import logging
+from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional
 
 from celery.result import AsyncResult
-from fastapi import FastAPI, Request, UploadFile, status
+from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from postgrest.exceptions import APIError
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id
+from app.services.ai import AIAnswer, answer_dfm_question
 from app.services.storage import upload_cad_file_to_storage
+from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
+from app.observability import setup_langtrace
+
+setup_langtrace()
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load the DFM threshold/scoring YAML once, at boot.
+
+    Doing it here means a malformed config fails startup loudly instead of
+    turning into a 500 on the first upload, and no request ever pays for
+    re-reading the files.
+    """
+    config = load_dfm_config()
+    logger.info(
+        "DFM config loaded: thresholds v%s, scoring v%s",
+        config.version,
+        config.scoring_version,
+    )
+    yield
+
 
 app = FastAPI(
     title="FaberAI Backend",
     description="AI-powered manufacturability review API for CAD parts.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -221,7 +248,7 @@ def analyze_mock():
         "status": "completed",
         "manufacturability_score": 72,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
-       "file_url": "http://127.0.0.1:8000/mock-file",
+        "file_url": "http://127.0.0.1:8000/mock-file", 
         "part_metadata": {
             "units": "mm",
             "volume": 15420.5,
@@ -249,7 +276,7 @@ def analyze_mock():
                 "title": "Wall Thickness Too Thin",
                 "description": "This wall is under the 2mm minimum thickness for injection molding.",
                 "face_id": 104,
-                "centroid": [15.2, 4.1, 0.0]
+                "centroid": {"x": 15.2, "y": 4.1, "z": 0.0}
             },
             {
                 "issue_id": "err_002",
@@ -257,7 +284,7 @@ def analyze_mock():
                 "title": "Sharp Internal Corner",
                 "description": "Requires a fillet to reduce stress concentration.",
                 "edge_id": 232,
-                "centroid": [-5.0, 10.5, 3.2]
+                "centroid": {"x": -5.0, "y": 10.5, "z": 3.2}
             },
             {
                 "issue_id": "err_003",
@@ -265,7 +292,7 @@ def analyze_mock():
                 "title": "Non-Standard Draft Angle",
                 "description": "Draft angle is 1.5 degrees, but recommended is 2.0.",
                 "face_id": 45,
-                "centroid": [0.0, -12.3, 5.0]
+                "centroid": {"x": 0.0, "y": -12.3, "z": 5.0}
             }
         ]
     }
@@ -278,6 +305,142 @@ def create_analysis(result: AnalysisResult):
     """
     inserted = insert_analysis_result(result)
     return {"message": "Analysis result saved successfully.", "data": inserted}
+
+# ---------------------------------------------------------------------------
+# DFM rule engine
+# ---------------------------------------------------------------------------
+
+class DFMEvaluateRequest(BaseModel):
+    """Run the DFM rule-set against a geometry payload.
+
+    Used to re-score a part with different user context (material, printer,
+    tolerances) without re-uploading the CAD file, and to exercise the engine
+    against mocked geometry — including the ribs[]/bosses[] arrays the geometry
+    team has not shipped yet.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # A GeometryEngineResponse payload (or the geometry_data field of a stored
+    # analysis). Unknown keys are tolerated by the DFM geometry contract.
+    geometry: Dict[str, Any]
+    inputs: Optional[DFMInputs] = None
+    analysis_id: Optional[str] = None
+
+
+class AIAskRequest(BaseModel):
+    """Ask a question about an existing manufacturability report."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1)
+    # Either point at a stored analysis...
+    analysis_id: Optional[str] = None
+    # ...or pass the report inline (the shape returned by /dfm/evaluate).
+    report: Optional[Dict[str, Any]] = None
+    # Optional geometry facts for extra context. Never re-analysed.
+    geometry: Optional[Dict[str, Any]] = None
+
+
+def _load_stored_analysis(analysis_id: str) -> dict:
+    try:
+        record = get_analysis_by_id(analysis_id)
+    except APIError as exc:
+        logger.error("Failed to load analysis %s: %s", analysis_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not reach the analysis store. Please try again.",
+        ) from exc
+
+    if not record or not record.get("results_json"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No completed analysis found for analysis_id '{analysis_id}'.",
+        )
+    return record["results_json"]
+
+
+@app.post("/dfm/evaluate", response_model=DFMReport, tags=["DFM"])
+def evaluate_dfm(request: DFMEvaluateRequest):
+    """Run the DFM rule engine over a geometry payload and return the report.
+
+    Deterministic: the same geometry and inputs always produce the same
+    verdicts, scores and findings. No LLM is involved.
+    """
+    return run_dfm_analysis(
+        request.geometry,
+        inputs=request.inputs,
+        analysis_id=request.analysis_id,
+    )
+
+
+@app.get("/analysis/{analysis_id}/dfm", response_model=DFMReport, tags=["DFM"])
+def get_dfm_report(analysis_id: str):
+    """Return the stored manufacturability report for a completed analysis."""
+    results = _load_stored_analysis(analysis_id)
+    report = results.get("dfm_report")
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Analysis '{analysis_id}' has no DFM report. It was analysed before the "
+                f"rule engine was enabled, or the DFM stage failed for this part."
+            ),
+        )
+    return DFMReport.model_validate(report)
+
+
+# ---------------------------------------------------------------------------
+# AI endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/ai/ask", response_model=AIAnswer, tags=["AI"])
+def ask_faber_ai(request: AIAskRequest):
+    """Answer a question about a manufacturability report.
+
+    Strictly downstream: this endpoint reads a report that already exists. It
+    never runs the geometry engine and never re-evaluates a DFM rule, so it
+    cannot contradict the analysis the user is looking at. A request for an
+    analysis with no stored report is rejected rather than silently re-analysed.
+    """
+    geometry = request.geometry
+
+    if request.report is not None:
+        report_payload = request.report
+    elif request.analysis_id:
+        results = _load_stored_analysis(request.analysis_id)
+        report_payload = results.get("dfm_report")
+        if not report_payload:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Analysis '{request.analysis_id}' has no DFM report yet. Run the analysis "
+                    f"first — the assistant answers from report data and does not compute it."
+                ),
+            )
+        if geometry is None:
+            geometry = results.get("geometry_data")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Provide either an analysis_id or an inline report.",
+        )
+
+    try:
+        report = DFMReport.model_validate(report_payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"The supplied report is not a valid DFM report: {exc}",
+        ) from exc
+
+    return answer_dfm_question(
+        report=report,
+        question=request.question,
+        geometry=geometry if isinstance(geometry, dict) else None,
+        analysis_id=request.analysis_id,
+    )
+
 
 @app.get("/mock-file", tags=["Analysis (Mock)"])
 def get_mock_file():

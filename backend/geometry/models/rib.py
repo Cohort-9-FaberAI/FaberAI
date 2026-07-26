@@ -1,23 +1,34 @@
-from dataclasses import dataclass,field
-from typing import Optional
+from dataclasses import dataclass, field
 import numpy as np
+
 
 @dataclass
 class Rib:
-    """A thin reinforcing wall."""
-    id: int
-    thickness: float
-    height: float
-    length: float
-    axis: np.ndarray
-    attached_face: Optional[int] = None
-    draft_angle: Optional[float] = None
-    fillet_radius: Optional[float] = None
+    """A thin, long-and-narrow support wall feature, detected as a pair of
+    near-parallel, closely-spaced interior planar faces."""
 
-    faces: list[int] = field(default_factory=list)
+    id: int
+    thickness: float                   # distance between the two faces
+    length: float                      # approx run length of the rib
+    normal: np.ndarray                 # normal of the first face in the pair
+    center: np.ndarray                 # midpoint between the two face locations
+    face_pair: tuple = field(default_factory=tuple)   # (Face.id, Face.id)
+    shared_neighbor_faces: list = field(default_factory=list)   # Face.id values
+    # Only populated when this rib was merged from more than one detected
+    # antiparallel pair sharing a face (e.g. a rib with multiple segments).
+    extra_face_pairs: list = field(default_factory=list)
 
     def aspect_ratio(self) -> float:
-        """Height will be divided by thickness."""
-        if self.thickness==0:
+        """length : thickness — high ratio confirms a long, thin rib rather
+        than a generic thin wall or boss."""
+        if self.thickness == 0:
             return float("inf")
-        return self.height/self.thickness
+        return self.length / self.thickness
+
+    def volume_estimate(self) -> float:
+        """Rough material volume of the rib, treating it as a rectangular
+        slab of thickness x length x length (no width data available, so
+        this is a coarse, self-consistent estimate for relative comparison
+        only — callers with real width data should compute volume directly)."""
+        return self.thickness * self.length * self.length
+
