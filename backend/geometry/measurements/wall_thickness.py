@@ -261,7 +261,7 @@ def compute_wall_thickness_mesh(
     ray_directions = -normals
 
 
-    vertices: np.ndarray = mesh.vertices          # (N, 3)
+    #vertices: np.ndarray = mesh.vertices          # (N, 3)
     tri_indices: np.ndarray = mesh.faces          # (M, 3)
     #face_normals: np.ndarray = mesh.face_normals  # (M, 3) — unit outward normals
 

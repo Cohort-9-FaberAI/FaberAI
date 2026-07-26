@@ -1,7 +1,6 @@
 import networkx as nx
 import numpy as np
 
-from geometry.models.enums import SurfaceType
 
 
 def build_face_graph(mesh) -> nx.Graph:
