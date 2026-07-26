@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from xml.parsers.expat import model
 #from os import path
 
 from geometry.models import GeometryModel, SourceFormat

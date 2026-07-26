@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import AppShell from '../components/layout/AppShell'
@@ -16,58 +16,22 @@ interface Issue {
   recommendation: string
 }
 
-const MOCK_FALLBACK: Record<string, unknown> = {
-  analysis_id: 'mock-local-fallback',
-  filename: 'local_preview.stl',
-  status: 'completed',
-  manufacturability_score: 72,
-  issues: [
-    {
-      severity: 'high',
-      message: 'Wall thickness of 0.8mm is below the minimum of 1.5mm for CNC machining.',
-      recommendation: 'Increase wall thickness to at least 1.5mm.',
-    },
-    {
-      severity: 'medium',
-      message:
-        'Pocket depth-to-width ratio of 5:1 exceeds the recommended 4:1 for standard tooling.',
-      recommendation: 'Reduce pocket depth or widen the pocket opening.',
-    },
-  ],
-}
-
 export default function AnalysisPage() {
   const navigate = useNavigate()
   const files = useStore((s) => s.files)
+  const updateFile = useStore((s) => s.updateFile)
   const analysisResult = useStore((s) => s.analysisResult)
   const setAnalysisResult = useStore((s) => s.setAnalysisResult)
   const [activeTab, setActiveTab] = useState<'molding' | 'printing'>('molding')
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const latestFile = files[files.length - 1]
   const taskId = latestFile?.taskId ?? null
   const isDevManual = taskId === 'dev-manual'
 
-  useEffect(() => {
-    if (isDevManual) {
-      setAnalysisResult(MOCK_FALLBACK)
-      return
-    }
-    fallbackTimerRef.current = setTimeout(() => {
-      const current = useStore.getState().analysisResult
-      if (!current) {
-        useStore.getState().setAnalysisResult(MOCK_FALLBACK)
-      }
-    }, 8000)
-    return () => {
-      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useTaskPolling(isDevManual ? null : taskId, (data) => {
-    if (fallbackTimerRef.current) {
-      clearTimeout(fallbackTimerRef.current)
-      fallbackTimerRef.current = null
+  useTaskPolling(isDevManual ? null : taskId, latestFile?.analysisId, (data) => {
+    const status = typeof data?.status === 'string' ? data.status : null
+    if (status === 'SUCCESS' && latestFile) {
+      updateFile(latestFile.id, { status: 'completed' })
     }
     const result = data?.result as Record<string, unknown> | undefined
     if (result) {

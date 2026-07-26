@@ -17,8 +17,12 @@ export async function uploadFile(file: File) {
   return res.json()
 }
 
-export async function getTaskStatus(taskId: string) {
-  const res = await fetch(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`)
+export async function getTaskStatus(taskId: string, analysisId?: string | null) {
+  const url = new URL(`${API_BASE}/tasks/${encodeURIComponent(taskId)}`)
+  if (analysisId) {
+    url.searchParams.set('analysis_id', analysisId)
+  }
+  const res = await fetch(url.toString())
 
   if (!res.ok) {
     const body = await res.json().catch(() => null)
