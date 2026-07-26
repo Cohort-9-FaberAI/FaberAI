@@ -15,9 +15,8 @@ The strategy is identical for both kernels:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Optional
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -45,7 +44,7 @@ class WallThicknessStats:
 # OCC path
 # ---------------------------------------------------------------------------
 
-def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[WallThicknessStats]]:
+def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], WallThicknessStats | None]:
     """Ray-cast wall thickness sampling for a STEP B-rep shape.
 
     Uses build123d BRepIntCurveSurface_Inter to cast rays from each face
@@ -63,11 +62,11 @@ def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[W
         stats   : WallThicknessStats or None if no valid samples were found.
     """
     from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
-    from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
+    from OCP.gp import gp_Dir, gp_Lin, gp_Pnt
     #from OCP.TopAbs import TopAbs_REVERSED
 
 
-   #from OCP.GeomAbs import GeomAbs_IsOpposite  # noqa: F401 – kept for reference
+   #from OCP.GeomAbs import GeomAbs_IsOpposite
 
     samples: list[WallSample] = []
     topo_shape = shape_b123.wrapped if hasattr(shape_b123, "wrapped") else shape_b123
@@ -102,8 +101,8 @@ def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[W
             inter = BRepIntCurveSurface_Inter()
             inter.Init(topo_shape, ray, 1e-6)
 
-            best_dist: Optional[float] = None
-            best_face_idx: Optional[int] = None
+            best_dist: float | None = None
+            best_face_idx: int | None = None
 
             while inter.More():
                 hit_point = inter.Pnt()
@@ -162,7 +161,7 @@ def compute_wall_thickness_occ(shape_b123) -> tuple[list[WallSample], Optional[W
 # Mesh (trimesh) path
 # ---------------------------------------------------------------------------
 
-def compute_wall_thickness_mesh(mesh) -> tuple[list[WallSample], Optional[WallThicknessStats]]:
+def compute_wall_thickness_mesh(mesh) -> tuple[list[WallSample], WallThicknessStats | None]:
     """Ray-cast wall thickness sampling for a trimesh mesh.
 
     Casts a ray from each triangle centroid in the inward-normal direction

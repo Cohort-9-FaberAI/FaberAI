@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 import os
-#from os import path
 
-from geometry.models import GeometryModel, SourceFormat
-from .exceptions import StepSupportUnavailableError
 from geometry.measurements import (
-    compute_bbox_occ,
     compute_bbox_mesh,
-    compute_oriented_bbox_mesh,
-    compute_volume_occ,
-    compute_volume_mesh,
-    compute_surface_area_occ,
-    compute_surface_area_mesh,
-    compute_center_mass_occ,
+    compute_bbox_occ,
     compute_center_mass_mesh,
-    compute_moment_inertia_occ,
+    compute_center_mass_occ,
     compute_moment_inertia_mesh,
+    compute_moment_inertia_occ,
+    compute_oriented_bbox_mesh,
+    compute_surface_area_mesh,
+    compute_surface_area_occ,
+    compute_volume_mesh,
+    compute_volume_occ,
     is_mesh_reliable,
 )
-from .stl_loader_trimesh import load_stl
 
+#from os import path
+from geometry.models import GeometryModel, SourceFormat
+
+from .exceptions import StepSupportUnavailableError
+from .stl_loader_trimesh import load_stl
 
 STEP_EXTENSIONS = {".step", ".stp"}
 STL_EXTENSIONS = {".stl"}
@@ -142,12 +143,12 @@ def _load_step(path: str) -> GeometryModel:
         # nested in the same try — if topology extraction fails, feature
         # detection can't run either.
         try:
-            from geometry.features.holes import detect_holes
             from geometry.features.bosses import detect_bosses_full
             from geometry.features.cavities import detect_cavities_full
-            from geometry.features.fillets import detect_fillets
-            from geometry.features.ribs import detect_ribs
             from geometry.features.chamfers import detect_chamfers
+            from geometry.features.fillets import detect_fillets
+            from geometry.features.holes import detect_holes
+            from geometry.features.ribs import detect_ribs
 
             model.holes = detect_holes(faces_list, edges_list)
             model.bosses = detect_bosses_full(faces_list, edges_list, holes=model.holes)
@@ -189,7 +190,9 @@ def _load_step(path: str) -> GeometryModel:
     # Print orientation analysis (requires faces to be populated)
     if model.faces:
         try:
-            from geometry.measurements.print_orientations import compute_print_orientations
+            from geometry.measurements.print_orientations import (
+                compute_print_orientations,
+            )
             model.print_orientations = compute_print_orientations(model.faces)
         except Exception as e:
             print(f"Warning: print orientation analysis failed for {path}: {e}")
@@ -238,8 +241,8 @@ def _load_stl(path: str) -> GeometryModel:
 
     try:
         from geometry.measurements.print_orientations import compute_print_orientations
-        from geometry.models.face import Face
         from geometry.models.enums import SurfaceType
+        from geometry.models.face import Face
 
         face_normals = mesh.face_normals
         face_areas = mesh.area_faces
