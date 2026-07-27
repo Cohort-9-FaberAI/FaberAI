@@ -294,7 +294,8 @@ def analyze_mock():
                 "face_id": 45,
                 "centroid": {"x": 0.0, "y": -12.3, "z": 5.0}
             }
-        ]
+        ],
+        "response_model": AnalysisResult.model_json_schema()  # Include the schema for client validation    
     }
 
 @app.post("/analysis/", tags=["Analysis"])
