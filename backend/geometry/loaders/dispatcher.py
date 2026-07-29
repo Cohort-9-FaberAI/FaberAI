@@ -64,12 +64,12 @@ def load_geometry(path: str) -> GeometryModel:
 # STEP / OCC path
 
 def _load_step(path: str) -> GeometryModel:
-    # STEP loading is tricky because there are two competing loaders: build123d and pythonOCC. 
+    # STEP loading is tricky because there are two competing loaders: build123d and pythonOCC.
     # We need both loaders for the different use cases.
-    # So we load twice and generate two shapes, one for build123d and one for pythonOCC. 
-    # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.    
-    # 
-    #   
+    # So we load twice and generate two shapes, one for build123d and one for pythonOCC.
+    # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.
+    #
+    #
     # --- Try build123d ---
     shape_b123 = None
     b123_missing = False
@@ -92,7 +92,7 @@ def _load_step(path: str) -> GeometryModel:
 
     except Exception as e:
         print(f"Warning: pythonOCC STEP loader failed for {path}: {e}")
-        
+
 
     # If both dependencies are missing, signal that STEP support is unavailable
     if b123_missing and occ_missing:
@@ -100,14 +100,14 @@ def _load_step(path: str) -> GeometryModel:
             "STEP support is unavailable because required optional dependencies "
             "(pythonocc-core / build123d) are not installed."
         )
-    
+
     # Safety net: the loaders should already reject null/None shapes, but
     # guard here too so no downstream OCC call receives an invalid shape.
     if shape_occ is None and shape_b123 is None:
         raise ValueError(
             f"STEP file '{path}' could not be loaded — the file may be empty or corrupted."
         )
-    
+
     model = GeometryModel(
         source_format=SourceFormat.STEP, source_path=path, raw_occ=shape_occ, raw_b123=shape_b123
     )
@@ -243,9 +243,50 @@ def _load_stl(path: str) -> GeometryModel:
             node: list(face_graph.neighbors(node))
             for node in face_graph.nodes()
         }
+        try:
+            from geometry.Mesh_features.holes import (
+                detect_mesh_holes
+            )
+
+            from geometry.Mesh_features.bosses import (
+                detect_mesh_bosses
+            )
+
+            from geometry.Mesh_features.ribs import (
+                detect_mesh_ribs
+            )
+
+            model.holes = detect_mesh_holes(
+                mesh,
+                face_graph
+            )
+
+            model.bosses = detect_mesh_bosses(
+                mesh,
+                face_graph
+            )
+
+            model.ribs = detect_mesh_ribs(
+                mesh,
+                face_graph
+            )
+
+        except Exception as e:
+            print(f"Warning: STL feature detection failed for {path}: {e}")
+
+            model.holes = []
+            model.bosses = []
+            model.ribs = []
+
     except Exception as e:
             print(f"Warning: face extraction failed for {path}: {e}")
+            model.faces = []
+            model.edges = []
+            model.face_graph = None
 
+            model.holes = []
+            model.bosses = []
+            model.ribs = []
     try:
         from geometry.models.mesh_quality import check_mesh_quality
         model.mesh_quality = check_mesh_quality(mesh)
