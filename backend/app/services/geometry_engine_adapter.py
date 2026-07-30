@@ -216,6 +216,17 @@ class ChamferSummary(BaseModel):
     is_symmetric_45: bool
 
 
+class OverhangSummary(BaseModel):
+    """A single face whose downward-facing angle exceeds the print-support
+    threshold."""
+    model_config = ConfigDict(extra="forbid")
+    face_id: int
+    centroid: Vector3
+    normal: Vector3
+    angle: float
+    area: float
+
+
 
 # DFM issue schemas
 
@@ -289,6 +300,9 @@ class GeometryEngineResponse(BaseModel):
     fillets: List[FilletSummary] = Field(default_factory=list)
     ribs: List[RibSummary] = Field(default_factory=list)
     chamfers: List[ChamferSummary] = Field(default_factory=list)
+
+    # Overhangs
+    overhangs: List[OverhangSummary] = Field(default_factory=list)
 
     # DFM issues
     issues: List[GeometryEngineIssue] = Field(default_factory=list)
@@ -494,6 +508,16 @@ def _to_chamfer_summary(chamfer: Any) -> ChamferSummary:
     )
 
 
+def _to_overhang_summary(overhang: Any) -> OverhangSummary:
+    return OverhangSummary(
+        face_id=int(overhang.face_id),
+        centroid=_to_vector3(overhang.centroid) or Vector3(x=0.0, y=0.0, z=0.0),
+        normal=_to_vector3(overhang.normal) or Vector3(x=0.0, y=0.0, z=0.0),
+        angle=float(overhang.angle),
+        area=float(overhang.area),
+    )
+
+
 def _clamp_volume(volume: float | None, measurements_reliable: bool) -> float | None:
     """
     Here the physically impossible negative volumes are made None.
@@ -563,6 +587,8 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         fillets=[_to_fillet_summary(f) for f in model.fillets],
         ribs=[_to_rib_summary(r) for r in model.ribs],
         chamfers=[_to_chamfer_summary(c) for c in model.chamfers],
+        # Overhangs
+        overhangs=[_to_overhang_summary(o) for o in model.overhangs],
     )
 
     return response.model_dump()
