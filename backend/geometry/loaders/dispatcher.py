@@ -244,39 +244,39 @@ def _load_stl(path: str) -> GeometryModel:
             for node in face_graph.nodes()
         }
         try:
-            from geometry.Mesh_features.holes import (
-                detect_mesh_holes
-            )
-
-            from geometry.Mesh_features.bosses import (
-                detect_mesh_bosses
-            )
-
-            from geometry.Mesh_features.ribs import (
-                detect_mesh_ribs
-            )
-
-            model.holes = detect_mesh_holes(
-                mesh,
-                face_graph
-            )
-
-            model.bosses = detect_mesh_bosses(
-                mesh,
-                face_graph
-            )
-
-            model.ribs = detect_mesh_ribs(
-                mesh,
-                face_graph
-            )
-
+            from geometry.Mesh_features.holes import detect_mesh_holes
+            model.holes = detect_mesh_holes(mesh, face_graph)
         except Exception as e:
-            print(f"Warning: STL feature detection failed for {path}: {e}")
-
+            print(f"Warning: STL hole detection failed for {path}: {e}")
             model.holes = []
+
+        try:
+            from geometry.Mesh_features.bosses import detect_mesh_bosses
+            model.bosses = detect_mesh_bosses(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL boss detection failed for {path}: {e}")
             model.bosses = []
+
+        try:
+            from geometry.Mesh_features.ribs import detect_mesh_ribs
+            model.ribs = detect_mesh_ribs(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL rib detection failed for {path}: {e}")
             model.ribs = []
+
+        try:
+            from geometry.Mesh_features.fillets import detect_mesh_fillets
+            model.fillets = detect_mesh_fillets(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL fillet detection failed for {path}: {e}")
+            model.fillets = []
+
+        try:
+            from geometry.Mesh_features.chamfers import detect_mesh_chamfers
+            model.chamfers = detect_mesh_chamfers(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL chamfer detection failed for {path}: {e}")
+            model.chamfers = []
 
     except Exception as e:
             print(f"Warning: face extraction failed for {path}: {e}")
@@ -287,6 +287,8 @@ def _load_stl(path: str) -> GeometryModel:
             model.holes = []
             model.bosses = []
             model.ribs = []
+            model.fillets = []
+            model.chamfers = []
     try:
         from geometry.models.mesh_quality import check_mesh_quality
         model.mesh_quality = check_mesh_quality(mesh)
