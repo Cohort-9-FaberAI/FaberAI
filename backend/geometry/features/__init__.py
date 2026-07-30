@@ -3,7 +3,7 @@
 from .holes import detect_holes, detect_cylindrical_holes, classify_hole, measure_hole
 from .bosses import detect_bosses, detect_bosses_full, measure_boss, find_attached_face
 from .cavities import detect_cavities, detect_cavities_full, measure_cavity
-from .rib import detect_ribs
+from .ribs import detect_ribs
 __all__ = [
     "detect_holes",
     "detect_cylindrical_holes",
