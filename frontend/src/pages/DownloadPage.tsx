@@ -4,15 +4,26 @@ import AppShell from '../components/layout/AppShell'
 import StepIndicator from '../components/layout/StepIndicator'
 import { useStore } from '../store'
 
+const PROJECT_STEPS = ['Upload', 'Extra Info', 'Conclusion']
+
 export default function DownloadPage() {
   const navigate = useNavigate()
   const process = useStore((s) => s.process)
+  const wizardSource = useStore((s) => s.source)
+  const wizardProjectId = useStore((s) => s.projectId)
   const [comparison, setComparison] = useState(false)
   const showComparison = process === null
 
+  const isProject = wizardSource === 'project' || wizardSource === 'view'
+  const backToStart = isProject && wizardProjectId ? `/projects/${wizardProjectId}` : '/home'
+  const backLabel = isProject ? 'Back to Project' : 'Back To Upload'
+
   return (
     <AppShell>
-      <StepIndicator currentStep={5} />
+      <StepIndicator
+        currentStep={isProject ? 3 : 4}
+        steps={isProject ? PROJECT_STEPS : undefined}
+      />
 
       <h1>Download</h1>
 
@@ -50,8 +61,8 @@ export default function DownloadPage() {
         <button type="button" className="wizard-nav-back" onClick={() => navigate('/conclusion')}>
           Go Back
         </button>
-        <button type="button" onClick={() => navigate('/home')}>
-          Back To Upload
+        <button type="button" onClick={() => navigate(backToStart)}>
+          {backLabel}
         </button>
       </div>
     </AppShell>

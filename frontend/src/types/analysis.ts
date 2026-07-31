@@ -31,6 +31,8 @@ export interface GeometryData {
   center_mass: Vector3
 }
 
+export type Centroid = [number, number, number] | { x: number; y: number; z: number }
+
 export interface ManufacturabilityIssue {
   issue_id: string
   severity: IssueSeverity
@@ -38,7 +40,7 @@ export interface ManufacturabilityIssue {
   description: string
   face_id?: number
   edge_id?: number
-  centroid: [number, number, number]
+  centroid: Centroid
 }
 
 export interface AnalysisResult {

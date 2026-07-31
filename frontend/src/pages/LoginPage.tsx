@@ -9,7 +9,7 @@ export default function LoginPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    navigate('/home')
+    navigate('/projects')
   }
 
   return (

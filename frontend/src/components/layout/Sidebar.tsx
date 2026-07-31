@@ -1,10 +1,8 @@
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
-  { label: 'Upload', to: '/home', icon: 'U' },
+  { label: 'Quick Upload', to: '/home', icon: 'U' },
   { label: 'Projects', to: '/projects', icon: 'P' },
-  { label: 'Library', to: '/library', icon: 'L' },
-  { label: 'History', to: '/history', icon: 'H' },
 ]
 
 export default function Sidebar() {
