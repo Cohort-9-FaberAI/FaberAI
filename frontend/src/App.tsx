@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
-import HomePage from './pages/HomePage'
+import UploadPage from './pages/UploadPage'
 import ExtraInfoPage from './pages/ExtraInfoPage'
 import ConclusionPage from './pages/ConclusionPage'
 import DownloadPage from './pages/DownloadPage'
@@ -14,7 +14,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/home" element={<HomePage />} />
+      <Route path="/upload" element={<UploadPage />} />
       <Route path="/extra-info" element={<ExtraInfoPage />} />
       <Route path="/conclusion" element={<ConclusionPage />} />
       <Route path="/download" element={<DownloadPage />} />

@@ -82,7 +82,7 @@ export default function ConclusionPage() {
   })
 
   const backToStart =
-    wizardSource === 'project' && wizardProjectId ? `/projects/${wizardProjectId}` : '/home'
+    wizardSource === 'project' && wizardProjectId ? `/projects/${wizardProjectId}` : '/upload'
   const backLabel = wizardSource === 'project' ? 'Back to Project' : 'Back to Upload'
 
   const issues = (displayResult?.issues as Issue[]) ?? []

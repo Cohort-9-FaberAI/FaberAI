@@ -15,7 +15,7 @@ export default function DownloadPage() {
   const showComparison = process === null
 
   const isProject = wizardSource === 'project' || wizardSource === 'view'
-  const backToStart = isProject && wizardProjectId ? `/projects/${wizardProjectId}` : '/home'
+  const backToStart = isProject && wizardProjectId ? `/projects/${wizardProjectId}` : '/upload'
   const backLabel = isProject ? 'Back to Project' : 'Back To Upload'
 
   return (

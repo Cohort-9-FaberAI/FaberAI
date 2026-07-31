@@ -1,14 +1,28 @@
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
-  { label: 'Quick Upload', to: '/home', icon: 'U' },
+  { label: 'Quick Upload', to: '/upload', icon: 'U' },
   { label: 'Projects', to: '/projects', icon: 'P' },
 ]
 
-export default function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean
+  onToggle: () => void
+}
+
+export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">FaberAI</div>
+    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+      <button
+        type="button"
+        className="sidebar-toggle"
+        onClick={onToggle}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {collapsed ? '»' : '«'}
+      </button>
+      <div className="sidebar-logo">Faber AI</div>
       <nav className="sidebar-nav">
         {navItems.map((item) => (
           <NavLink
@@ -31,7 +45,7 @@ export default function Sidebar() {
             >
               {item.icon}
             </span>
-            {item.label}
+            <span className="sidebar-label">{item.label}</span>
           </NavLink>
         ))}
       </nav>
@@ -41,7 +55,7 @@ export default function Sidebar() {
           className={({ isActive }) => `sidebar-nav-item${isActive ? ' active' : ''}`}
           style={{ fontSize: 12, opacity: 0.5 }}
         >
-          API Debug
+          <span className="sidebar-label">API Debug</span>
         </NavLink>
       </div>
     </aside>

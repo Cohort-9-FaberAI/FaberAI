@@ -5,7 +5,7 @@ import UploadDropzone from '../components/home/UploadDropzone'
 import FileCard from '../components/home/FileCard'
 import { useStore } from '../store'
 
-export default function HomePage() {
+export default function UploadPage() {
   const navigate = useNavigate()
   const files = useStore((s) => s.files)
   const clearFiles = useStore((s) => s.clearFiles)

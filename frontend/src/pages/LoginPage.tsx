@@ -26,7 +26,7 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4, delay: 0.1 }}
       >
-        <h1>FaberAI</h1>
+        <h1>Faber AI</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>
           AI-powered manufacturability analysis
         </p>
