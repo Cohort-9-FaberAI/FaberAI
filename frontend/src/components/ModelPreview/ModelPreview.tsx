@@ -23,15 +23,18 @@ function ModelCanvas() {
       <directionalLight position={[-3, 1, -4]} intensity={0.5} castShadow />
       <Model />
 
-      {context?.analysis.issues.map((issue) => (
-        <IssueMarker
-          key={issue.centroid.join(':')}
-          position={issue.centroid}
-          color="red"
-          issue={issue}
-          type="POINT"
-        />
-      ))}
+      {context?.analysis.issues.map((issue) => {
+        const { x, y, z } = issue.centroid
+        return (
+          <IssueMarker
+            key={`${x}:${y}:${z}`}
+            position={[x, y, z]}
+            color="red"
+            issue={issue}
+            type="POINT"
+          />
+        )
+      })}
 
       <OrbitControls />
     </Canvas>

@@ -38,7 +38,7 @@ export interface ManufacturabilityIssue {
   description: string
   face_id?: number
   edge_id?: number
-  centroid: [number, number, number]
+  centroid: Vector3
 }
 
 export interface AnalysisResult {
