@@ -1,10 +1,11 @@
-const steps = ['Upload', 'Extra Info', 'Analysis', 'Conclusion', 'Download']
+const DEFAULT_STEPS = ['Upload', 'Extra Info', 'Conclusion', 'Download']
 
 interface StepIndicatorProps {
   currentStep: number
+  steps?: string[]
 }
 
-export default function StepIndicator({ currentStep }: StepIndicatorProps) {
+export default function StepIndicator({ currentStep, steps = DEFAULT_STEPS }: StepIndicatorProps) {
   return (
     <div className="step-indicator">
       {steps.map((label, i) => {

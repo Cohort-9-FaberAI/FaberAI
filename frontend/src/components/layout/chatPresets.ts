@@ -1,7 +1,7 @@
 // Maps a route path to suggested question chips shown in the chat panel.
 // Falls back to DEFAULT_QUESTIONS for routes with no preset list.
 export const PAGE_QUESTIONS: Record<string, string[]> = {
-  '/home': ['What file formats are supported?', 'How does the upload process work?'],
+  '/upload': ['What file formats are supported?', 'How does the upload process work?'],
   '/extra-info': [
     'How does material choice affect manufacturability?',
     'What tolerance should I pick for this process?',

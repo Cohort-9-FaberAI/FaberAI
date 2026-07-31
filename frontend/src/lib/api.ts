@@ -1,6 +1,6 @@
 import type { AIAnswer, AIAskRequest } from '../types/analysis'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 export async function uploadFile(file: File) {
   const formData = new FormData()
