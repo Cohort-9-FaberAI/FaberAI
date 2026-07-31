@@ -1468,9 +1468,113 @@ a {
   flex: 1;
   padding: 20px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
   font-size: 14px;
+}
+
+.chat-empty {
+  color: var(--text-muted);
   text-align: center;
+  margin: auto 0;
+}
+
+.chat-message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.4;
+}
+
+.chat-message-user {
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.chat-message-assistant {
+  align-self: flex-start;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.chat-message-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chat-mode-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.chat-mode-badge-llm {
+  background: rgba(76, 175, 80, 0.25);
+  color: #9fe6a3;
+}
+
+.chat-mode-badge-deterministic {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-muted);
+}
+
+.chat-message-rules {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.chat-typing {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.chat-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 14px;
+}
+
+.chat-preset-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chat-preset-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.chat-preset-chip:disabled {
+  opacity: 0.5;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.chat-input-row input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.chat-input-row button {
+  padding: 10px 16px;
+  border-radius: 8px;
 }
