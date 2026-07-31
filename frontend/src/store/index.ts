@@ -35,10 +35,22 @@ interface AnalysisSlice {
   setAnalysisResult: (r: Record<string, unknown> | null) => void
 }
 
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  mode?: 'llm' | 'deterministic'
+  referencedRules?: string[]
+  degradedReason?: string | null
+}
+
 interface ChatSlice {
   isOpen: boolean
   toggle: () => void
   setOpen: (v: boolean) => void
+  messages: ChatMessage[]
+  addMessage: (m: ChatMessage) => void
+  clearMessages: () => void
 }
 
 interface ModelSlice {
@@ -112,6 +124,9 @@ export const useStore = create<StoreState>((set) => ({
   isOpen: false,
   toggle: () => set((s) => ({ isOpen: !s.isOpen })),
   setOpen: (v) => set({ isOpen: v }),
+  messages: [],
+  addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
+  clearMessages: () => set({ messages: [] }),
 
   // Model slice
   currentFileBuffer: null,

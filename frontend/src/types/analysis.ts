@@ -52,3 +52,22 @@ export interface AnalysisResult {
   geometry_data: GeometryData
   issues: ManufacturabilityIssue[]
 }
+
+export type AIAnswerMode = 'llm' | 'deterministic'
+
+export interface AIAskRequest {
+  question: string
+  analysis_id?: string | null
+  report?: Record<string, unknown> | null
+  geometry?: Record<string, unknown> | null
+}
+
+export interface AIAnswer {
+  question: string
+  answer: string
+  mode: AIAnswerMode
+  model?: string | null
+  referenced_rules: string[]
+  analysis_id?: string | null
+  degraded_reason?: string | null
+}
