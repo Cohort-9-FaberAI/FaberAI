@@ -1,8 +1,10 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { askFaberAI } from '../../lib/api'
 import { useStore } from '../../store'
 import BrandMark from './BrandMark'
+import { getPageQuestions } from './chatPresets'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -172,6 +174,7 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 export default function ChatPanel() {
   const isOpen = useStore((s) => s.isOpen)
   const setOpen = useStore((s) => s.setOpen)
+  const location = useLocation()
   const files = useStore((s) => s.files)
   const activeFileId = useStore((s) => s.activeFileId)
   const latestFile = files.find((f) => f.id === activeFileId) ?? files[files.length - 1]
@@ -218,11 +221,6 @@ export default function ChatPanel() {
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(messages))
   }, [messages, storageKey])
-
-  useEffect(() => {
-    if (!isOpen || !hasCompletedReport) return
-    requestAnimationFrame(() => inputRef.current?.focus())
-  }, [hasCompletedReport, isOpen])
 
   useEffect(() => {
     const node = scrollRef.current
@@ -342,20 +340,23 @@ export default function ChatPanel() {
             </div>
 
             <div className="chat-composer">
-              {hasCompletedReport ? (
-                <div className="chat-suggestions" aria-label="Suggested questions">
-                  {SUGGESTED_QUESTIONS.map((question) => (
-                    <button
-                      key={question}
-                      type="button"
-                      onClick={() => sendMessage(question)}
-                      disabled={isSending}
-                    >
-                      {question}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <div className="chat-suggestions" aria-label="Suggested questions">
+                {Array.from(
+                  new Set([
+                    ...getPageQuestions(location.pathname),
+                    ...(hasCompletedReport ? SUGGESTED_QUESTIONS : []),
+                  ]),
+                ).map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => sendMessage(question)}
+                    disabled={isSending}
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
 
               {error ? <p className="chat-error">{error}</p> : null}
 
@@ -373,12 +374,12 @@ export default function ChatPanel() {
                   placeholder={
                     hasCompletedReport
                       ? 'Ask about rules, score, process choice, or fixes...'
-                      : 'Complete an analysis before asking Faber AI.'
+                      : 'Ask a question or select a suggestion above...'
                   }
-                  disabled={!hasCompletedReport || isSending}
+                  disabled={isSending}
                   rows={2}
                 />
-                <button type="submit" disabled={!hasCompletedReport || isSending || !input.trim()}>
+                <button type="submit" disabled={isSending || !input.trim()}>
                   {isSending ? 'Sending' : 'Send'}
                 </button>
               </form>

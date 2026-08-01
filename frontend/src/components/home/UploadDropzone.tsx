@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import { uploadFile } from '../../lib/api'
 import { useStore } from '../../store'
+import { uploadFile } from '../../lib/api'
 
 export default function UploadDropzone() {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -22,11 +22,13 @@ export default function UploadDropzone() {
     addFile({
       id,
       name: file.name,
+      file,
       taskId: null,
       analysisId: null,
       fileUrl: null,
       sourceFormat,
       status: 'pending',
+      analysisResult: null,
     })
 
     if (sourceFormat === 'stl') {
@@ -115,6 +117,11 @@ export default function UploadDropzone() {
             </svg>
             <h2>Drag and drop CAD files here</h2>
             <p className="upload-formats">.STEP · .STP · .STL (Multiple files allowed)</p>
+            {error ? (
+              <p className="chat-error" style={{ margin: '8px 0 0' }}>
+                {error}
+              </p>
+            ) : null}
             <button
               className="upload-browse-btn"
               type="button"
@@ -131,10 +138,8 @@ export default function UploadDropzone() {
           multiple={true}
           className="sr-only"
           onChange={onChange}
-          disabled={uploading}
         />
       </div>
-      {error && <p className="upload-error">{error}</p>}
     </div>
   )
 }

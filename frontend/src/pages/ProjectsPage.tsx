@@ -2,89 +2,140 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/layout/AppShell'
 import SearchBar from '../components/common/SearchBar'
-import ListRow from '../components/common/ListRow'
-import Modal from '../components/common/Modal'
+import ProjectForm from '../components/projects/ProjectForm'
 import { useStore } from '../store'
 
 export default function ProjectsPage() {
   const navigate = useNavigate()
   const projects = useStore((s) => s.projects)
+  const addProject = useStore((s) => s.addProject)
   const updateProject = useStore((s) => s.updateProject)
   const deleteProject = useStore((s) => s.deleteProject)
   const [query, setQuery] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
   const [editTarget, setEditTarget] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-  const [editDesc, setEditDesc] = useState('')
 
   const filtered = projects.filter(
-    (e) =>
-      e.fileName.toLowerCase().includes(query.toLowerCase()) ||
-      e.description.toLowerCase().includes(query.toLowerCase()),
+    (p) =>
+      p.name.toLowerCase().includes(query.toLowerCase()) ||
+      p.description.toLowerCase().includes(query.toLowerCase()),
   )
 
-  function openEdit(id: string) {
-    const p = projects.find((proj) => proj.id === id)
-    if (!p) return
-    setEditTarget(id)
-    setEditName(p.fileName)
-    setEditDesc(p.description)
+  const editProject = editTarget ? projects.find((p) => p.id === editTarget) : null
+
+  function handleCreate(data: { name: string; description: string; files: File[] }) {
+    const projectId = crypto.randomUUID()
+    addProject({
+      id: projectId,
+      name: data.name,
+      description: data.description,
+      files: data.files.map((f) => ({
+        id: crypto.randomUUID(),
+        name: f.name,
+        file: f,
+        taskId: null,
+        analysisId: null,
+        status: 'stored' as const,
+        analysisResult: null,
+      })),
+    })
+    setShowCreate(false)
+    navigate(`/projects/${projectId}`)
   }
 
-  function saveEdit() {
+  function handleEdit(data: { name: string; description: string; files: File[] }) {
     if (!editTarget) return
-    updateProject(editTarget, { fileName: editName, description: editDesc })
+    updateProject(editTarget, { name: data.name, description: data.description })
     setEditTarget(null)
+  }
+
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
   }
 
   return (
     <AppShell>
       <h1>Projects</h1>
+      <p className="page-note">Organize CAD files into projects and analyze them on demand.</p>
 
       <div className="list-header">
-        <SearchBar value={query} onChange={setQuery} />
-        <button type="button" className="list-add-btn" onClick={() => navigate('/home')}>
+        <SearchBar value={query} onChange={setQuery} placeholder="Search projects..." />
+        <button
+          type="button"
+          className="list-add-btn"
+          onClick={() => {
+            setEditTarget(null)
+            setShowCreate(true)
+          }}
+        >
           New Project
         </button>
       </div>
 
-      <Modal open={editTarget !== null} onClose={() => setEditTarget(null)}>
-        <h2>Edit Project</h2>
-        <div className="edit-form">
-          <label className="login-field">
-            <span>File Name</span>
-            <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} />
-          </label>
-          <label className="login-field">
-            <span>Description</span>
-            <input type="text" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-          </label>
-          <div className="modal-actions">
-            <button type="button" onClick={() => setEditTarget(null)}>
-              Cancel
-            </button>
-            <button type="button" onClick={saveEdit}>
-              Save
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {showCreate && (
+        <ProjectForm mode="create" onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
+      )}
 
-      <div className="list-container">
-        {filtered.map((p) => (
-          <ListRow
-            key={p.id}
-            fields={[
-              { label: 'File Name', value: p.fileName },
-              { label: 'Description', value: p.description },
-            ]}
-            actions={[
-              { label: 'Edit', onClick: () => openEdit(p.id) },
-              { label: 'Delete', onClick: () => deleteProject(p.id) },
-            ]}
-          />
+      {editTarget && (
+        <ProjectForm
+          key={editTarget}
+          mode="edit"
+          initialName={editProject?.name ?? ''}
+          initialDescription={editProject?.description ?? ''}
+          onSubmit={handleEdit}
+          onCancel={() => setEditTarget(null)}
+        />
+      )}
+
+      {!showCreate &&
+        !editTarget &&
+        (filtered.length === 0 ? (
+          <p className="list-empty">No projects found.</p>
+        ) : (
+          <div className="project-list">
+            {filtered.map((p) => (
+              <div key={p.id} className="project-row">
+                <div className="project-row-main">
+                  <div className="project-row-title">
+                    <h3>{p.name}</h3>
+                    <span className="project-file-count">
+                      {p.files.length} file{p.files.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <p className="project-row-desc">{p.description || 'No description'}</p>
+                  <div className="project-row-meta">
+                    <span>Created {formatDate(p.createdAt)}</span>
+                  </div>
+                </div>
+                <div className="project-row-actions">
+                  <button
+                    type="button"
+                    className="project-open-btn"
+                    onClick={() => navigate(`/projects/${p.id}`)}
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreate(false)
+                      setEditTarget(p.id)
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => deleteProject(p.id)}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         ))}
-        {filtered.length === 0 && <p className="list-empty">No projects found.</p>}
-      </div>
     </AppShell>
   )
 }

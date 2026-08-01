@@ -19,6 +19,7 @@ type ModelPreviewProps = {
   previewFileUrl?: string | null
   previewBuffer?: ArrayBuffer | null
   onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
+  height?: number | string
 }
 
 function toPoint(value?: [number, number, number] | Vector3): [number, number, number] | null {
@@ -124,6 +125,7 @@ export default function ModelPreview({
   previewFileUrl = null,
   previewBuffer,
   onIssueSelected,
+  height,
 }: ModelPreviewProps) {
   const [selectedIssue, setSelectedIssue] = useState<ManufacturabilityIssue | null>(null)
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
@@ -186,7 +188,7 @@ export default function ModelPreview({
   }
 
   return (
-    <div>
+    <div className={styles.wrapper} style={{ height }}>
       <div className={styles.canvasContainer}>
         {isLoadingModel && <div className={styles.overlay}>Loading 3D preview...</div>}
         {activeLoadError && <div className={styles.overlay}>{activeLoadError}</div>}

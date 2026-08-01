@@ -1,13 +1,19 @@
 import { Link } from 'react-router-dom'
 
-const steps = ['Upload', 'Extra Info', 'Analysis', 'Conclusion', 'Download']
-const stepRoutes = ['/home', '/extra-info', '/analysis', '/conclusion', '/download']
+const DEFAULT_STEPS = ['Upload', 'Extra Info', 'Analysis', 'Conclusion', 'Download']
+const DEFAULT_ROUTES = ['/home', '/extra-info', '/analysis', '/conclusion', '/download']
 
 interface StepIndicatorProps {
   currentStep: number
+  steps?: string[]
+  stepRoutes?: string[]
 }
 
-export default function StepIndicator({ currentStep }: StepIndicatorProps) {
+export default function StepIndicator({
+  currentStep,
+  steps = DEFAULT_STEPS,
+  stepRoutes = DEFAULT_ROUTES,
+}: StepIndicatorProps) {
   return (
     <div className="step-indicator">
       {steps.map((label, i) => {
@@ -16,7 +22,7 @@ export default function StepIndicator({ currentStep }: StepIndicatorProps) {
         return (
           <div key={label} className="step-segment">
             <Link
-              to={stepRoutes[i]}
+              to={stepRoutes[i] ?? '#'}
               className={`step-item step-${state}`}
               aria-current={state === 'active' ? 'step' : undefined}
             >

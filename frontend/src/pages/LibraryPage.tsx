@@ -33,7 +33,7 @@ export default function LibraryPage() {
 
       <div className="list-header">
         <SearchBar value={query} onChange={setQuery} />
-        <button type="button" className="list-add-btn" onClick={() => navigate('/home')}>
+        <button type="button" className="list-add-btn" onClick={() => navigate('/upload')}>
           Add New 3D Model
         </button>
       </div>
@@ -54,7 +54,7 @@ export default function LibraryPage() {
                 setPickerTarget(null)
               }}
             >
-              {p.fileName}
+              {p.name}
             </button>
           ))}
           {projects.length === 0 && <p className="list-empty">No projects yet.</p>}
@@ -74,7 +74,7 @@ export default function LibraryPage() {
                 { label: 'Diagnosis', value: item.diagnosis },
                 {
                   label: 'Project',
-                  value: linkedProject ? linkedProject.fileName : 'None',
+                  value: linkedProject ? linkedProject.name : 'None',
                 },
               ]}
               actions={[

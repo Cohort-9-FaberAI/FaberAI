@@ -1,6 +1,29 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
-interface ProjectSlice {
+export type FileStatus = 'stored' | 'pending' | 'processing' | 'completed' | 'failed'
+
+export interface ProjectFile {
+  id: string
+  name: string
+  file: File | null
+  taskId: string | null
+  analysisId: string | null
+  status: FileStatus
+  analysisResult: Record<string, unknown> | null
+}
+
+export interface Project {
+  id: string
+  name: string
+  description: string
+  files: ProjectFile[]
+  createdAt: string
+}
+
+export type WizardSource = 'quick' | 'project' | 'view'
+
+interface ProjectSettingsSlice {
   isProject: boolean
   process: 'molding' | 'printing' | null
   quantity: number
@@ -15,14 +38,35 @@ interface ProjectSlice {
   setNotes: (v: string) => void
 }
 
+interface WizardSlice {
+  source: WizardSource
+  projectId: string | null
+  fileId: string | null
+  file: File | null
+  setWizard: (patch: Partial<Omit<WizardSlice, 'file'>> & { file?: File | null }) => void
+  resetWizard: () => void
+}
+
+interface ProjectSlice {
+  projects: Project[]
+  addProject: (p: Omit<Project, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) => void
+  updateProject: (id: string, patch: Partial<Pick<Project, 'name' | 'description'>>) => void
+  deleteProject: (id: string) => void
+  addProjectFiles: (projectId: string, files: ProjectFile[]) => void
+  removeProjectFile: (projectId: string, fileId: string) => void
+  updateProjectFile: (projectId: string, fileId: string, patch: Partial<ProjectFile>) => void
+}
+
 export interface UploadedFile {
   id: string
   name: string
+  file: File | null
   taskId: string | null
   analysisId: string | null
   fileUrl?: string | null
   sourceFormat?: 'stl' | 'step' | null
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: FileStatus
+  analysisResult: Record<string, unknown> | null
 }
 
 interface FileSlice {
@@ -42,10 +86,22 @@ interface AnalysisSlice {
   setAnalysisResult: (fileId: string, r: Record<string, unknown> | null) => void
 }
 
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  mode?: 'llm' | 'deterministic'
+  referencedRules?: string[]
+  degradedReason?: string | null
+}
+
 interface ChatSlice {
   isOpen: boolean
   toggle: () => void
   setOpen: (v: boolean) => void
+  messages: ChatMessage[]
+  addMessage: (m: ChatMessage) => void
+  clearMessages: () => void
 }
 
 interface ModelSlice {
@@ -53,12 +109,6 @@ interface ModelSlice {
   setCurrentFileBuffer: (buf: ArrayBuffer | null) => void
   fileBuffers: Record<string, ArrayBuffer>
   setFileBuffer: (fileId: string, buf: ArrayBuffer | null) => void
-}
-
-interface ProjectRecord {
-  id: string
-  fileName: string
-  description: string
 }
 
 interface LibraryRecord {
@@ -76,12 +126,8 @@ interface HistoryRecord {
 }
 
 interface RecordsSlice {
-  projects: ProjectRecord[]
   libraryItems: LibraryRecord[]
   historyEntries: HistoryRecord[]
-  addProject: (p: ProjectRecord) => void
-  updateProject: (id: string, patch: Partial<ProjectRecord>) => void
-  deleteProject: (id: string) => void
   deleteLibraryItem: (id: string) => void
   addLibraryItem: (l: LibraryRecord) => void
   linkLibraryItemToProject: (itemId: string, projectId: string) => void
@@ -95,7 +141,9 @@ interface ThemeSlice {
   setTheme: (t: ThemeMode) => void
 }
 
-type StoreState = ProjectSlice &
+type StoreState = ProjectSettingsSlice &
+  WizardSlice &
+  ProjectSlice &
   FileSlice &
   AnalysisSlice &
   ChatSlice &
@@ -103,126 +151,188 @@ type StoreState = ProjectSlice &
   RecordsSlice &
   ThemeSlice
 
-export const useStore = create<StoreState>((set) => ({
-  // Theme slice
-  theme: (localStorage.getItem('faberai_theme') as ThemeMode) || 'dark',
-  toggleTheme: () =>
-    set((s) => {
-      const next: ThemeMode = s.theme === 'dark' ? 'light' : 'dark'
-      localStorage.setItem('faberai_theme', next)
-      document.documentElement.setAttribute('data-theme', next)
-      return { theme: next }
-    }),
-  setTheme: (t: ThemeMode) => {
-    localStorage.setItem('faberai_theme', t)
-    document.documentElement.setAttribute('data-theme', t)
-    set({ theme: t })
-  },
+const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
 
-  // Project slice
-  isProject: false,
-  process: null,
-  quantity: 1,
-  material: '',
-  tolerance: '',
-  notes: '',
-  setProject: (v) => set({ isProject: v }),
-  setProcess: (v) => set({ process: v }),
-  setQuantity: (v) => set({ quantity: v }),
-  setMaterial: (v) => set({ material: v }),
-  setTolerance: (v) => set({ tolerance: v }),
-  setNotes: (v) => set({ notes: v }),
+export const useStore = create<StoreState>()(
+  persist(
+    (set) => ({
+      // Theme slice
+      theme: (localStorage.getItem('faberai_theme') as ThemeMode) || 'dark',
+      toggleTheme: () =>
+        set((s) => {
+          const next: ThemeMode = s.theme === 'dark' ? 'light' : 'dark'
+          localStorage.setItem('faberai_theme', next)
+          document.documentElement.setAttribute('data-theme', next)
+          return { theme: next }
+        }),
+      setTheme: (t: ThemeMode) => {
+        localStorage.setItem('faberai_theme', t)
+        document.documentElement.setAttribute('data-theme', t)
+        set({ theme: t })
+      },
 
-  // File slice
-  files: [],
-  activeFileId: null,
-  openTabIds: [],
-  addFile: (f) =>
-    set((s) => ({
-      files: [...s.files, f],
-      activeFileId: f.id,
-      openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
-    })),
-  updateFile: (id, patch) =>
-    set((s) => ({
-      files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
-    })),
-  clearFiles: () =>
-    set({
+      // Project settings slice
+      isProject: false,
+      process: null,
+      quantity: 1,
+      material: '',
+      tolerance: '',
+      notes: '',
+      setProject: (v) => set({ isProject: v }),
+      setProcess: (v) => set({ process: v }),
+      setQuantity: (v) => set({ quantity: v }),
+      setMaterial: (v) => set({ material: v }),
+      setTolerance: (v) => set({ tolerance: v }),
+      setNotes: (v) => set({ notes: v }),
+
+      // Wizard slice
+      ...EMPTY_WIZARD,
+      setWizard: (patch) => set((s) => ({ ...s, ...patch })),
+      resetWizard: () => set(EMPTY_WIZARD),
+
+      // File slice
       files: [],
       activeFileId: null,
       openTabIds: [],
+      addFile: (f) =>
+        set((s) => ({
+          files: [...s.files, f],
+          activeFileId: f.id,
+          openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
+        })),
+      updateFile: (id, patch) =>
+        set((s) => ({
+          files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+        })),
+      clearFiles: () =>
+        set({
+          files: [],
+          activeFileId: null,
+          openTabIds: [],
+          analysisResults: {},
+          currentFileBuffer: null,
+          fileBuffers: {},
+        }),
+      setActiveFileId: (id) => set({ activeFileId: id }),
+      openTab: (id) =>
+        set((s) => ({
+          openTabIds: s.openTabIds.includes(id) ? s.openTabIds : [...s.openTabIds, id],
+          activeFileId: id,
+        })),
+      closeTab: (id) =>
+        set((s) => {
+          const filtered = s.openTabIds.filter((tid) => tid !== id)
+          const nextActive =
+            s.activeFileId === id
+              ? filtered.length > 0
+                ? filtered[filtered.length - 1]
+                : null
+              : s.activeFileId
+          return {
+            openTabIds: filtered,
+            activeFileId: nextActive,
+          }
+        }),
+
+      // Analysis slice – keyed by file ID so each tab has its own result
       analysisResults: {},
+      setAnalysisResult: (fileId, r) =>
+        set((s) => {
+          if (r === null) {
+            const rest = { ...s.analysisResults }
+            delete rest[fileId]
+            return { analysisResults: rest }
+          }
+          return { analysisResults: { ...s.analysisResults, [fileId]: r } }
+        }),
+
+      // Project slice
+      projects: [],
+      addProject: (p) =>
+        set((s) => ({
+          projects: [
+            ...s.projects,
+            {
+              ...p,
+              id: p.id ?? crypto.randomUUID(),
+              createdAt: p.createdAt ?? new Date().toISOString(),
+            },
+          ],
+        })),
+      updateProject: (id, patch) =>
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        })),
+      deleteProject: (id) => set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
+      addProjectFiles: (projectId, files) =>
+        set((s) => ({
+          projects: s.projects.map((p) =>
+            p.id === projectId ? { ...p, files: [...p.files, ...files] } : p,
+          ),
+        })),
+      removeProjectFile: (projectId, fileId) =>
+        set((s) => ({
+          projects: s.projects.map((p) =>
+            p.id === projectId ? { ...p, files: p.files.filter((f) => f.id !== fileId) } : p,
+          ),
+        })),
+      updateProjectFile: (projectId, fileId, patch) =>
+        set((s) => ({
+          projects: s.projects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  files: p.files.map((f) => (f.id === fileId ? { ...f, ...patch } : f)),
+                }
+              : p,
+          ),
+        })),
+
+      // Model slice
       currentFileBuffer: null,
+      setCurrentFileBuffer: (buf) => set({ currentFileBuffer: buf }),
       fileBuffers: {},
-    }),
-  setActiveFileId: (id) => set({ activeFileId: id }),
-  openTab: (id) =>
-    set((s) => ({
-      openTabIds: s.openTabIds.includes(id) ? s.openTabIds : [...s.openTabIds, id],
-      activeFileId: id,
-    })),
-  closeTab: (id) =>
-    set((s) => {
-      const filtered = s.openTabIds.filter((tid) => tid !== id)
-      const nextActive =
-        s.activeFileId === id
-          ? filtered.length > 0
-            ? filtered[filtered.length - 1]
-            : null
-          : s.activeFileId
-      return {
-        openTabIds: filtered,
-        activeFileId: nextActive,
-      }
-    }),
+      setFileBuffer: (fileId, buf) =>
+        set((s) => {
+          if (buf === null) {
+            const rest = { ...s.fileBuffers }
+            delete rest[fileId]
+            return { fileBuffers: rest }
+          }
+          return { fileBuffers: { ...s.fileBuffers, [fileId]: buf } }
+        }),
 
-  // Analysis slice – keyed by file ID so each tab has its own result
-  analysisResults: {},
-  setAnalysisResult: (fileId, r) =>
-    set((s) => {
-      if (r === null) {
-        const rest = { ...s.analysisResults }
-        delete rest[fileId]
-        return { analysisResults: rest }
-      }
-      return { analysisResults: { ...s.analysisResults, [fileId]: r } }
+      // Chat slice
+      isOpen: false,
+      toggle: () => set((s) => ({ isOpen: !s.isOpen })),
+      setOpen: (v) => set({ isOpen: v }),
+      messages: [],
+      addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
+      clearMessages: () => set({ messages: [] }),
+
+      // Records slice
+      libraryItems: [],
+      historyEntries: [],
+      deleteLibraryItem: (id) =>
+        set((s) => ({ libraryItems: s.libraryItems.filter((l) => l.id !== id) })),
+      addLibraryItem: (l) => set((s) => ({ libraryItems: [...s.libraryItems, l] })),
+      linkLibraryItemToProject: (itemId, projectId) =>
+        set((s) => ({
+          libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
+        })),
     }),
-
-  // Chat slice
-  isOpen: false,
-  toggle: () => set((s) => ({ isOpen: !s.isOpen })),
-  setOpen: (v) => set({ isOpen: v }),
-
-  // Model slice
-  currentFileBuffer: null,
-  setCurrentFileBuffer: (buf) => set({ currentFileBuffer: buf }),
-  fileBuffers: {},
-  setFileBuffer: (fileId, buf) =>
-    set((s) => {
-      if (buf === null) {
-        const rest = { ...s.fileBuffers }
-        delete rest[fileId]
-        return { fileBuffers: rest }
-      }
-      return { fileBuffers: { ...s.fileBuffers, [fileId]: buf } }
-    }),
-
-  // Records slice
-  projects: [],
-  libraryItems: [],
-  historyEntries: [],
-  addProject: (p) => set((s) => ({ projects: [...s.projects, p] })),
-  updateProject: (id, patch) =>
-    set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    })),
-  deleteProject: (id) => set((s) => ({ projects: s.projects.filter((p) => p.id !== id) })),
-  deleteLibraryItem: (id) =>
-    set((s) => ({ libraryItems: s.libraryItems.filter((l) => l.id !== id) })),
-  addLibraryItem: (l) => set((s) => ({ libraryItems: [...s.libraryItems, l] })),
-  linkLibraryItemToProject: (itemId, projectId) =>
-    set((s) => ({
-      libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
-    })),
-}))
+    {
+      name: 'faberai-store',
+      partialize: (state) => ({
+        ...state,
+        currentFileBuffer: null,
+        fileBuffers: {},
+        projects: state.projects.map((p) => ({
+          ...p,
+          files: p.files.map((f) => ({ ...f, file: null })),
+        })),
+        files: state.files.map((f) => ({ ...f, file: null })),
+      }),
+    },
+  ),
+)

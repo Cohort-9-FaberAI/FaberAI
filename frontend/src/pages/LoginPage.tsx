@@ -42,7 +42,7 @@ export default function LoginPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    navigate('/home')
+    navigate('/projects')
   }
 
   return (
@@ -63,7 +63,7 @@ export default function LoginPage() {
           <BrandMark />
           <span>FaberAI</span>
         </div>
-        <p className="auth-eyebrow">Manufacturability analysis</p>
+        <p className="auth-eyebrow">AI-powered manufacturability analysis</p>
         <h1>Sign in to FaberAI</h1>
         <p className="login-sub">
           Upload a CAD file and get a scored read on how it molds or prints before it reaches a shop

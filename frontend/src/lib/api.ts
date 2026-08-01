@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+import type { AIAnswer, AIAskRequest } from '../types/analysis'
+
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 export interface AIAskPayload {
   question: string
@@ -97,7 +99,9 @@ export async function getMockAnalysis() {
   return res.json()
 }
 
-export async function askFaberAI(payload: AIAskPayload): Promise<AIAskResponse> {
+export async function askFaberAI(
+  payload: AIAskPayload | AIAskRequest,
+): Promise<AIAskResponse & AIAnswer> {
   const res = await fetch(`${API_BASE}/ai/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -111,6 +115,8 @@ export async function askFaberAI(payload: AIAskPayload): Promise<AIAskResponse> 
 
   return res.json()
 }
+
+export const askAI = askFaberAI as unknown as (payload: AIAskRequest) => Promise<AIAnswer>
 
 export async function downloadAnalysisReportPdf(
   analysis: Record<string, unknown>,
