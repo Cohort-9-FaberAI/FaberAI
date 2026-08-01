@@ -9,7 +9,9 @@ interface SetupStepProps {
 }
 
 export default function SetupStep({ activeFile }: SetupStepProps) {
-  const analysisResult = useStore((s) => s.analysisResult)
+  const activeId = activeFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
+  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const quantity = useStore((s) => s.quantity)
   const material = useStore((s) => s.material)
   const tolerance = useStore((s) => s.tolerance)
@@ -41,6 +43,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
       description="Add the constraints that calibrate DFM evaluation thresholds."
       analysis={completedPreviewAnalysis}
       previewFileUrl={livePreviewUrl}
+      previewBuffer={fileBuffer}
       previewFilename={livePreviewFilename}
     >
       <form className="extra-info-form" onSubmit={(e) => e.preventDefault()}>

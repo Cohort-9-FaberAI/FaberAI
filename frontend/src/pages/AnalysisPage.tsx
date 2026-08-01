@@ -12,21 +12,53 @@ import { useStore } from '../store'
 import { useTaskPolling } from '../lib/useTaskPolling'
 import { asAnalysisResult, hasCompletedReport } from '../lib/analysisView'
 
+function FilePoller({
+  file,
+}: {
+  file: { id: string; taskId: string | null; analysisId: string | null; status: string }
+}) {
+  const updateFile = useStore((s) => s.updateFile)
+  const setAnalysisResult = useStore((s) => s.setAnalysisResult)
+
+  useTaskPolling(
+    file.status === 'processing' && file.taskId && file.taskId !== 'dev-manual'
+      ? file.taskId
+      : null,
+    file.analysisId,
+    (data) => {
+      const status = typeof data?.status === 'string' ? data.status : null
+      if (status === 'SUCCESS') {
+        updateFile(file.id, { status: 'completed' })
+      }
+      if (status === 'FAILED' || status === 'FAILURE') {
+        updateFile(file.id, { status: 'failed' })
+      }
+      const result = data?.result as Record<string, unknown> | undefined
+      if (result) {
+        setAnalysisResult(file.id, result)
+      }
+    },
+    () => {
+      updateFile(file.id, { status: 'failed' })
+    },
+  )
+  return null
+}
+
 export default function AnalysisPage() {
   const navigate = useNavigate()
   const files = useStore((s) => s.files)
   const openTabIds = useStore((s) => s.openTabIds)
   const openTab = useStore((s) => s.openTab)
   const activeFileId = useStore((s) => s.activeFileId)
-  const updateFile = useStore((s) => s.updateFile)
-  const analysisResult = useStore((s) => s.analysisResult)
-  const setAnalysisResult = useStore((s) => s.setAnalysisResult)
 
   const [stepByFile, setStepByFile] = useState<Record<string, WorkspaceStep>>({})
 
   const uploadedFiles = files.filter((f) => f.taskId !== 'dev-manual')
   const activeFile =
     files.find((f) => f.id === activeFileId) ?? uploadedFiles[uploadedFiles.length - 1] ?? null
+  const activeId = activeFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
 
   // Auto-open last file tab if no tabs are open and files exist
   useEffect(() => {
@@ -37,32 +69,6 @@ export default function AnalysisPage() {
       }
     }
   }, [uploadedFiles, openTabIds.length, openTab])
-
-  // Real-time task polling for active file tab
-  const taskId = activeFile?.taskId ?? null
-  const isDevManual = taskId === 'dev-manual'
-  useTaskPolling(
-    isDevManual ? null : taskId,
-    activeFile?.analysisId,
-    (data) => {
-      const status = typeof data?.status === 'string' ? data.status : null
-      if (status === 'SUCCESS' && activeFile) {
-        updateFile(activeFile.id, { status: 'completed' })
-      }
-      if ((status === 'FAILED' || status === 'FAILURE') && activeFile) {
-        updateFile(activeFile.id, { status: 'failed' })
-      }
-      const result = data?.result as Record<string, unknown> | undefined
-      if (result) {
-        setAnalysisResult(result)
-      }
-    },
-    () => {
-      if (activeFile) {
-        updateFile(activeFile.id, { status: 'failed' })
-      }
-    },
-  )
 
   if (uploadedFiles.length === 0) {
     return (
@@ -141,6 +147,11 @@ export default function AnalysisPage() {
 
   return (
     <AppShell>
+      {files.map((f) =>
+        f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending') ? (
+          <FilePoller key={f.id} file={f} />
+        ) : null,
+      )}
       <div className="workspace-shell-container">
         <div className="workspace-tabs-header">
           <WorkspaceTabs />

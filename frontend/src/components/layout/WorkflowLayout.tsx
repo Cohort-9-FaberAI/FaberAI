@@ -9,6 +9,7 @@ interface WorkflowLayoutProps {
   description?: string
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
+  previewBuffer?: ArrayBuffer | null
   previewFilename?: string | null
   viewerLabel?: string
   viewerMeta?: ReactNode
@@ -21,6 +22,7 @@ export default function WorkflowLayout({
   description,
   analysis = null,
   previewFileUrl = null,
+  previewBuffer,
   previewFilename = null,
   viewerLabel = 'Live inspection',
   viewerMeta,
@@ -78,7 +80,11 @@ export default function WorkflowLayout({
               <line x1="8" y1="11" x2="14" y2="11" />
             </svg>
           </button>
-          <ModelPreview analysis={analysis} previewFileUrl={previewFileUrl} />
+          <ModelPreview
+            analysis={analysis}
+            previewFileUrl={previewFileUrl}
+            previewBuffer={previewBuffer}
+          />
         </div>
       </aside>
 
@@ -119,7 +125,11 @@ export default function WorkflowLayout({
                 </div>
               </div>
               <div className="preview-fullscreen-canvas">
-                <ModelPreview analysis={analysis} previewFileUrl={previewFileUrl} />
+                <ModelPreview
+                  analysis={analysis}
+                  previewFileUrl={previewFileUrl}
+                  previewBuffer={previewBuffer}
+                />
               </div>
             </motion.div>
           </motion.div>

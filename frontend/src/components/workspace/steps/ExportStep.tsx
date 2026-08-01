@@ -11,7 +11,9 @@ interface ExportStepProps {
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
   const process = useStore((s) => s.process)
-  const analysisResult = useStore((s) => s.analysisResult)
+  const activeId = activeFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
+  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [comparison, setComparison] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -61,6 +63,7 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       description="Package the completed inspection results and design recommendations for supplier review."
       analysis={cleanAnalysis}
       previewFileUrl={livePreviewUrl}
+      previewBuffer={fileBuffer}
       previewFilename={livePreviewFilename}
       viewerMeta={
         score !== null ? <span className="viewer-score">{Math.round(score)}/100</span> : null

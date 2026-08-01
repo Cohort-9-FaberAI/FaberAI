@@ -18,7 +18,9 @@ interface InspectionStepProps {
 }
 
 export default function InspectionStep({ activeFile }: InspectionStepProps) {
-  const analysisResult = useStore((s) => s.analysisResult)
+  const activeId = activeFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
+  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [activeTab, setActiveTab] = useState<'molding' | 'printing'>('molding')
 
   const analysis = asAnalysisResult(analysisResult)
@@ -82,6 +84,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
           }
           analysis={analysis}
           previewFileUrl={livePreviewUrl}
+          previewBuffer={fileBuffer}
           previewFilename={livePreviewFilename}
           viewerMeta={
             canContinue && score !== null ? (

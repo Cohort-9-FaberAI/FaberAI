@@ -11,8 +11,6 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
   const files = useStore((s) => s.files)
   const openTab = useStore((s) => s.openTab)
   const openTabIds = useStore((s) => s.openTabIds)
-  const setAnalysisResult = useStore((s) => s.setAnalysisResult)
-  const activeFileId = useStore((s) => s.activeFileId)
 
   if (!isOpen) return null
 
@@ -53,9 +51,6 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
                       className={`modal-file-item${isAlreadyOpen ? ' disabled-open' : ''}`}
                       onClick={() => {
                         if (isAlreadyOpen) return
-                        if (file.id !== activeFileId) {
-                          setAnalysisResult(null)
-                        }
                         openTab(file.id)
                         onClose()
                       }}

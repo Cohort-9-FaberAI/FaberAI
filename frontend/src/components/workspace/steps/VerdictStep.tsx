@@ -24,7 +24,9 @@ const conclusionLegendItems = [
 
 export default function VerdictStep({ activeFile }: VerdictStepProps) {
   const process = useStore((s) => s.process)
-  const analysisResult = useStore((s) => s.analysisResult)
+  const activeId = activeFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
+  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [activeTab, setActiveTab] = useState<'reasons' | 'improvements'>('reasons')
   const analysis = asAnalysisResult(analysisResult)
 
@@ -76,6 +78,7 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
       description="Compare process favorability and review prioritized design improvements."
       analysis={cleanAnalysis}
       previewFileUrl={livePreviewUrl}
+      previewBuffer={fileBuffer}
       previewFilename={livePreviewFilename}
       viewerMeta={
         score !== null ? <span className="viewer-score">{Math.round(score)}/100</span> : null

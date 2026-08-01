@@ -17,6 +17,7 @@ import { isVisibleIssueSeverity } from '../../lib/analysisView'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
+  previewBuffer?: ArrayBuffer | null
   onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
 }
 
@@ -121,6 +122,7 @@ function ModelCanvas() {
 export default function ModelPreview({
   analysis = null,
   previewFileUrl = null,
+  previewBuffer,
   onIssueSelected,
 }: ModelPreviewProps) {
   const [selectedIssue, setSelectedIssue] = useState<ManufacturabilityIssue | null>(null)
@@ -130,18 +132,19 @@ export default function ModelPreview({
     source: string
     transform: ModelTransform
   } | null>(null)
-  const currentFileBuffer = useStore((s) => s.currentFileBuffer)
+  const devFileBuffer = useStore((s) => s.currentFileBuffer)
+  const fileBuffer = previewBuffer !== undefined ? previewBuffer : devFileBuffer
   const modelUrl = useMemo(
     () => getPreviewUrl(analysis, previewFileUrl),
     [analysis, previewFileUrl],
   )
-  const modelSource = modelUrl ?? (currentFileBuffer ? 'local-stl-buffer' : null)
+  const modelSource = modelUrl ?? (fileBuffer ? 'local-stl-buffer' : null)
   const hasRawStepOnly = Boolean(
     analysis?.geometry_data?.source_format === 'step' &&
     !analysis?.geometry_data?.preview_url &&
     isStepUrl(analysis?.file_url),
   )
-  const canRenderModel = Boolean(modelUrl || currentFileBuffer)
+  const canRenderModel = Boolean(modelUrl || fileBuffer)
   const handleModelLoaded = useCallback(() => {
     if (modelSource) {
       setLoadedSource(modelSource)
@@ -190,7 +193,7 @@ export default function ModelPreview({
         <ModelContext.Provider
           value={{
             analysis,
-            fileBuffer: currentFileBuffer,
+            fileBuffer,
             modelUrl,
             modelTransform: activeTransform,
             previewFileUrl,

@@ -8,7 +8,6 @@ export default function WorkspaceTabs() {
   const activeFileId = useStore((s) => s.activeFileId)
   const setActiveFileId = useStore((s) => s.setActiveFileId)
   const closeTab = useStore((s) => s.closeTab)
-  const setAnalysisResult = useStore((s) => s.setAnalysisResult)
   const [modalOpen, setModalOpen] = useState(false)
   const tabsRef = useRef<HTMLDivElement>(null)
 
@@ -49,7 +48,6 @@ export default function WorkspaceTabs() {
               onClick={() => {
                 if (file.id !== activeFileId) {
                   setActiveFileId(file.id)
-                  setAnalysisResult(null)
                 }
               }}
               onKeyDown={(e) => {
@@ -57,7 +55,6 @@ export default function WorkspaceTabs() {
                   e.preventDefault()
                   if (file.id !== activeFileId) {
                     setActiveFileId(file.id)
-                    setAnalysisResult(null)
                   }
                 }
               }}

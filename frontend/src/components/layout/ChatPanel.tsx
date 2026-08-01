@@ -172,10 +172,11 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 export default function ChatPanel() {
   const isOpen = useStore((s) => s.isOpen)
   const setOpen = useStore((s) => s.setOpen)
-  const analysisResult = useStore((s) => s.analysisResult)
   const files = useStore((s) => s.files)
   const activeFileId = useStore((s) => s.activeFileId)
   const latestFile = files.find((f) => f.id === activeFileId) ?? files[files.length - 1]
+  const activeId = latestFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
 
   const analysis = getRecord(analysisResult)
   const report = getRecord(analysis?.dfm_report)

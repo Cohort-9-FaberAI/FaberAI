@@ -38,8 +38,8 @@ interface FileSlice {
 }
 
 interface AnalysisSlice {
-  analysisResult: Record<string, unknown> | null
-  setAnalysisResult: (r: Record<string, unknown> | null) => void
+  analysisResults: Record<string, Record<string, unknown>>
+  setAnalysisResult: (fileId: string, r: Record<string, unknown> | null) => void
 }
 
 interface ChatSlice {
@@ -51,6 +51,8 @@ interface ChatSlice {
 interface ModelSlice {
   currentFileBuffer: ArrayBuffer | null
   setCurrentFileBuffer: (buf: ArrayBuffer | null) => void
+  fileBuffers: Record<string, ArrayBuffer>
+  setFileBuffer: (fileId: string, buf: ArrayBuffer | null) => void
 }
 
 interface ProjectRecord {
@@ -150,8 +152,9 @@ export const useStore = create<StoreState>((set) => ({
       files: [],
       activeFileId: null,
       openTabIds: [],
-      analysisResult: null,
+      analysisResults: {},
       currentFileBuffer: null,
+      fileBuffers: {},
     }),
   setActiveFileId: (id) => set({ activeFileId: id }),
   openTab: (id) =>
@@ -174,9 +177,17 @@ export const useStore = create<StoreState>((set) => ({
       }
     }),
 
-  // Analysis slice
-  analysisResult: null,
-  setAnalysisResult: (r) => set({ analysisResult: r }),
+  // Analysis slice – keyed by file ID so each tab has its own result
+  analysisResults: {},
+  setAnalysisResult: (fileId, r) =>
+    set((s) => {
+      if (r === null) {
+        const rest = { ...s.analysisResults }
+        delete rest[fileId]
+        return { analysisResults: rest }
+      }
+      return { analysisResults: { ...s.analysisResults, [fileId]: r } }
+    }),
 
   // Chat slice
   isOpen: false,
@@ -186,6 +197,16 @@ export const useStore = create<StoreState>((set) => ({
   // Model slice
   currentFileBuffer: null,
   setCurrentFileBuffer: (buf) => set({ currentFileBuffer: buf }),
+  fileBuffers: {},
+  setFileBuffer: (fileId, buf) =>
+    set((s) => {
+      if (buf === null) {
+        const rest = { ...s.fileBuffers }
+        delete rest[fileId]
+        return { fileBuffers: rest }
+      }
+      return { fileBuffers: { ...s.fileBuffers, [fileId]: buf } }
+    }),
 
   // Records slice
   projects: [],

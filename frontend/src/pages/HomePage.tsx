@@ -15,7 +15,6 @@ function FilePoller({
 }) {
   const updateFile = useStore((s) => s.updateFile)
   const setAnalysisResult = useStore((s) => s.setAnalysisResult)
-  const activeFileId = useStore((s) => s.activeFileId)
 
   useTaskPolling(
     file.status === 'processing' && file.taskId ? file.taskId : null,
@@ -29,8 +28,8 @@ function FilePoller({
         updateFile(file.id, { status: 'failed' })
       }
       const result = data?.result as Record<string, unknown> | undefined
-      if (result && file.id === activeFileId) {
-        setAnalysisResult(result)
+      if (result) {
+        setAnalysisResult(file.id, result)
       }
     },
     () => {

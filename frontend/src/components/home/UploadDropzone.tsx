@@ -7,6 +7,7 @@ export default function UploadDropzone() {
   const addFile = useStore((s) => s.addFile)
   const updateFile = useStore((s) => s.updateFile)
   const setCurrentFileBuffer = useStore((s) => s.setCurrentFileBuffer)
+  const setFileBuffer = useStore((s) => s.setFileBuffer)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,11 +32,13 @@ export default function UploadDropzone() {
     if (sourceFormat === 'stl') {
       try {
         const buffer = await file.arrayBuffer()
+        setFileBuffer(id, buffer)
         setCurrentFileBuffer(buffer)
       } catch {
         // buffer read failed, preview won't work immediately but upload proceeds
       }
     } else {
+      setFileBuffer(id, null)
       setCurrentFileBuffer(null)
     }
 
