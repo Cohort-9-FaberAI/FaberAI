@@ -12,3 +12,5 @@ Thumbs.db
 tests/geometry/fixtures/
 try_all_fixtures.py
 .agents/
+datasets/reference_docs/
+test_real_fixtures_undercuts.py
