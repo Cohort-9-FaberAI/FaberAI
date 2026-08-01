@@ -227,6 +227,23 @@ class OverhangSummary(BaseModel):
     area: float
 
 
+class UndercutSummary(BaseModel):
+    """A group of faces the mold cannot reach in a straight line along
+    their own release direction, for a single given pull direction.
+
+    `releasable` is a PLACEHOLDER (always True currently) until Stage 2
+    (side-action reachability) is built in the geometry engine — see
+    geometry.models.undercut.Undercut for details.
+    """
+    model_config = ConfigDict(extra="forbid")
+    id: int
+    pull_direction: Vector3
+    center: Vector3
+    face_ids: List[int] = Field(default_factory=list)
+    max_shadow_depth: Optional[float] = None
+    releasable: bool = True
+
+
 
 # DFM issue schemas
 
@@ -303,6 +320,10 @@ class GeometryEngineResponse(BaseModel):
 
     # Overhangs
     overhangs: List[OverhangSummary] = Field(default_factory=list)
+
+    # Undercuts (single-pull-direction, Stage 1 -- see UndercutSummary)
+    undercuts: List[UndercutSummary] = Field(default_factory=list)
+    pull_direction: Optional[Vector3] = None
 
     # DFM issues
     issues: List[GeometryEngineIssue] = Field(default_factory=list)
@@ -518,6 +539,17 @@ def _to_overhang_summary(overhang: Any) -> OverhangSummary:
     )
 
 
+def _to_undercut_summary(undercut: Any) -> UndercutSummary:
+    return UndercutSummary(
+        id=int(undercut.id),
+        pull_direction=_to_vector3(undercut.pull_direction) or Vector3(x=0.0, y=0.0, z=0.0),
+        center=_to_vector3(undercut.center) or Vector3(x=0.0, y=0.0, z=0.0),
+        face_ids=[int(f) for f in undercut.face_ids],
+        max_shadow_depth=undercut.max_shadow_depth,
+        releasable=bool(undercut.releasable),
+    )
+
+
 def _clamp_volume(volume: float | None, measurements_reliable: bool) -> float | None:
     """
     Here the physically impossible negative volumes are made None.
@@ -589,6 +621,9 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         chamfers=[_to_chamfer_summary(c) for c in model.chamfers],
         # Overhangs
         overhangs=[_to_overhang_summary(o) for o in model.overhangs],
+        # Undercuts
+        undercuts=[_to_undercut_summary(u) for u in model.undercuts],
+        pull_direction=_to_vector3(model.pull_direction),
     )
 
     return response.model_dump()

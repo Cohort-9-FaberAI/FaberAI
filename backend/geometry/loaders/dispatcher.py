@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-#from os import path
+
+import numpy as np
 
 from geometry.models import GeometryModel, SourceFormat
 from .exceptions import StepSupportUnavailableError
@@ -59,16 +60,15 @@ def load_geometry(path: str) -> GeometryModel:
         return _load_stl(path)
 
 
-
 # STEP / OCC path
 
 def _load_step(path: str) -> GeometryModel:
-    # STEP loading is tricky because there are two competing loaders: build123d and pythonOCC. 
+    # STEP loading is tricky because there are two competing loaders: build123d and pythonOCC.
     # We need both loaders for the different use cases.
-    # So we load twice and generate two shapes, one for build123d and one for pythonOCC. 
-    # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.    
-    # 
-    #   
+    # So we load twice and generate two shapes, one for build123d and one for pythonOCC.
+    # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.
+    #
+    #
     # --- Try build123d ---
     shape_b123 = None
     b123_missing = False
@@ -91,7 +91,7 @@ def _load_step(path: str) -> GeometryModel:
 
     except Exception as e:
         print(f"Warning: pythonOCC STEP loader failed for {path}: {e}")
-        
+
 
     # If both dependencies are missing, signal that STEP support is unavailable
     if b123_missing and occ_missing:
@@ -99,14 +99,14 @@ def _load_step(path: str) -> GeometryModel:
             "STEP support is unavailable because required optional dependencies "
             "(pythonocc-core / build123d) are not installed."
         )
-    
+
     # Safety net: the loaders should already reject null/None shapes, but
     # guard here too so no downstream OCC call receives an invalid shape.
     if shape_occ is None and shape_b123 is None:
         raise ValueError(
             f"STEP file '{path}' could not be loaded — the file may be empty or corrupted."
         )
-    
+
     model = GeometryModel(
         source_format=SourceFormat.STEP, source_path=path, raw_occ=shape_occ, raw_b123=shape_b123
     )
@@ -167,6 +167,35 @@ def _load_step(path: str) -> GeometryModel:
             model.chamfers = []
             model.overhangs = []
 
+        # Undercut detection — needs the build123d shape (shape_b123) for
+        # ray-casting, same as wall thickness. Kept in its own try block,
+        # separate from the holes/bosses/cavities block above, so a
+        # failure here doesn't wipe out feature detection that already
+        # succeeded (and vice versa).
+        try:
+            from geometry.features.undercuts import detect_undercuts
+
+            # Default pull direction: the bounding box's smallest-extent
+            # axis (parting lines are typically chosen along the flattest
+            # dimension of a part). This is a placeholder heuristic —
+            # TODO: confirm with the DFM/lead whether the pull direction
+            # should instead be supplied by the caller/DFM layer rather
+            # than assumed here.
+            extents = np.array([
+                model.bounding_box.width,
+                model.bounding_box.depth,
+                model.bounding_box.height,
+            ])
+            axis_index = int(np.argmin(extents))
+            pull_direction = np.eye(3)[axis_index]
+
+            model.pull_direction = pull_direction
+            model.undercuts = detect_undercuts(shape_b123, pull_direction)
+        except Exception as e:
+            print(f"Warning: undercut detection failed for {path}: {e}")
+            model.undercuts = []
+            model.pull_direction = None
+
     except Exception as e:
         print(f"Warning: face/edge extraction failed for {path}: {e}")
         model.faces = []
@@ -179,6 +208,8 @@ def _load_step(path: str) -> GeometryModel:
         model.ribs = []
         model.chamfers = []
         model.overhangs = []
+        model.undercuts = []
+        model.pull_direction = None
 
     # Wall thickness sampling
     try:
@@ -201,7 +232,6 @@ def _load_step(path: str) -> GeometryModel:
     return model
 
 
-
 # STL / trimesh path
 
 def _load_stl(path: str) -> GeometryModel:
@@ -218,12 +248,12 @@ def _load_stl(path: str) -> GeometryModel:
     model.moment_of_inertia = compute_moment_inertia_mesh(mesh)
     model.measurements_reliable = is_mesh_reliable(mesh)
 
-    # NOTE: holes/bosses/cavities are intentionally left empty on the STL
-    # path. Mesh faces (from extract_faces_mesh) have no surface-type
-    # classification (no cylinder/plane distinction without real curvature
-    # analysis on a triangle soup), so cylindrical feature detection can't
-    # run against them yet — this matches the feature spec's STL placeholder
-    # allowance.
+    # NOTE: holes/bosses/cavities/undercuts are intentionally left empty on
+    # the STL path. Mesh faces (from extract_faces_mesh) have no
+    # surface-type classification (no cylinder/plane distinction without
+    # real curvature analysis on a triangle soup), so cylindrical feature
+    # detection and undercut ray-casting can't run against them yet — this
+    # matches the feature spec's STL placeholder allowance.
 
     # Topology: faces, edges, face graph
     try:
