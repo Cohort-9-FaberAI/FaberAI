@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-#from os import path
 
 from geometry.models import GeometryModel, SourceFormat
 from .exceptions import StepSupportUnavailableError
@@ -18,6 +17,7 @@ from geometry.measurements import (
     compute_moment_inertia_occ,
     compute_moment_inertia_mesh,
     is_mesh_reliable,
+    
 )
 from .stl_loader_trimesh import load_stl
 
@@ -232,6 +232,8 @@ def _load_stl(path: str) -> GeometryModel:
                     graph_to_faces_and_edges,
         )
         from geometry.measurements.face_graph_mesh import build_face_graph
+        from geometry.features.overhangs import detect_overhangs
+
 
         vertices, indices = extract_faces_mesh(mesh)
         face_graph = build_face_graph(mesh)
@@ -254,6 +256,12 @@ def _load_stl(path: str) -> GeometryModel:
         model.mesh_quality = check_mesh_quality(mesh)
     except Exception as e:
         print(f"Warning: mesh quality check failed for {path}: {e}")
+
+    try:
+        model.overhangs = detect_overhangs(face_graph, max_overhang_angle=45.0)
+    except Exception as e:
+        print(f"Warning: overhang detection failed for {path}: {e}")    
+        model.overhangs = []
 
     try:
         from geometry.measurements.wall_thickness import compute_wall_thickness_mesh
