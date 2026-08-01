@@ -31,6 +31,8 @@ export interface GeometryData {
   center_mass: Vector3
 }
 
+export type Centroid = [number, number, number] | { x: number; y: number; z: number }
+
 export interface ManufacturabilityIssue {
   issue_id: string
   severity: IssueSeverity
@@ -38,7 +40,7 @@ export interface ManufacturabilityIssue {
   description: string
   face_id?: number
   edge_id?: number
-  centroid: [number, number, number]
+  centroid: Centroid
 }
 
 export interface AnalysisResult {
@@ -51,4 +53,23 @@ export interface AnalysisResult {
   part_metadata: PartMetadata
   geometry_data: GeometryData
   issues: ManufacturabilityIssue[]
+}
+
+export type AIAnswerMode = 'llm' | 'deterministic'
+
+export interface AIAskRequest {
+  question: string
+  analysis_id?: string | null
+  report?: Record<string, unknown> | null
+  geometry?: Record<string, unknown> | null
+}
+
+export interface AIAnswer {
+  question: string
+  answer: string
+  mode: AIAnswerMode
+  model?: string | null
+  referenced_rules: string[]
+  analysis_id?: string | null
+  degraded_reason?: string | null
 }

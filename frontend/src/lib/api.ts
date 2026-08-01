@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+import type { AIAnswer, AIAskRequest } from '../types/analysis'
+
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 export async function uploadFile(file: File) {
   const formData = new FormData()
@@ -64,6 +66,21 @@ export async function getMockAnalysis() {
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     throw new Error(body?.error?.message || `Mock analysis failed (${res.status})`)
+  }
+
+  return res.json()
+}
+
+export async function askAI(payload: AIAskRequest): Promise<AIAnswer> {
+  const res = await fetch(`${API_BASE}/ai/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message || `AI request failed (${res.status})`)
   }
 
   return res.json()
