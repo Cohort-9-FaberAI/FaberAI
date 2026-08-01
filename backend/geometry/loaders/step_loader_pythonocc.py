@@ -18,7 +18,7 @@ def load_step(path: str):
     try:
         from OCC.Core.STEPControl import STEPControl_Reader
         from OCC.Core.IFSelect import IFSelect_RetDone
-    except (ImportError, ModuleNotFoundError) as exc:
+    except (ImportError, ModuleNotFoundError):
         try:
             from OCP.STEPControl import STEPControl_Reader
             from OCP.IFSelect import IFSelect_RetDone
