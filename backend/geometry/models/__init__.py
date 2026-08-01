@@ -17,12 +17,12 @@ from .rib import Rib
 from .chamfer import Chamfer
 
 
-
 __all__ = [
     "SourceFormat", "SurfaceType", "CurveType",
     "BoundingBox", "GeometryModel",
     "Face", "Edge", "WallSample",
     "MeshQuality", "check_mesh_quality",
-    "Hole", "Boss", "Cavity",
+    "Edge", "Hole", "Boss", "Cavity",
     "Fillet", "Rib", "Chamfer"
 ]
+
