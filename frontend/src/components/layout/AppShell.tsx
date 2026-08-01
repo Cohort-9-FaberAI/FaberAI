@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import Sidebar from './Sidebar'
-import UsageIndicator from './UsageIndicator'
-import AskFaberAIButton from './AskFaberAIButton'
+import TopHeader from './TopHeader'
 import ChatPanel from './ChatPanel'
 
 export default function AppShell({ children }: { children: ReactNode }) {
@@ -9,11 +8,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <Sidebar />
       <div className="app-main">
+        <TopHeader />
         <div className="app-content">{children}</div>
-        <div className="app-footer">
-          <UsageIndicator />
-          <AskFaberAIButton />
-        </div>
       </div>
       <ChatPanel />
     </div>

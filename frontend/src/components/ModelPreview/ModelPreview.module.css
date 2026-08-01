@@ -8,6 +8,22 @@
   overflow: hidden;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--mist);
+  background: rgba(7, 16, 12, 0.42);
+  text-align: center;
+  font-size: 14px;
+  pointer-events: none;
 }
 
 .placeholder {

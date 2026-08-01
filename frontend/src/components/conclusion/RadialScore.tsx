@@ -8,11 +8,17 @@ export default function RadialScore({ percentage, label, recommended }: RadialSc
   const radius = 40
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (percentage / 100) * circumference
+  const roundedPercentage = Math.round(percentage)
 
   return (
     <div className="radial-score">
-      {recommended && <span className="radial-recommended">Recommended</span>}
-      <svg width="100" height="100" viewBox="0 0 100 100">
+      <svg
+        className="radial-score-ring"
+        width="100"
+        height="100"
+        viewBox="0 0 100 100"
+        aria-hidden="true"
+      >
         <circle cx="50" cy="50" r={radius} fill="none" stroke="#e0e0e0" strokeWidth="8" />
         <circle
           cx="50"
@@ -33,10 +39,16 @@ export default function RadialScore({ percentage, label, recommended }: RadialSc
           dominantBaseline="central"
           className="radial-score-text"
         >
-          {percentage}%
+          {roundedPercentage}%
         </text>
       </svg>
-      <span className="radial-label">{label}</span>
+      <span className="radial-score-copy">
+        <span className="radial-label">{label}</span>
+        <span className="radial-score-meta">
+          {recommended ? 'Recommended process' : `${roundedPercentage}/100`}
+        </span>
+      </span>
+      {recommended && <span className="radial-recommended">Best fit</span>}
     </div>
   )
 }

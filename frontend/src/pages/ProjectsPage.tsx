@@ -42,7 +42,7 @@ export default function ProjectsPage() {
 
       <div className="list-header">
         <SearchBar value={query} onChange={setQuery} />
-        <button type="button" onClick={() => navigate('/home')}>
+        <button type="button" className="list-add-btn" onClick={() => navigate('/home')}>
           New Project
         </button>
       </div>

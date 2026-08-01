@@ -16,10 +16,12 @@ export default function HistoryPage() {
 
   return (
     <AppShell>
-      <h1>History</h1>
-      <p className="page-note">
-        Diagnosis inside history will be deleted at the end of every month!
-      </p>
+      <section className="history-header">
+        <h1>History</h1>
+        <p className="page-note">
+          Diagnosis inside history will be deleted at the end of every month.
+        </p>
+      </section>
 
       <SearchBar value={query} onChange={setQuery} />
 

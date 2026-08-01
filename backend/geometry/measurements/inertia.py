@@ -10,13 +10,25 @@ from __future__ import annotations
 import numpy as np
 
 
+def _inertia_modules():
+    try:
+        from OCC.Core.GProp import GProp_GProps
+        from OCC.Core.BRepGProp import brepgprop
+
+        return GProp_GProps, brepgprop.VolumeProperties
+    except (ImportError, ModuleNotFoundError):
+        from OCP.GProp import GProp_GProps
+        from OCP.BRepGProp import BRepGProp
+
+        return GProp_GProps, BRepGProp.VolumeProperties_s
+
+
 def compute_moment_inertia_occ(shape_occ) -> np.ndarray:
     """3x3 inertia matrix (about the center of mass) of a TopoDS_Shape."""
-    from OCC.Core.GProp import GProp_GProps
-    from OCC.Core.BRepGProp import brepgprop
+    GProp_GProps, volume_properties = _inertia_modules()
 
     props = GProp_GProps()
-    brepgprop.VolumeProperties(shape_occ, props)
+    volume_properties(shape_occ, props)
     mat = props.MatrixOfInertia()
     return np.array([[mat.Value(i, j) for j in range(1, 4)] for i in range(1, 4)])
 

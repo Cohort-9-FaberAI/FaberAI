@@ -15,19 +15,26 @@ interface ProjectSlice {
   setNotes: (v: string) => void
 }
 
-interface UploadedFile {
+export interface UploadedFile {
   id: string
   name: string
   taskId: string | null
   analysisId: string | null
+  fileUrl?: string | null
+  sourceFormat?: 'stl' | 'step' | null
   status: 'pending' | 'processing' | 'completed' | 'failed'
 }
 
 interface FileSlice {
   files: UploadedFile[]
+  activeFileId: string | null
+  openTabIds: string[]
   addFile: (f: UploadedFile) => void
   updateFile: (id: string, patch: Partial<UploadedFile>) => void
   clearFiles: () => void
+  setActiveFileId: (id: string | null) => void
+  openTab: (id: string) => void
+  closeTab: (id: string) => void
 }
 
 interface AnalysisSlice {
@@ -78,9 +85,38 @@ interface RecordsSlice {
   linkLibraryItemToProject: (itemId: string, projectId: string) => void
 }
 
-type StoreState = ProjectSlice & FileSlice & AnalysisSlice & ChatSlice & ModelSlice & RecordsSlice
+export type ThemeMode = 'dark' | 'light'
+
+interface ThemeSlice {
+  theme: ThemeMode
+  toggleTheme: () => void
+  setTheme: (t: ThemeMode) => void
+}
+
+type StoreState = ProjectSlice &
+  FileSlice &
+  AnalysisSlice &
+  ChatSlice &
+  ModelSlice &
+  RecordsSlice &
+  ThemeSlice
 
 export const useStore = create<StoreState>((set) => ({
+  // Theme slice
+  theme: (localStorage.getItem('faberai_theme') as ThemeMode) || 'dark',
+  toggleTheme: () =>
+    set((s) => {
+      const next: ThemeMode = s.theme === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('faberai_theme', next)
+      document.documentElement.setAttribute('data-theme', next)
+      return { theme: next }
+    }),
+  setTheme: (t: ThemeMode) => {
+    localStorage.setItem('faberai_theme', t)
+    document.documentElement.setAttribute('data-theme', t)
+    set({ theme: t })
+  },
+
   // Project slice
   isProject: false,
   process: null,
@@ -97,12 +133,46 @@ export const useStore = create<StoreState>((set) => ({
 
   // File slice
   files: [],
-  addFile: (f) => set((s) => ({ files: [...s.files, f] })),
+  activeFileId: null,
+  openTabIds: [],
+  addFile: (f) =>
+    set((s) => ({
+      files: [...s.files, f],
+      activeFileId: f.id,
+      openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
+    })),
   updateFile: (id, patch) =>
     set((s) => ({
       files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
     })),
-  clearFiles: () => set({ files: [] }),
+  clearFiles: () =>
+    set({
+      files: [],
+      activeFileId: null,
+      openTabIds: [],
+      analysisResult: null,
+      currentFileBuffer: null,
+    }),
+  setActiveFileId: (id) => set({ activeFileId: id }),
+  openTab: (id) =>
+    set((s) => ({
+      openTabIds: s.openTabIds.includes(id) ? s.openTabIds : [...s.openTabIds, id],
+      activeFileId: id,
+    })),
+  closeTab: (id) =>
+    set((s) => {
+      const filtered = s.openTabIds.filter((tid) => tid !== id)
+      const nextActive =
+        s.activeFileId === id
+          ? filtered.length > 0
+            ? filtered[filtered.length - 1]
+            : null
+          : s.activeFileId
+      return {
+        openTabIds: filtered,
+        activeFileId: nextActive,
+      }
+    }),
 
   // Analysis slice
   analysisResult: null,

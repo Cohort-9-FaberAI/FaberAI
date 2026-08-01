@@ -17,6 +17,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _feature_list(model: Any, name: str) -> list[Any]:
+    value = getattr(model, name, None)
+    return value if isinstance(value, list) else []
+
+
 
 # Primitive schemas
 
@@ -580,15 +585,15 @@ def run_geometry_engine(file_path: str, original_filename: str) -> dict:
         # Print orientations
         print_orientations=_to_print_orientation_analysis(model.print_orientations),
         # Cylindrical manufacturing features
-        holes=[_to_hole_summary(h) for h in model.holes],
-        bosses=[_to_boss_summary(b) for b in model.bosses],
-        cavities=[_to_cavity_summary(c) for c in model.cavities],
+        holes=[_to_hole_summary(h) for h in _feature_list(model, "holes")],
+        bosses=[_to_boss_summary(b) for b in _feature_list(model, "bosses")],
+        cavities=[_to_cavity_summary(c) for c in _feature_list(model, "cavities")],
         # Blend / bevel manufacturing features
-        fillets=[_to_fillet_summary(f) for f in model.fillets],
-        ribs=[_to_rib_summary(r) for r in model.ribs],
-        chamfers=[_to_chamfer_summary(c) for c in model.chamfers],
+        fillets=[_to_fillet_summary(f) for f in _feature_list(model, "fillets")],
+        ribs=[_to_rib_summary(r) for r in _feature_list(model, "ribs")],
+        chamfers=[_to_chamfer_summary(c) for c in _feature_list(model, "chamfers")],
         # Overhangs
-        overhangs=[_to_overhang_summary(o) for o in model.overhangs],
+        overhangs=[_to_overhang_summary(o) for o in _feature_list(model, "overhangs")],
     )
 
     return response.model_dump()

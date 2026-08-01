@@ -1,6 +1,34 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
-export async function uploadFile(file: File) {
+export interface AIAskPayload {
+  question: string
+  analysis_id?: string
+  report?: Record<string, unknown>
+  geometry?: Record<string, unknown>
+}
+
+export interface AIAskResponse {
+  question: string
+  answer: string
+  mode: 'llm' | 'deterministic'
+  model?: string | null
+  referenced_rules: string[]
+  analysis_id?: string | null
+  degraded_reason?: string | null
+}
+
+export interface UploadResponse {
+  message: string
+  task_id: string
+  analysis_id?: string | null
+  filename: string
+  storage_path: string
+  file_url?: string | null
+  source_file_url?: string | null
+  status: string
+}
+
+export async function uploadFile(file: File): Promise<UploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -67,4 +95,49 @@ export async function getMockAnalysis() {
   }
 
   return res.json()
+}
+
+export async function askFaberAI(payload: AIAskPayload): Promise<AIAskResponse> {
+  const res = await fetch(`${API_BASE}/ai/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message || `AI request failed (${res.status})`)
+  }
+
+  return res.json()
+}
+
+export async function downloadAnalysisReportPdf(
+  analysis: Record<string, unknown>,
+  includeComparison: boolean,
+) {
+  const res = await fetch(`${API_BASE}/analysis/report.pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      analysis,
+      include_comparison: includeComparison,
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error?.message || `PDF download failed (${res.status})`)
+  }
+
+  const disposition = res.headers.get('content-disposition')
+  const filename =
+    disposition?.match(/filename="([^"]+)"/)?.[1] ??
+    disposition?.match(/filename=([^;]+)/)?.[1]?.trim() ??
+    'faberai-dfm-report.pdf'
+
+  return {
+    blob: await res.blob(),
+    filename,
+  }
 }

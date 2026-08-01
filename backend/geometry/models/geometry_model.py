@@ -46,6 +46,7 @@ class GeometryModel:
     fillets: list = field(default_factory=list)
     ribs: list = field(default_factory=list)
     chamfers: list = field(default_factory=list)
+    overhangs: list = field(default_factory=list)
 
     # False when the source mesh has holes/damage that couldn't be
     # auto-repaired — volume_mm3 (and to a lesser extent center_mass)

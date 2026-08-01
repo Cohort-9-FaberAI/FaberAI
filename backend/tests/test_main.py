@@ -26,6 +26,30 @@ class TestHealthCheck:
         body = client.get("/").json()
         assert body == {"status": "ok", "message": "FaberAI backend is running."}
 
+    def test_dependency_health_returns_200_when_queue_is_ready(self, client):
+        response = client.get("/health/dependencies")
+        assert response.status_code == 200
+        assert response.json()["status"] == "ok"
+
+    def test_dependency_health_returns_500_when_queue_is_down(self, client, monkeypatch):
+        def fail():
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "component": "celery_worker",
+                    "message": "No analysis worker is online. Restart the Celery worker.",
+                },
+            )
+
+        monkeypatch.setattr(main, "_check_analysis_queue", fail)
+
+        response = client.get("/health/dependencies")
+        assert response.status_code == 500
+        error = response.json()["error"]
+        assert error["code"] == 500
+        assert "No analysis worker is online" in error["message"]
+        assert error["details"]["component"] == "celery_worker"
+
 
 class TestAnalyzeMock:
     def test_returns_200(self, client):
@@ -97,10 +121,31 @@ class TestUpload:
         assert body["task_id"] == "task-123"
         assert body["filename"] == "bracket.stl"
         assert body["status"] == "pending"
+        assert body["file_url"] == self.STORAGE_RESULT["public_url"]
+        assert body["source_file_url"] == self.STORAGE_RESULT["public_url"]
 
     def test_missing_file_returns_422(self, client):
         response = client.post("/upload/")
         assert response.status_code == 422
+
+    def test_upload_returns_500_when_analysis_queue_is_down(self, client, monkeypatch):
+        def fail():
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "component": "celery_worker",
+                    "message": "No analysis worker is online. Restart the Celery worker.",
+                },
+            )
+
+        monkeypatch.setattr(main, "_check_analysis_queue", fail)
+
+        response = self._upload(client)
+        assert response.status_code == 500
+        error = response.json()["error"]
+        assert error["code"] == 500
+        assert "No analysis worker is online" in error["message"]
+        assert error["details"]["component"] == "celery_worker"
 
 
 class TestUploadValidation:
@@ -242,6 +287,96 @@ class TestGetTaskStatus:
 
         assert response.status_code == 200
         assert response.json() == {"task_id": "task-123", "status": "PENDING"}
+
+    def test_completed_db_record_wins_over_stale_celery_pending(self, client):
+        stored_result = {
+            "analysis_id": "analysis-123",
+            "filename": "bracket.stp",
+            "status": "completed",
+            "manufacturability_score": 25,
+            "file_url": "https://example.test/previews/bracket.stl",
+            "source_file_url": "https://example.test/uploads/bracket.stp",
+            "geometry_data": {
+                "source_format": "step",
+                "preview_url": "https://example.test/previews/bracket.stl",
+            },
+            "dfm_report": {"manufacturability_score": 25, "processes": []},
+            "issues": [],
+        }
+        with patch.object(
+            main, "AsyncResult", return_value=self._mock_async_result("PENDING")
+        ), patch.object(
+            main,
+            "get_analysis_by_id",
+            return_value={"status": "completed", "results_json": stored_result},
+        ):
+            response = client.get("/tasks/task-123?analysis_id=analysis-123")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "SUCCESS"
+        assert body["result"]["file_url"] == stored_result["file_url"]
+        assert body["result"]["geometry_data"]["preview_url"] == stored_result["file_url"]
+
+    def test_completed_step_record_backfills_missing_preview(self, client):
+        stored_result = {
+            "analysis_id": "analysis-123",
+            "filename": "bracket.stp",
+            "status": "completed",
+            "manufacturability_score": 25,
+            "file_url": "https://example.test/uploads/bracket.stp",
+            "source_file_url": "https://example.test/uploads/bracket.stp",
+            "geometry_data": {"source_format": "step"},
+            "dfm_report": {"manufacturability_score": 25, "processes": []},
+            "issues": [],
+        }
+        repaired_result = {
+            **stored_result,
+            "file_url": "https://example.test/previews/bracket.stl",
+            "geometry_data": {
+                "source_format": "step",
+                "preview_url": "https://example.test/previews/bracket.stl",
+            },
+        }
+        with patch.object(
+            main, "AsyncResult", return_value=self._mock_async_result("PENDING")
+        ), patch.object(
+            main,
+            "get_analysis_by_id",
+            return_value={"status": "completed", "results_json": stored_result},
+        ), patch.object(
+            main, "_attach_missing_step_preview", return_value=repaired_result
+        ) as mock_repair:
+            response = client.get("/tasks/task-123?analysis_id=analysis-123")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "SUCCESS"
+        assert body["result"]["file_url"] == repaired_result["file_url"]
+        assert body["result"]["geometry_data"]["preview_url"] == repaired_result["file_url"]
+        mock_repair.assert_called_once()
+
+    def test_pending_task_returns_500_when_worker_is_down(self, client, monkeypatch):
+        def fail():
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "component": "celery_worker",
+                    "message": "No analysis worker is online. Restart the Celery worker.",
+                },
+            )
+
+        monkeypatch.setattr(main, "_check_analysis_queue", fail)
+
+        with patch.object(
+            main, "AsyncResult", return_value=self._mock_async_result("PENDING")
+        ):
+            response = client.get("/tasks/task-123")
+
+        assert response.status_code == 500
+        error = response.json()["error"]
+        assert "No analysis worker is online" in error["message"]
+        assert error["details"]["component"] == "celery_worker"
 
 
 class TestErrorHandlers:
