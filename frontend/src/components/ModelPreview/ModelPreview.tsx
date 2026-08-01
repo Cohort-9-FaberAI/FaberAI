@@ -1,7 +1,7 @@
 import styles from './ModelPreview.module.css'
-import { useState, useEffect, useContext } from 'react'
+import { useState, useEffect, useContext, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, OrbitControls } from '@react-three/drei'
 
 import {
   type AnalysisResult,
@@ -13,6 +13,7 @@ import { fetchAnalysis } from './api'
 import { Model } from './Model'
 import IssueMarker from './IssueMarker'
 import { PCFShadowMap } from 'three'
+import Toolbar from './Toolbar'
 type ModelPreviewProps = {
   onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
   height?: number | string
@@ -27,6 +28,10 @@ function ModelCanvas() {
 
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
+      <color
+        attach="background"
+        args={[window.matchMedia('(prefers-color-scheme: dark)').matches ? '#22252f' : '#adc5de']}
+      />
       <ambientLight intensity={2.4} />
       <directionalLight position={[4, 6, 3]} intensity={5} castShadow />
       <directionalLight position={[-3, 1, -4]} intensity={0.5} castShadow />
@@ -46,6 +51,9 @@ function ModelCanvas() {
       })}
 
       <OrbitControls />
+      <GizmoHelper alignment="top-left" margin={[80, 80]}>
+        <GizmoViewport />
+      </GizmoHelper>
     </Canvas>
   )
 }
@@ -57,6 +65,8 @@ export default function ModelPreview({ onIssueSelected, height = 400 }: ModelPre
     fetchAnalysis().then((a) => setAnalysisResult(a))
   }, [])
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isFullScreen, setFullScreen] = useState<boolean>(false)
   //triggers onIssueSelected callback when the selected issue changes
   useEffect(() => {
     if (onIssueSelected) onIssueSelected(selectedIssue)
@@ -66,7 +76,15 @@ export default function ModelPreview({ onIssueSelected, height = 400 }: ModelPre
 
   return (
     <div className={styles.wrapper} style={{ height }}>
-      <div className={styles.canvasContainer}>
+      <div ref={containerRef} className={styles.canvasContainer}>
+        <Toolbar
+          onFullScreenPressed={() => {
+            if (isFullScreen) document.exitFullscreen()
+            else containerRef.current?.requestFullscreen()
+            setFullScreen(!isFullScreen)
+          }}
+          isFullScreen={isFullScreen}
+        />
         <ModelContext.Provider
           value={{ analysis: AnalysisResult, selectedIssueSetter: setSelectedIssue }}
         >
