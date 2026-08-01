@@ -4925,6 +4925,11 @@ select option {
   --text-h: var(--porcelain);
   --text-muted: #95a19a;
 
+  --severity-high: #d32f2f;
+  --severity-medium: #e67e22;
+  --severity-low: #f39c12;
+  --severity-pro: #146143;
+
   --bg-gradient: var(--obsidian);
   color-scheme: light;
   color: var(--porcelain);
@@ -4979,6 +4984,11 @@ select option {
 
 :root[data-theme='light'] .workspace-tabs-header .browser-tab {
   color: var(--mist);
+}
+
+:root[data-theme='light'] .workspace-tabs-header .browser-tab:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--porcelain, #12211a);
 }
 
 :root[data-theme='light'] .workspace-tabs-header .browser-tab.active {
@@ -5066,8 +5076,10 @@ select option {
 
 :root[data-theme='light'] .file-card-status.status-processing,
 :root[data-theme='light'] .file-card-status.status-pending,
+:root[data-theme='light'] .file-card-status.status-stored,
 :root[data-theme='light'] .status-processing,
-:root[data-theme='light'] .status-pending {
+:root[data-theme='light'] .status-pending,
+:root[data-theme='light'] .status-stored {
   background: var(--graphite-2, #eef2ef) !important;
   color: var(--porcelain, #12211a) !important;
   border: 1px solid var(--line, #e2e7e2) !important;
