@@ -38,7 +38,8 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
     !isDevManual && activeFile?.status === 'processing' && taskId !== null && !analysis
   const error =
     activeFile?.status === 'failed' && !isDevManual
-      ? 'Analysis failed. Please try uploading or processing the file again.'
+      ? activeFile.errorMessage ||
+        'Analysis failed. Please try uploading or processing the file again.'
       : null
   const noAnalysisStarted = !activeFile && !analysis
   const canContinue = hasCompletedReport(analysis)
@@ -56,13 +57,31 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
       )}
 
       {error && (
-        <motion.p
-          className="analysis-status error"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+        <motion.div
+          className="analysis-status error-card"
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            padding: '16px 20px',
+            borderRadius: '12px',
+            background: 'rgba(232, 93, 93, 0.15)',
+            border: '1px solid rgba(232, 93, 93, 0.45)',
+            color: '#ff6b6b',
+            fontSize: '14px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '24px',
+            boxShadow: '0 4px 16px rgba(232, 93, 93, 0.15)',
+          }}
         >
-          {error}
-        </motion.p>
+          <span style={{ fontSize: '20px', flexShrink: 0 }}>⚠️</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <strong style={{ fontSize: '15px', color: '#fff' }}>DFM Inspection Error</strong>
+            <span>{error}</span>
+          </div>
+        </motion.div>
       )}
 
       {noAnalysisStarted && (

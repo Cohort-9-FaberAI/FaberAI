@@ -31,7 +31,13 @@ function FilePoller({
         updateFile(file.id, { status: 'completed' })
       }
       if (status === 'FAILED' || status === 'FAILURE') {
-        updateFile(file.id, { status: 'failed' })
+        const errorMsg =
+          typeof data?.error === 'string'
+            ? data.error
+            : typeof data?.message === 'string'
+              ? data.message
+              : 'DFM inspection failed during background processing.'
+        updateFile(file.id, { status: 'failed', errorMessage: errorMsg })
       }
       const result = data?.result as Record<string, unknown> | undefined
       if (result) {
@@ -39,7 +45,10 @@ function FilePoller({
       }
     },
     () => {
-      updateFile(file.id, { status: 'failed' })
+      updateFile(file.id, {
+        status: 'failed',
+        errorMessage: 'Network timeout or server connection error while checking task status.',
+      })
     },
   )
   return null

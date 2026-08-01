@@ -335,6 +335,7 @@ a {
 
 .sidebar {
   position: relative;
+  z-index: 50;
   width: 220px;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
@@ -356,7 +357,7 @@ a {
   position: absolute;
   top: 14px;
   right: -14px;
-  z-index: 5;
+  z-index: 100;
   width: 28px;
   height: 28px;
   display: flex;
@@ -364,11 +365,20 @@ a {
   justify-content: center;
   padding: 0;
   border-radius: 50%;
-  background: rgba(13, 71, 161, 0.92);
-  border: 1px solid var(--glass-border);
+  background: var(--graphite-2, #1c2320);
+  border: 1px solid var(--line, #2d3833);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   font-size: 12px;
-  color: var(--text-h);
+  color: var(--porcelain, #ffffff);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--ferrule, #1e8a5c);
+  color: #ffffff;
+  border-color: var(--ferrule-deep, #146143);
+  transform: scale(1.05);
 }
 
 .sidebar.collapsed .sidebar-logo {
@@ -505,17 +515,15 @@ a {
 /* ======================== ASK FABER BUTTON ======================== */
 
 .ask-faber-btn {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 30;
+  position: relative;
   background: linear-gradient(135deg, var(--primary), var(--accent));
   font-size: 14px;
   font-weight: 600;
-  padding: 12px 22px;
+  padding: 10px 20px;
   border: none;
   border-radius: 999px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
   transition:
     filter 0.2s,
     transform 0.15s;
@@ -2619,9 +2627,14 @@ select option {
 }
 
 .sidebar {
+  position: relative;
+  z-index: 50;
   background: var(--graphite);
   border-right: 1px solid var(--line);
   padding: 28px 18px;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-logo {
@@ -2942,17 +2955,68 @@ select option {
 }
 
 .dev-section {
-  max-width: 760px;
-  margin-top: 18px;
-  border: 1px solid var(--line);
-  background: rgba(20, 25, 23, 0.72);
+  width: 100%;
+  margin-top: 24px;
+  padding: 16px 22px;
+  border: 1px dashed var(--line, #2d3833);
+  border-radius: 12px;
+  background: var(--graphite, #121714);
   color: var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.2s ease;
+}
+
+.dev-section:hover {
+  border-color: var(--ferrule, #1e8a5c);
 }
 
 .dev-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
   background: rgba(111, 255, 176, 0.12);
-  color: var(--toolpath);
+  color: var(--toolpath, #6fffb0);
   font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border: 1px solid rgba(111, 255, 176, 0.3);
+  flex-shrink: 0;
+}
+
+.dev-text {
+  flex: 1;
+  min-width: 240px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--mist, #839088);
+  font-weight: 500;
+}
+
+.dev-browse-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  background: var(--graphite-2, #1c2320);
+  color: var(--porcelain, #ffffff);
+  border: 1px solid var(--line, #2d3833);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dev-browse-btn:hover {
+  background: var(--ferrule, #1e8a5c);
+  color: #ffffff;
+  border-color: var(--ferrule-deep, #146143);
+  box-shadow: 0 4px 12px rgba(30, 138, 92, 0.25);
 }
 
 .workflow-layout {
@@ -3842,9 +3906,12 @@ select option {
 /* ======================== STRUCTURE + WIZARD NAV PASS ======================== */
 
 .app-main {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto !important;
+  overflow-x: hidden;
 }
 
 .top-header {
@@ -3893,7 +3960,8 @@ select option {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding-bottom: 34px;
+  padding-bottom: 60px;
+  overflow: visible !important;
 }
 
 .app-footer {

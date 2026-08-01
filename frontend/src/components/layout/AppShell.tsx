@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import Sidebar from './Sidebar'
 import TopHeader from './TopHeader'
-import AskFaberAIButton from './AskFaberAIButton'
 import ChatPanel from './ChatPanel'
+import { useSequentialFileProcessor } from '../../lib/useSequentialFileProcessor'
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
+  useSequentialFileProcessor()
 
   return (
     <div className="app-shell">
@@ -14,7 +15,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <TopHeader />
         <div className="app-content">{children}</div>
       </div>
-      <AskFaberAIButton />
       <ChatPanel />
     </div>
   )

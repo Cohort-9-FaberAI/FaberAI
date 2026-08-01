@@ -1,11 +1,9 @@
 import { useRef, useState } from 'react'
 import { useStore } from '../../store'
-import { uploadFile } from '../../lib/api'
 
 export default function UploadDropzone() {
   const inputRef = useRef<HTMLInputElement>(null)
   const addFile = useStore((s) => s.addFile)
-  const updateFile = useStore((s) => s.updateFile)
   const setCurrentFileBuffer = useStore((s) => s.setCurrentFileBuffer)
   const setFileBuffer = useStore((s) => s.setFileBuffer)
   const [uploading, setUploading] = useState(false)
@@ -19,6 +17,7 @@ export default function UploadDropzone() {
       : lowerName.endsWith('.step') || lowerName.endsWith('.stp')
         ? 'step'
         : null
+
     addFile({
       id,
       name: file.name,
@@ -43,20 +42,6 @@ export default function UploadDropzone() {
       setFileBuffer(id, null)
       setCurrentFileBuffer(null)
     }
-
-    try {
-      const res = await uploadFile(file)
-      updateFile(id, {
-        taskId: res.task_id,
-        analysisId: res.analysis_id ?? null,
-        fileUrl: res.file_url ?? null,
-        sourceFormat,
-        status: 'processing',
-      })
-    } catch (err) {
-      updateFile(id, { status: 'failed' })
-      throw err
-    }
   }
 
   async function handleFiles(fileList: FileList | File[] | null | undefined) {
@@ -73,9 +58,11 @@ export default function UploadDropzone() {
     setUploading(true)
     setError(null)
     try {
-      await Promise.all(files.map((file) => handleSingleFile(file)))
+      for (const file of files) {
+        await handleSingleFile(file)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed for one or more files')
+      setError(err instanceof Error ? err.message : 'Failed to process files')
     } finally {
       setUploading(false)
     }

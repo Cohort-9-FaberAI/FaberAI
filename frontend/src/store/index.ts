@@ -10,6 +10,7 @@ export interface ProjectFile {
   taskId: string | null
   analysisId: string | null
   status: FileStatus
+  errorMessage?: string | null
   analysisResult: Record<string, unknown> | null
 }
 
@@ -66,6 +67,7 @@ export interface UploadedFile {
   fileUrl?: string | null
   sourceFormat?: 'stl' | 'step' | null
   status: FileStatus
+  errorMessage?: string | null
   analysisResult: Record<string, unknown> | null
 }
 
