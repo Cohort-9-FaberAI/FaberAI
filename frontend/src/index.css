@@ -2000,3 +2000,64 @@ a {
   padding: 10px 16px;
   border-radius: 8px;
 }
+
+/* ======================== LANDING PAGE ======================== */
+
+.title-bar {
+  background: var(login-page);
+  text-align: center;
+}
+
+.title-image {
+  width: 150px;
+  height: 75px;
+}
+
+.landing-bg {
+  display: flex;
+  min-height: 700px;
+  background-image: url('./src/assets/landingPageBG.png');
+}
+
+.paragraph-box p {
+  font-size: 15px;
+  color: black;
+}
+
+.info-box {
+  margin: 25px;
+  min-height: 575px;
+  max-height: 575px;
+  max-width: 600px;
+  justify-content: center;
+  border-radius: 20px;
+  border: 1px solid white;
+  padding: 0px 20px;
+  background: linear-gradient(135deg, #29497e 0%, #334c6c 40%, #255986 100%);
+}
+
+.info-box div {
+  min-width: 400px;
+  max-width: 400px;
+  min-height: 400px;
+  max-height: 400px;
+  margin: auto;
+  border-radius: 10px;
+  background-color: white;
+}
+
+.landing-img {
+  max-width: 650px;
+  max-height: 650px;
+}
+
+.button-box {
+  text-align: center;
+  padding-bottom: 50px;
+}
+
+.button-box button {
+  border-radius: 50px 50px;
+  font-size: 50px;
+  background-color: rgb(243, 94, 119);
+}

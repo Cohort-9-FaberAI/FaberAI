@@ -9,10 +9,12 @@ import ProjectDetailPage from './pages/ProjectDetailPage'
 import LibraryPage from './pages/LibraryPage'
 import HistoryPage from './pages/HistoryPage'
 import DebugApiPage from './pages/DebugApiPage'
+import LandingPage from './pages/LandingPage'
 
 function App() {
   return (
     <Routes>
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/upload" element={<UploadPage />} />
       <Route path="/extra-info" element={<ExtraInfoPage />} />
@@ -23,7 +25,7 @@ function App() {
       <Route path="/library" element={<LibraryPage />} />
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/debug" element={<DebugApiPage />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/landing" replace />} />
     </Routes>
   )
 }
