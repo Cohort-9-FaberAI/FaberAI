@@ -2004,7 +2004,7 @@ a {
 /* ======================== LANDING PAGE ======================== */
 
 .title-bar {
-  background: var(login-page);
+  background: var(--glass-bg);
   text-align: center;
 }
 
