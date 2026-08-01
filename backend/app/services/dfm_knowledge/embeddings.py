@@ -20,7 +20,7 @@ The embedding dimension for the default model is 768 — this must match the
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import List
 
 DEFAULT_MODEL = "BAAI/bge-base-en-v1.5"
 EMBEDDING_DIM = 768
