@@ -1,7 +1,7 @@
 import styles from './ModelPreview.module.css'
-import { useState, useEffect, useContext, useCallback, useMemo } from 'react'
+import { useState, useEffect, useContext, useCallback, useMemo, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Float } from '@react-three/drei'
+import { OrbitControls, Float, GizmoHelper, GizmoViewport } from '@react-three/drei'
 
 import {
   type AnalysisResult,
@@ -14,6 +14,7 @@ import IssueMarker from './IssueMarker'
 import { PCFShadowMap } from 'three'
 import { useStore } from '../../store'
 import { isVisibleIssueSeverity } from '../../lib/analysisView'
+import Toolbar from './Toolbar'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
@@ -101,6 +102,10 @@ function ModelCanvas() {
 
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
+      <color
+        attach="background"
+        args={[window.matchMedia('(prefers-color-scheme: dark)').matches ? '#22252f' : '#adc5de']}
+      />
       <ambientLight intensity={2.4} />
       <directionalLight position={[4, 6, 3]} intensity={5} castShadow />
       <directionalLight position={[-3, 1, -4]} intensity={0.5} castShadow />
@@ -124,6 +129,11 @@ function ModelCanvas() {
       ))}
 
       <OrbitControls autoRotate={Boolean(isLoginLogo)} autoRotateSpeed={1.5} />
+      {!isLoginLogo && (
+        <GizmoHelper alignment="top-left" margin={[80, 80]}>
+          <GizmoViewport />
+        </GizmoHelper>
+      )}
     </Canvas>
   )
 }
@@ -180,6 +190,8 @@ export default function ModelPreview({
   const activeTransform = loadedTransform?.source === modelSource ? loadedTransform.transform : null
   const isLoadingModel = Boolean(modelSource && loadedSource !== modelSource && !activeLoadError)
 
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isFullScreen, setFullScreen] = useState<boolean>(false)
   //triggers onIssueSelected callback when the selected issue changes
   useEffect(() => {
     if (onIssueSelected) onIssueSelected(selectedIssue)
@@ -197,7 +209,17 @@ export default function ModelPreview({
 
   return (
     <div className={styles.wrapper} style={{ height }}>
-      <div className={styles.canvasContainer}>
+      <div ref={containerRef} className={styles.canvasContainer}>
+        {!(modelUrl === '/logo.stl' || modelUrl?.endsWith('logo.stl')) && (
+          <Toolbar
+            onFullScreenPressed={() => {
+              if (isFullScreen) document.exitFullscreen()
+              else containerRef.current?.requestFullscreen()
+              setFullScreen(!isFullScreen)
+            }}
+            isFullScreen={isFullScreen}
+          />
+        )}
         {isLoadingModel && <div className={styles.overlay}>Loading 3D preview...</div>}
         {activeLoadError && <div className={styles.overlay}>{activeLoadError}</div>}
         <ModelContext.Provider

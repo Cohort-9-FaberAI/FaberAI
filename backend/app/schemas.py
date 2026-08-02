@@ -54,6 +54,10 @@ class AnalysisResult(BaseModel):
     filename: str
     status: AnalysisStatus = AnalysisStatus.pending
     manufacturability_score: Optional[float] = None
+    printing_manufacturable: Optional[bool] = None
+    printing_score: Optional[float] = None
+    molding_manufacturable: Optional[bool] = None
+    molding_score: Optional[float] = None
     summary: Optional[str] = None
     # Public URL loadable by the frontend 3D preview. For STL uploads this is
     # the original file URL; for STEP uploads this is a generated STL preview.

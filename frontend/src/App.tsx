@@ -10,6 +10,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage'
 import LibraryPage from './pages/LibraryPage'
 import HistoryPage from './pages/HistoryPage'
 import DebugApiPage from './pages/DebugApiPage'
+import LandingPage from './pages/LandingPage'
 
 function App() {
   const theme = useStore((s) => s.theme)
@@ -20,6 +21,7 @@ function App() {
 
   return (
     <Routes>
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/home" element={<HomePage />} />
       <Route path="/upload" element={<UploadPage />} />
@@ -32,7 +34,7 @@ function App() {
       <Route path="/library" element={<LibraryPage />} />
       <Route path="/history" element={<HistoryPage />} />
       <Route path="/debug" element={<DebugApiPage />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/landing" replace />} />
     </Routes>
   )
 }

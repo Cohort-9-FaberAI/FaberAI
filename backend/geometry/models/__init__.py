@@ -18,7 +18,6 @@ from .chamfer import Chamfer
 from .overhang import Overhang
 
 
-
 __all__ = [
     "SourceFormat", "SurfaceType", "CurveType",
     "BoundingBox", "GeometryModel",

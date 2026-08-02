@@ -3,6 +3,7 @@ import { STLLoader } from 'three/examples/jsm/Addons.js'
 import { Box3, DoubleSide, Object3D, Vector3, type BufferGeometry } from 'three'
 import { ModelContext, type ModelTransform } from './ModelContext'
 import { useThree } from '@react-three/fiber'
+import { getGeometry } from './api'
 
 function preparePreviewGeometry(source: BufferGeometry): {
   geometry: BufferGeometry
@@ -39,7 +40,7 @@ export function Model() {
   const onModelError = context?.onModelError
   const onModelLoaded = context?.onModelLoaded
   const onModelTransform = context?.onModelTransform
-  const [geometry, setGeometry] = useState<BufferGeometry | undefined>(undefined)
+  const [geometries, setGeometries] = useState<BufferGeometry[]>([])
   const { camera } = useThree()
   const objectRef = useRef<Object3D>(null)
 
@@ -48,19 +49,37 @@ export function Model() {
     let cancelled = false
 
     async function loadModelFromURL() {
-      setGeometry(undefined)
+      setGeometries([])
       if (modelUrl) {
         try {
+          const isStep =
+            modelUrl.toLowerCase().endsWith('.step') ||
+            modelUrl.toLowerCase().endsWith('.stp') ||
+            context?.analysis?.filename?.toLowerCase().endsWith('.step') ||
+            context?.analysis?.filename?.toLowerCase().endsWith('.stp')
+
+          if (isStep) {
+            const geoms = await getGeometry(modelUrl, 'STEP')
+            if (cancelled) return
+            if (geoms && geoms.length > 0) {
+              const prepared = geoms.map((g) => preparePreviewGeometry(g))
+              onModelTransform?.(prepared[0].transform)
+              setGeometries(prepared.map((p) => p.geometry))
+              onModelLoaded?.()
+              return
+            }
+          }
+
           const { geometry: geom, transform } = preparePreviewGeometry(
             await new STLLoader().loadAsync(modelUrl),
           )
           if (cancelled) return
           onModelTransform?.(transform)
-          setGeometry(geom)
+          setGeometries([geom])
           onModelLoaded?.()
         } catch {
           if (cancelled) return
-          onModelError?.('The generated STL preview could not be loaded.')
+          onModelError?.('The generated CAD preview could not be loaded.')
         }
         return
       }
@@ -72,12 +91,13 @@ export function Model() {
           )
           if (cancelled) return
           onModelTransform?.(transform)
-          setGeometry(geom)
+          setGeometries([geom])
           onModelLoaded?.()
         } catch {
           if (cancelled) return
           onModelError?.('The local STL preview could not be parsed.')
         }
+        return
       }
     }
     loadModelFromURL()
@@ -85,11 +105,25 @@ export function Model() {
     return () => {
       cancelled = true
     }
-  }, [modelUrl, fileBuffer, onModelError, onModelLoaded, onModelTransform])
+  }, [
+    modelUrl,
+    fileBuffer,
+    onModelError,
+    onModelLoaded,
+    onModelTransform,
+    context?.analysis?.filename,
+  ])
 
-  //Gives the camera an initial position along the bounding box of the mesh
+  useEffect(() => {
+    return () => {
+      geometries.forEach((geometry) => geometry.dispose())
+    }
+  }, [geometries]) //cleaning when reloading
+
+  // Gives the camera an initial position along the bounding box of the mesh
   useEffect(() => {
     if (objectRef.current != null) {
+      objectRef.current.updateWorldMatrix(true, true)
       const box = new Box3().setFromObject(objectRef.current)
       const center = box.getCenter(new Vector3())
       const size = box.getSize(new Vector3())
@@ -97,17 +131,21 @@ export function Model() {
       camera.position.set(center.x + distance, center.y + distance, center.z + distance)
       camera.lookAt(center)
     }
-  }, [geometry])
+  }, [geometries, camera])
 
   return (
-    <mesh ref={objectRef} geometry={geometry} scale={0.5}>
-      <meshPhysicalMaterial
-        color="#0858F4"
-        roughness={0.45}
-        metalness={0.05}
-        clearcoat={0.1}
-        side={DoubleSide}
-      />
-    </mesh>
+    <group ref={objectRef}>
+      {geometries.map((geometry, i) => (
+        <mesh key={`geometry_${i}`} geometry={geometry} castShadow receiveShadow scale={0.5}>
+          <meshPhysicalMaterial
+            color="#0858F4"
+            roughness={0.45}
+            metalness={0.05}
+            clearcoat={0.1}
+            side={DoubleSide}
+          />
+        </mesh>
+      ))}
+    </group>
   )
 }

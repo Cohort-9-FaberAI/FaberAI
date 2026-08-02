@@ -452,6 +452,10 @@ def analyze_mock():
         "filename": "box_prism.stl", 
         "status": "completed",
         "manufacturability_score": 72,
+        "printing_score": 81,
+        "molding_score": 55,
+        "printing_manufacturable": True,
+        "molding_manufacturable": False,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
         "file_url": "http://127.0.0.1:8000/mock-file", 
         "part_metadata": {

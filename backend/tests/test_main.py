@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import main
+from app.schemas import AnalysisResult
 from app.services import storage
 from app.services.storage import validate_upload_filename
 
@@ -52,6 +53,23 @@ class TestHealthCheck:
 
 
 class TestAnalyzeMock:
+    def test_analysis_result_schema_exposes_process_scores(self):
+        result = AnalysisResult(
+            filename="demo.stl",
+            manufacturability_score=72.0,
+            printing_score=81.0,
+            molding_score=55.0,
+            printing_manufacturable=True,
+            molding_manufacturable=False,
+        )
+
+        payload = result.model_dump()
+
+        assert payload["printing_score"] == 81.0
+        assert payload["molding_score"] == 55.0
+        assert payload["printing_manufacturable"] is True
+        assert payload["molding_manufacturable"] is False
+
     def test_returns_200(self, client):
         response = client.post("/analyze-mock")
         assert response.status_code == 200
