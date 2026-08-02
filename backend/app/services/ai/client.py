@@ -5,15 +5,14 @@ Anthropic's native ``/v1/messages`` API, picked automatically from
 ``FABERAI_AI_BASE_URL`` (Anthropic is used when the base URL contains
 "anthropic.com"; everything else assumes OpenAI-shaped). Configured entirely
 through environment variables, so the model/provider can be swapped without a
-code change. Defaults follow the team's LLM selection analysis: Muse Spark 1.1
-primary (cheapest tool-calling-grade model, lowest hallucination rate of the
-viable candidates), with a faster-TTFT model kept as the interactive fallback.
+code change. Default model: claude-opus-4-8 (team decision, updated from the
+earlier muse-spark-1.1 placeholder).
 
     FABERAI_AI_BASE_URL   provider base URL (no trailing /chat/completions
                            or /v1/messages — that suffix is added per-provider)
     FABERAI_AI_API_KEY    bearer token / Anthropic API key; absent means
                            "AI not configured"
-    FABERAI_AI_MODEL      model id (default: muse-spark-1.1)
+    FABERAI_AI_MODEL      model id (default: claude-opus-4-8)
     FABERAI_AI_TIMEOUT    request timeout in seconds (default: 90)
     FABERAI_AI_MAX_TOKENS response cap (default: 900)
 
@@ -32,7 +31,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "muse-spark-1.1"
+DEFAULT_MODEL = "claude-opus-4-8"
 DEFAULT_TIMEOUT_SECONDS = 90.0
 DEFAULT_MAX_TOKENS = 900
 ANTHROPIC_API_VERSION = "2023-06-01"
@@ -116,10 +115,16 @@ class LLMClient:
                 },
                 timeout=self.timeout,
             )
-            response.raise_for_status()
-            payload = response.json()
         except requests.exceptions.RequestException as exc:
             raise LLMRequestError(f"LLM request failed: {exc}") from exc
+
+        if not response.ok:
+            raise LLMRequestError(
+                f"LLM provider returned {response.status_code}: {response.text}"
+            )
+
+        try:
+            payload = response.json()
         except ValueError as exc:
             raise LLMRequestError(f"LLM returned a non-JSON response: {exc}") from exc
 
@@ -142,7 +147,11 @@ class LLMClient:
             "model": self.model,
             "max_tokens": self.max_tokens,
             "messages": chat_messages,
-            "temperature": 0.1,
+            # No "temperature" here on purpose: newer Anthropic models (e.g.
+            # claude-opus-4-8) reject it outright with a 400 "temperature is
+            # deprecated for this model" error. Older models accept omitting
+            # it fine too (falls back to their own default), so leaving it
+            # out is the version that works across the model lineup.
         }
         if system_prompt:
             body["system"] = system_prompt
@@ -158,10 +167,19 @@ class LLMClient:
                 json=body,
                 timeout=self.timeout,
             )
-            response.raise_for_status()
-            payload = response.json()
         except requests.exceptions.RequestException as exc:
             raise LLMRequestError(f"LLM request failed: {exc}") from exc
+
+        if not response.ok:
+            # requests' raise_for_status() only gives "400 Bad Request" — the
+            # useful part is Anthropic's own error body, e.g. {"error":
+            # {"type": "invalid_request_error", "message": "model: ... "}}.
+            raise LLMRequestError(
+                f"Anthropic API returned {response.status_code}: {response.text}"
+            )
+
+        try:
+            payload = response.json()
         except ValueError as exc:
             raise LLMRequestError(f"LLM returned a non-JSON response: {exc}") from exc
 
