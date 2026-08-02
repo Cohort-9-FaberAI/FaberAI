@@ -136,7 +136,7 @@ export function Model() {
   return (
     <group ref={objectRef}>
       {geometries.map((geometry, i) => (
-        <mesh key={`geometry_${i}`} geometry={geometry} castShadow receiveShadow scale={0.5}>
+        <mesh key={`geometry_${i}`} geometry={geometry} scale={0.5}>
           <meshPhysicalMaterial
             color="#0858F4"
             roughness={0.45}
