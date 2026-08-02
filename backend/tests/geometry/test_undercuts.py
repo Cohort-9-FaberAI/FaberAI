@@ -12,6 +12,10 @@ Three cases, chosen specifically to catch the classic false-positive trap:
   pull-direction-dependent, not a fixed property of the geometry alone.
 """
 
+import glob
+from pathlib import Path
+
+import pytest
 from build123d import Box
 
 from geometry.features.undercuts import (
@@ -115,11 +119,6 @@ def test_undercut_candidate_faces_reports_zone_for_every_face():
 # fixture deliberately built with a known, verified undercut (the same
 # tunnel-block shape from the synthetic tests above, exported to a real
 # .step file), so THAT one gets checked for an exact expected result.
-
-import glob
-from pathlib import Path
-
-import pytest
 
 try:
     from build123d import import_step
