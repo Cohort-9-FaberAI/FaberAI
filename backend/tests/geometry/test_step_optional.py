@@ -1,7 +1,7 @@
 """
 Tests for optional STEP dependency handling.
 
-STEP support (pythonocc-core / build123d) is optional. These tests simulate
+STEP support (pythonocc-core / OCP / build123d) is optional. These tests simulate
 an environment where those packages are missing and verify that:
   * geometry.loaders still imports (so app startup can't fail on them),
   * STEP loads fail with a clear StepSupportUnavailableError,
@@ -19,14 +19,14 @@ import trimesh
 
 from geometry.loaders import StepSupportUnavailableError, load_geometry
 
-OPTIONAL_STEP_PACKAGES = ("OCC", "build123d")
+OPTIONAL_STEP_PACKAGES = ("OCC", "OCP", "build123d")
 
 
 @pytest.fixture
 def without_step_deps(monkeypatch):
     """Simulate an environment with no optional STEP dependencies installed.
 
-    Drops any already-imported OCC/build123d modules and blocks re-imports by
+    Drops any already-imported OCC/OCP/build123d modules and blocks re-imports by
     mapping the top-level packages to None in sys.modules (the import system
     then raises ImportError). monkeypatch restores everything on teardown.
     """
@@ -53,7 +53,7 @@ def test_step_load_fails_gracefully(without_step_deps, tmp_path):
     step_file = tmp_path / "part.step"
     step_file.write_text("ISO-10303-21;")
 
-    with pytest.raises(StepSupportUnavailableError, match="pythonocc-core"):
+    with pytest.raises(StepSupportUnavailableError, match="STEP support is unavailable"):
         load_geometry(str(step_file))
 
 

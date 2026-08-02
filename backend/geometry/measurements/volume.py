@@ -5,13 +5,25 @@ from __future__ import annotations
 from .reliability import attempt_mesh_repair
 
 
+def _volume_modules():
+    try:
+        from OCC.Core.GProp import GProp_GProps
+        from OCC.Core.BRepGProp import brepgprop
+
+        return GProp_GProps, brepgprop.VolumeProperties
+    except (ImportError, ModuleNotFoundError):
+        from OCP.GProp import GProp_GProps
+        from OCP.BRepGProp import BRepGProp
+
+        return GProp_GProps, BRepGProp.VolumeProperties_s
+
+
 def compute_volume_occ(shape_occ) -> float:
     """Volume of a solid TopoDS_Shape via GProp_GProps/BRepGProp.VolumeProperties."""
-    from OCC.Core.GProp import GProp_GProps
-    from OCC.Core.BRepGProp import brepgprop
+    GProp_GProps, volume_properties = _volume_modules()
 
     props = GProp_GProps()
-    brepgprop.VolumeProperties(shape_occ, props)
+    volume_properties(shape_occ, props)
     return float(props.Mass())  # "Mass" with unit density == volume
 
 

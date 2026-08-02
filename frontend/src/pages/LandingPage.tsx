@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import landingPageImg from '../assets/landingPage.png'
 
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -10,12 +11,25 @@ export default function LandingPage() {
   return (
     <div>
       <div className="title-bar">
-        <img className="title-image" src="/src/assets/FaberAI_logo.png" />
+        <img
+          className="title-image"
+          src="/logo-full.svg"
+          alt="FaberAI"
+          style={{ height: '36px', width: 'auto' }}
+        />
       </div>
 
       <div className="landing-bg">
         <div className="info-box">
-          <h1>Quick and accurate AI review</h1>
+          <h1
+            style={{
+              color: '#ffffff',
+              marginBottom: '16px',
+              fontFamily: "'Geist', Inter, sans-serif",
+            }}
+          >
+            Quick and accurate AI review
+          </h1>
           <ul>
             <li>
               How it works: AI parses the STL's mesh data — the triangular facets defining the
@@ -48,7 +62,7 @@ export default function LandingPage() {
           </ul>
         </div>
         <div>
-          <img src="/src/assets/landingPage.png" className="landing-img" />
+          <img src={landingPageImg} className="landing-img" alt="Landing visual" />
           <div className="button-box">
             <button onClick={goToLogin}>Get Started</button>
           </div>

@@ -280,6 +280,12 @@ class DFMReport(BaseModel):
     # one when no process was specified) — mirrors the frontend contract.
     manufacturable: bool = True
     manufacturability_score: float = Field(default=100.0, ge=0, le=100)
+    # Convenience per-process headline values so callers can read scores
+    # for printing and injection moulding directly from the top-level report.
+    printing_manufacturable: Optional[bool] = None
+    printing_score: Optional[float] = Field(default=None, ge=0, le=100)
+    molding_manufacturable: Optional[bool] = None
+    molding_score: Optional[float] = Field(default=None, ge=0, le=100)
 
     # Non-fatal problems with the *input* (unreliable mesh, missing topology).
     warnings: List[str] = Field(default_factory=list)

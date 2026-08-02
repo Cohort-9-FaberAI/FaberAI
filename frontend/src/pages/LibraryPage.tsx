@@ -33,7 +33,7 @@ export default function LibraryPage() {
 
       <div className="list-header">
         <SearchBar value={query} onChange={setQuery} />
-        <button type="button" onClick={() => navigate('/upload')}>
+        <button type="button" className="list-add-btn" onClick={() => navigate('/upload')}>
           Add New 3D Model
         </button>
       </div>

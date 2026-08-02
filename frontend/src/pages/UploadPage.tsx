@@ -38,6 +38,7 @@ export default function UploadPage() {
               name={f.name}
               status={f.status}
               taskId={f.taskId}
+              errorMessage={f.errorMessage}
               onRemove={() => clearFiles()}
             />
           ))}

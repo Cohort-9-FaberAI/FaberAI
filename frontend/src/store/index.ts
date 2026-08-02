@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type FileStatus = 'stored' | 'processing' | 'completed' | 'failed'
+export type FileStatus = 'stored' | 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface ProjectFile {
   id: string
@@ -10,6 +10,7 @@ export interface ProjectFile {
   taskId: string | null
   analysisId: string | null
   status: FileStatus
+  errorMessage?: string | null
   analysisResult: Record<string, unknown> | null
 }
 
@@ -29,11 +30,13 @@ interface ProjectSettingsSlice {
   quantity: number
   material: string
   tolerance: string
+  notes: string
   setProject: (v: boolean) => void
   setProcess: (v: 'molding' | 'printing' | null) => void
   setQuantity: (v: number) => void
   setMaterial: (v: string) => void
   setTolerance: (v: string) => void
+  setNotes: (v: string) => void
 }
 
 interface WizardSlice {
@@ -55,26 +58,34 @@ interface ProjectSlice {
   updateProjectFile: (projectId: string, fileId: string, patch: Partial<ProjectFile>) => void
 }
 
-interface UploadedFile {
+export interface UploadedFile {
   id: string
   name: string
   file: File | null
   taskId: string | null
   analysisId: string | null
+  fileUrl?: string | null
+  sourceFormat?: 'stl' | 'step' | null
   status: FileStatus
+  errorMessage?: string | null
   analysisResult: Record<string, unknown> | null
 }
 
 interface FileSlice {
   files: UploadedFile[]
+  activeFileId: string | null
+  openTabIds: string[]
   addFile: (f: UploadedFile) => void
   updateFile: (id: string, patch: Partial<UploadedFile>) => void
   clearFiles: () => void
+  setActiveFileId: (id: string | null) => void
+  openTab: (id: string) => void
+  closeTab: (id: string) => void
 }
 
 interface AnalysisSlice {
-  analysisResult: Record<string, unknown> | null
-  setAnalysisResult: (r: Record<string, unknown> | null) => void
+  analysisResults: Record<string, Record<string, unknown>>
+  setAnalysisResult: (fileId: string, r: Record<string, unknown> | null) => void
 }
 
 interface ChatMessage {
@@ -93,6 +104,13 @@ interface ChatSlice {
   messages: ChatMessage[]
   addMessage: (m: ChatMessage) => void
   clearMessages: () => void
+}
+
+interface ModelSlice {
+  currentFileBuffer: ArrayBuffer | null
+  setCurrentFileBuffer: (buf: ArrayBuffer | null) => void
+  fileBuffers: Record<string, ArrayBuffer>
+  setFileBuffer: (fileId: string, buf: ArrayBuffer | null) => void
 }
 
 interface LibraryRecord {
@@ -117,35 +135,118 @@ interface RecordsSlice {
   linkLibraryItemToProject: (itemId: string, projectId: string) => void
 }
 
+export type ThemeMode = 'dark' | 'light'
+
+interface ThemeSlice {
+  theme: ThemeMode
+  toggleTheme: () => void
+  setTheme: (t: ThemeMode) => void
+}
+
 type StoreState = ProjectSettingsSlice &
   WizardSlice &
   ProjectSlice &
   FileSlice &
   AnalysisSlice &
   ChatSlice &
-  RecordsSlice
+  ModelSlice &
+  RecordsSlice &
+  ThemeSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
 
 export const useStore = create<StoreState>()(
   persist(
     (set) => ({
+      // Theme slice
+      theme: (localStorage.getItem('faberai_theme') as ThemeMode) || 'dark',
+      toggleTheme: () =>
+        set((s) => {
+          const next: ThemeMode = s.theme === 'dark' ? 'light' : 'dark'
+          localStorage.setItem('faberai_theme', next)
+          document.documentElement.setAttribute('data-theme', next)
+          return { theme: next }
+        }),
+      setTheme: (t: ThemeMode) => {
+        localStorage.setItem('faberai_theme', t)
+        document.documentElement.setAttribute('data-theme', t)
+        set({ theme: t })
+      },
+
       // Project settings slice
       isProject: false,
       process: null,
       quantity: 1,
       material: '',
       tolerance: '',
+      notes: '',
       setProject: (v) => set({ isProject: v }),
       setProcess: (v) => set({ process: v }),
       setQuantity: (v) => set({ quantity: v }),
       setMaterial: (v) => set({ material: v }),
       setTolerance: (v) => set({ tolerance: v }),
+      setNotes: (v) => set({ notes: v }),
 
       // Wizard slice
       ...EMPTY_WIZARD,
       setWizard: (patch) => set((s) => ({ ...s, ...patch })),
       resetWizard: () => set(EMPTY_WIZARD),
+
+      // File slice
+      files: [],
+      activeFileId: null,
+      openTabIds: [],
+      addFile: (f) =>
+        set((s) => ({
+          files: [...s.files, f],
+          activeFileId: f.id,
+          openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
+        })),
+      updateFile: (id, patch) =>
+        set((s) => ({
+          files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+        })),
+      clearFiles: () =>
+        set({
+          files: [],
+          activeFileId: null,
+          openTabIds: [],
+          analysisResults: {},
+          currentFileBuffer: null,
+          fileBuffers: {},
+        }),
+      setActiveFileId: (id) => set({ activeFileId: id }),
+      openTab: (id) =>
+        set((s) => ({
+          openTabIds: s.openTabIds.includes(id) ? s.openTabIds : [...s.openTabIds, id],
+          activeFileId: id,
+        })),
+      closeTab: (id) =>
+        set((s) => {
+          const filtered = s.openTabIds.filter((tid) => tid !== id)
+          const nextActive =
+            s.activeFileId === id
+              ? filtered.length > 0
+                ? filtered[filtered.length - 1]
+                : null
+              : s.activeFileId
+          return {
+            openTabIds: filtered,
+            activeFileId: nextActive,
+          }
+        }),
+
+      // Analysis slice – keyed by file ID so each tab has its own result
+      analysisResults: {},
+      setAnalysisResult: (fileId, r) =>
+        set((s) => {
+          if (r === null) {
+            const rest = { ...s.analysisResults }
+            delete rest[fileId]
+            return { analysisResults: rest }
+          }
+          return { analysisResults: { ...s.analysisResults, [fileId]: r } }
+        }),
 
       // Project slice
       projects: [],
@@ -189,6 +290,20 @@ export const useStore = create<StoreState>()(
           ),
         })),
 
+      // Model slice
+      currentFileBuffer: null,
+      setCurrentFileBuffer: (buf) => set({ currentFileBuffer: buf }),
+      fileBuffers: {},
+      setFileBuffer: (fileId, buf) =>
+        set((s) => {
+          if (buf === null) {
+            const rest = { ...s.fileBuffers }
+            delete rest[fileId]
+            return { fileBuffers: rest }
+          }
+          return { fileBuffers: { ...s.fileBuffers, [fileId]: buf } }
+        }),
+
       // Chat slice
       isOpen: false,
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
@@ -196,19 +311,6 @@ export const useStore = create<StoreState>()(
       messages: [],
       addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
       clearMessages: () => set({ messages: [] }),
-
-      // File slice
-      files: [],
-      addFile: (f) => set((s) => ({ files: [...s.files, f] })),
-      updateFile: (id, patch) =>
-        set((s) => ({
-          files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
-        })),
-      clearFiles: () => set({ files: [] }),
-
-      // Analysis slice
-      analysisResult: null,
-      setAnalysisResult: (r) => set({ analysisResult: r }),
 
       // Records slice
       libraryItems: [],
@@ -224,6 +326,9 @@ export const useStore = create<StoreState>()(
     {
       name: 'faberai-store',
       partialize: (state) => ({
+        ...state,
+        currentFileBuffer: null,
+        fileBuffers: {},
         projects: state.projects.map((p) => ({
           ...p,
           files: p.files.map((f) => ({ ...f, file: null })),
