@@ -7,11 +7,11 @@ import type { AnalysisResult } from '../types/analysis'
 
 const demoAnalysis: AnalysisResult = {
   analysis_id: 'demo',
-  filename: 'faberai-sample-part.stl',
+  filename: 'logo.stl',
   status: 'completed',
   manufacturability_score: 87,
-  summary: 'Representative inspection sample.',
-  file_url: '/faberai-sample-part.stl',
+  summary: 'Faber AI brand inspection sample.',
+  file_url: '/logo.stl',
   part_metadata: {
     units: 'mm',
     volume: 0,

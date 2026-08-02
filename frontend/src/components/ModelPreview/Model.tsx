@@ -102,7 +102,7 @@ export function Model() {
   return (
     <mesh ref={objectRef} geometry={geometry} scale={0.5}>
       <meshPhysicalMaterial
-        color="#1E8A5C"
+        color="#0858F4"
         roughness={0.45}
         metalness={0.05}
         clearcoat={0.1}

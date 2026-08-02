@@ -1,8 +1,31 @@
-export default function BrandMark({ size = 30 }: { size?: number }) {
+export default function BrandMark({
+  size = 30,
+  variant = 'default',
+  className = '',
+}: {
+  size?: number
+  variant?: 'default' | 'white' | 'full'
+  className?: string
+}) {
+  const src =
+    variant === 'white' ? '/logo-white.svg' : variant === 'full' ? '/logo-full.svg' : '/logo.svg'
+
+  const width = variant === 'full' ? Math.round(size * 1.78) : size
+
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <path d="M6 26V10L16 4L26 10V26L20 22V13.5L16 11L12 13.5V22L6 26Z" fill="var(--ferrule)" />
-      <path d="M16 11L20 13.5V22L16 19.5V11Z" fill="var(--toolpath)" opacity="0.85" />
-    </svg>
+    <img
+      src={src}
+      alt="Faber AI"
+      width={width}
+      height={size}
+      className={`brand-mark brand-mark-${variant} ${className}`.trim()}
+      style={{
+        height: `${size}px`,
+        width: variant === 'full' ? 'auto' : `${size}px`,
+        objectFit: 'contain',
+        display: 'inline-block',
+        verticalAlign: 'middle',
+      }}
+    />
   )
 }

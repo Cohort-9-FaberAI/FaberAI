@@ -6,7 +6,7 @@ export default function AskFaberAIButton() {
 
   return (
     <button className="ask-faber-btn" type="button" onClick={toggle}>
-      <BrandMark size={18} />
+      <BrandMark size={18} variant="white" />
       Ask Faber AI
     </button>
   )

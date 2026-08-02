@@ -40,8 +40,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <BrandMark size={28} />
-          {!collapsed && <span>FaberAI</span>}
+          {collapsed ? (
+            <BrandMark size={20} variant="default" className="sidebar-mark-icon" />
+          ) : (
+            <BrandMark size={24} variant="full" className="sidebar-mark-full" />
+          )}
         </div>
         {!collapsed && (
           <button

@@ -1,7 +1,7 @@
 import styles from './ModelPreview.module.css'
 import { useState, useEffect, useContext, useCallback, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, Float } from '@react-three/drei'
 
 import {
   type AnalysisResult,
@@ -89,6 +89,7 @@ function getPreviewUrl(analysis: AnalysisResult | null, previewFileUrl: string |
 function ModelCanvas() {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
+  const isLoginLogo = context?.modelUrl === '/logo.stl' || context?.modelUrl?.endsWith('logo.stl')
   const issueMarkers =
     context?.analysis?.issues
       .filter(shouldShowMarker)
@@ -103,7 +104,14 @@ function ModelCanvas() {
       <ambientLight intensity={2.4} />
       <directionalLight position={[4, 6, 3]} intensity={5} castShadow />
       <directionalLight position={[-3, 1, -4]} intensity={0.5} castShadow />
-      <Model />
+
+      {isLoginLogo ? (
+        <Float speed={2.2} rotationIntensity={0.6} floatIntensity={1.8}>
+          <Model />
+        </Float>
+      ) : (
+        <Model />
+      )}
 
       {issueMarkers.map(({ issue, position }) => (
         <IssueMarker
@@ -115,7 +123,7 @@ function ModelCanvas() {
         />
       ))}
 
-      <OrbitControls />
+      <OrbitControls autoRotate={Boolean(isLoginLogo)} autoRotateSpeed={1.5} />
     </Canvas>
   )
 }
