@@ -1,12 +1,17 @@
-import { useNavigate } from 'react-router-dom'
-import AppShell from '../components/layout/AppShell'
-import StepIndicator from '../components/layout/StepIndicator'
-import ModelPreview from '../components/ModelPreview/ModelPreview'
-import ProcessToggle from '../components/extra-info/ProcessToggle'
-import { useStore } from '../store'
+import WorkflowLayout from '../../layout/WorkflowLayout'
+import ProcessToggle from '../../extra-info/ProcessToggle'
+import { useStore } from '../../../store'
+import { asAnalysisResult } from '../../../lib/analysisView'
+import type { UploadedFile } from '../../../store'
 
-export default function ExtraInfoPage() {
-  const navigate = useNavigate()
+interface SetupStepProps {
+  activeFile: UploadedFile | null
+}
+
+export default function SetupStep({ activeFile }: SetupStepProps) {
+  const activeId = activeFile?.id ?? ''
+  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
+  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const quantity = useStore((s) => s.quantity)
   const material = useStore((s) => s.material)
   const tolerance = useStore((s) => s.tolerance)
@@ -16,18 +21,32 @@ export default function ExtraInfoPage() {
   const setTolerance = useStore((s) => s.setTolerance)
   const setNotes = useStore((s) => s.setNotes)
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    navigate('/analysis')
-  }
+  const analysis = asAnalysisResult(analysisResult)
+  const activeFileIsStl =
+    activeFile?.sourceFormat === 'stl' ||
+    (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
+  const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
+  const livePreviewFilename = activeFile?.name ?? null
+
+  const completedPreviewAnalysis = analysis
+    ? {
+        ...analysis,
+        dfm_report: undefined,
+        issues: [],
+      }
+    : null
 
   return (
-    <AppShell>
-      <StepIndicator currentStep={2} />
-
-      <ModelPreview />
-
-      <form className="extra-info-form" onSubmit={handleSubmit}>
+    <WorkflowLayout
+      eyebrow="Step 01 &bull; Setup"
+      title="Confirm manufacturing inputs"
+      description="Add the constraints that calibrate DFM evaluation thresholds."
+      analysis={completedPreviewAnalysis}
+      previewFileUrl={livePreviewUrl}
+      previewBuffer={fileBuffer}
+      previewFilename={livePreviewFilename}
+    >
+      <form className="extra-info-form" onSubmit={(e) => e.preventDefault()}>
         <div className="form-group">
           <label>Process</label>
           <ProcessToggle />
@@ -68,22 +87,18 @@ export default function ExtraInfoPage() {
         </div>
 
         <div className="form-group">
-          <label htmlFor="notes">Notes</label>
+          <label htmlFor="notes">Notes & Specifications</label>
           <textarea
             id="notes"
             rows={3}
-            placeholder="Anything else that should be asked"
+            placeholder="Critical surfaces, material assumptions, target process, or supplier notes."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
 
         <div className="token-estimate">Estimated token cost: ~2,400 tokens</div>
-
-        <button className="next-btn" type="submit">
-          Submit
-        </button>
       </form>
-    </AppShell>
+    </WorkflowLayout>
   )
 }

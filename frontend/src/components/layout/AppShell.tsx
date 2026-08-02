@@ -1,19 +1,19 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import Sidebar from './Sidebar'
-import UsageIndicator from './UsageIndicator'
-import AskFaberAIButton from './AskFaberAIButton'
+import TopHeader from './TopHeader'
 import ChatPanel from './ChatPanel'
+import { useSequentialFileProcessor } from '../../lib/useSequentialFileProcessor'
 
 export default function AppShell({ children }: { children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false)
+  useSequentialFileProcessor()
+
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <div className="app-main">
+        <TopHeader />
         <div className="app-content">{children}</div>
-        <div className="app-footer">
-          <UsageIndicator />
-          <AskFaberAIButton />
-        </div>
       </div>
       <ChatPanel />
     </div>

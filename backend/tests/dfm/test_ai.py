@@ -22,7 +22,8 @@ from app.services.ai import (
 )
 from app.services.ai.service import AIServiceError, AnswerMode
 from dfm import DFMInputs, run_dfm_analysis
-from dfm.models import ProcessType
+from dfm.models import ProcessType, RuleStatus, Severity
+from app.services.ai.context_builder import MAX_PRINT_ORIENTATION_CANDIDATES
 
 
 @pytest.fixture()
@@ -62,6 +63,7 @@ class TestIntentClassification:
         ("Should I use injection moulding or 3D printing?", QuestionIntent.process_choice),
         ("What is my score?", QuestionIntent.score),
         ("Why wasn't the tolerance check run?", QuestionIntent.not_assessed),
+        ("Hello", QuestionIntent.small_talk),
         ("Tell me about this part", QuestionIntent.overview),
         ("", QuestionIntent.overview),
     ])
@@ -81,6 +83,26 @@ class TestDeterministicAnswers:
     def test_says_so_plainly_when_the_part_is_fine(self, clean_report):
         answer = answer_dfm_question(clean_report, "Why is this part not manufacturable?")
         assert "is** manufacturable" in answer.answer or "is manufacturable" in answer.answer
+
+    def test_greeting_does_not_dump_the_report(self, clean_report):
+        answer = answer_dfm_question(clean_report, "Hello")
+        assert answer.mode == AnswerMode.deterministic
+        assert "Hello" in answer.answer
+        assert "Which rules failed" in answer.answer
+        assert not answer.referenced_rules
+
+    def test_non_blocked_failed_rules_are_explained_as_needs_review(self, clean_report):
+        report = clean_report.model_copy(deep=True)
+        rule = report.processes[0].rule_results[0]
+        rule.status = RuleStatus.failed
+        rule.severity = Severity.major
+        rule.score_impact = 5.0
+        rule.summary = "Synthetic major issue."
+        rule.findings = []
+        report.processes[0].score = 95.0
+        answer = answer_dfm_question(report, "Why is this part not manufacturable?")
+        assert "needs review" in answer.answer.lower()
+        assert "Blocker" in answer.answer
 
     def test_which_rules_failed_lists_ids_severities_and_impact(self, blocked_report):
         answer = answer_dfm_question(blocked_report, "Which rules failed?")
@@ -151,6 +173,7 @@ class TestLLMPath:
         system = client.messages[0]["content"]
         assert "Never compute or estimate geometry" in system
         assert "Never re-decide a verdict" in system
+        assert "untrusted text" in system
 
     def test_falls_back_when_the_provider_fails(self, blocked_report):
         client = StubLLM(error=LLMRequestError("connection reset"))
@@ -234,6 +257,26 @@ class TestContextBuilder:
         assert "faces" not in facts
         assert "wall_samples" not in facts
         assert facts["feature_counts"]["cavities"] == 1
+
+    def test_context_declares_the_boundary_it_enforces(self, blocked_report):
+        context = build_ai_context(blocked_report)
+        policy = context["context_policy"]
+        assert policy["source"] == "completed_dfm_report"
+        assert policy["raw_geometry_arrays_included"] is False
+        assert "must not compute geometry" in " ".join(policy["rules"])
+
+    def test_print_orientation_context_is_bounded(self, blocked_report, stl_geometry):
+        stl_geometry["print_orientations"] = {
+            "recommended": "z",
+            "orientations": [
+                {"axis_label": f"axis-{i}", "overhang_ratio": i / 10}
+                for i in range(MAX_PRINT_ORIENTATION_CANDIDATES + 3)
+            ],
+        }
+        context = build_ai_context(blocked_report, stl_geometry)
+        orientations = context["geometry_facts"]["print_orientations"]
+        assert len(orientations["candidates"]) == MAX_PRINT_ORIENTATION_CANDIDATES
+        assert orientations["candidate_count"] == MAX_PRINT_ORIENTATION_CANDIDATES + 3
 
     def test_records_the_assumptions_a_verdict_rests_on(self, blocked_report):
         context = build_ai_context(blocked_report)

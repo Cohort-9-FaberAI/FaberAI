@@ -162,7 +162,7 @@ FaberAI/
 │       │   ├── AnalysisPage.tsx
 │       │   ├── DebugApiPage.tsx
 │       │   ├── ExtraInfoPage.tsx
-│       │   ├── HomePage.tsx
+│       │   ├── UploadPage.tsx
 │       │   └── LoginPage.tsx
 │       └── store/
 │           └── index.ts                  # Zustand store (project, file, analysis, chat)
@@ -399,7 +399,7 @@ A full React 19 + TypeScript + Vite single-page application with a Three.js 3D v
 | Route | Page | Purpose |
 |---|---|---|
 | `/login` | `LoginPage` | Login form (auth not yet wired to backend) |
-| `/home` | `HomePage` | Upload dropzone + file list + project modal |
+| `/upload` | `UploadPage` | Upload dropzone + file list + project modal |
 | `/extra-info` | `ExtraInfoPage` | Process, quantity, material, tolerance, notes form |
 | `/analysis` | `AnalysisPage` | 3D viewer + issue accordion (uses `/analyze-mock`) |
 | `/debug` | `DebugApiPage` | Endpoint testing tool for all 5 backend routes |

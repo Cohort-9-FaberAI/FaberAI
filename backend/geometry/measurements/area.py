@@ -3,14 +3,25 @@
 from __future__ import annotations
 
 
+def _surface_area_modules():
+    try:
+        from OCC.Core.GProp import GProp_GProps
+        from OCC.Core.BRepGProp import brepgprop
+
+        return GProp_GProps, brepgprop.SurfaceProperties
+    except (ImportError, ModuleNotFoundError):
+        from OCP.GProp import GProp_GProps
+        from OCP.BRepGProp import BRepGProp
+
+        return GProp_GProps, BRepGProp.SurfaceProperties_s
+
 
 def compute_surface_area_occ(shape_occ) -> float:
     """Surface area of a TopoDS_Shape via BRepGProp.SurfaceProperties."""
-    from OCC.Core.GProp import GProp_GProps
-    from OCC.Core.BRepGProp import brepgprop
+    GProp_GProps, surface_properties = _surface_area_modules()
 
     props = GProp_GProps()
-    brepgprop.SurfaceProperties(shape_occ, props)
+    surface_properties(shape_occ, props)
     return float(props.Mass())
 
 

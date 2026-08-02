@@ -31,3 +31,4 @@ class Rib:
         this is a coarse, self-consistent estimate for relative comparison
         only — callers with real width data should compute volume directly)."""
         return self.thickness * self.length * self.length
+

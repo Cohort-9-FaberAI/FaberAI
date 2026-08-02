@@ -46,6 +46,7 @@ class GeometryModel:
     fillets: list = field(default_factory=list)
     ribs: list = field(default_factory=list)
     chamfers: list = field(default_factory=list)
+    overhangs: list = field(default_factory=list)
 
     # FIX: was previously set by dispatcher.py (model.overhangs = ...) but
     # never declared here. On the STL path, where dispatcher.py never sets

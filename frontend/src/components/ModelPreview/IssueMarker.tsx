@@ -3,6 +3,8 @@ import { useContext, useEffect, useRef, useState } from 'react'
 import { Box3, Mesh, Vector3 } from 'three'
 import type { ManufacturabilityIssue } from '../../types/analysis'
 import { ModelContext } from './ModelContext'
+const POINT_MARKER_RADIUS = 1
+
 type IssueMarkerProps = {
   position?: [number, number, number]
   boundingBox?: Box3
@@ -31,7 +33,7 @@ export default function IssueMarker({
     if (context) {
       context.selectedIssueSetter(hovered ? issue : null)
     }
-  }, [hovered])
+  }, [context, hovered, issue])
 
   return (
     <mesh
@@ -44,7 +46,7 @@ export default function IssueMarker({
       onPointerOut={() => setHovered(false)}
     >
       {type == 'POINT' ? (
-        <circleGeometry args={[1, 32]} />
+        <circleGeometry args={[POINT_MARKER_RADIUS, 32]} />
       ) : (
         <boxGeometry args={boundingBox?.getSize(new Vector3()).toArray()} />
       )}

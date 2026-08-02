@@ -1,27 +1,154 @@
 import logging
+import os
+import tempfile
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from celery.result import AsyncResult
+from celery.exceptions import CeleryError
 from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from core.workers import celery_app, extract_geometry_task
+from core.workers import celery_app, extract_geometry_task, _upload_preview_stl_for_step
 from app.schemas import AnalysisResult, AnalysisStatus
-from app.crud import insert_analysis_result, get_analysis_by_id
+from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
 from app.services.ai import AIAnswer, answer_dfm_question
+from app.services.report_pdf import build_report_pdf, report_pdf_filename
 from app.services.storage import upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
 from app.observability import setup_langtrace
+import requests
 
 setup_langtrace()
 logger = logging.getLogger(__name__)
+_STEP_EXTENSIONS = {".step", ".stp"}
+
+
+def _raise_backend_unhealthy(component: str, message: str, cause: Exception | None = None) -> None:
+    logger.error("Backend health check failed for %s: %s", component, message)
+    exc = HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail={
+            "component": component,
+            "message": message,
+        },
+    )
+    if cause:
+        raise exc from cause
+    raise exc
+
+
+def _check_celery_broker() -> None:
+    try:
+        with celery_app.connection_for_read() as connection:
+            connection.ensure_connection(max_retries=1)
+    except Exception as exc:
+        _raise_backend_unhealthy(
+            "celery_broker",
+            "The analysis queue is unavailable. Check Redis and restart the backend worker.",
+            cause=exc,
+        )
+
+
+def _check_celery_worker() -> None:
+    try:
+        responses = celery_app.control.inspect(timeout=1.5).ping()
+    except Exception as exc:
+        _raise_backend_unhealthy(
+            "celery_worker",
+            "The analysis worker could not be reached. Restart the Celery worker.",
+            cause=exc,
+        )
+
+    if not responses:
+        _raise_backend_unhealthy(
+            "celery_worker",
+            "No analysis worker is online. Restart the Celery worker.",
+        )
+
+
+def _check_analysis_queue() -> None:
+    _check_celery_broker()
+    _check_celery_worker()
+
+
+def _is_step_url(value: str | None) -> bool:
+    if not value:
+        return False
+    clean_value = value.split("?", 1)[0].lower()
+    return any(clean_value.endswith(ext) for ext in _STEP_EXTENSIONS)
+
+
+def _is_step_analysis_without_preview(analysis: dict) -> bool:
+    geometry_data = analysis.get("geometry_data")
+    geometry = geometry_data if isinstance(geometry_data, dict) else {}
+    filename = str(analysis.get("filename") or "").lower()
+    source_format = str(geometry.get("source_format") or "").lower()
+    file_url = analysis.get("file_url")
+
+    is_step = (
+        source_format == "step"
+        or filename.endswith(".step")
+        or filename.endswith(".stp")
+        or _is_step_url(analysis.get("source_file_url"))
+    )
+    has_preview = bool(geometry.get("preview_url")) or (
+        isinstance(file_url, str) and not _is_step_url(file_url)
+    )
+    return is_step and not has_preview and bool(analysis.get("source_file_url"))
+
+
+def _attach_missing_step_preview(analysis: dict) -> dict:
+    """
+    Backfills STL previews for completed STEP analyses created before preview
+    URLs were attached. This keeps old completed reports renderable in the UI.
+    """
+    if not _is_step_analysis_without_preview(analysis):
+        return analysis
+
+    source_url = str(analysis["source_file_url"])
+    filename = str(analysis.get("filename") or "part.step")
+    suffix = ".stp" if filename.lower().endswith(".stp") else ".step"
+    tmp_path = None
+
+    try:
+        response = requests.get(source_url, timeout=30)
+        response.raise_for_status()
+
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
+            tmp_file.write(response.content)
+            tmp_path = tmp_file.name
+
+        preview_url = _upload_preview_stl_for_step(tmp_path)
+        if not preview_url:
+            return analysis
+
+        geometry_data = analysis.get("geometry_data")
+        geometry = geometry_data if isinstance(geometry_data, dict) else {}
+        geometry["preview_url"] = preview_url
+        analysis["geometry_data"] = geometry
+        analysis["file_url"] = preview_url
+
+        analysis_id = analysis.get("analysis_id")
+        if analysis_id:
+            update_analysis_status(
+                str(analysis_id),
+                AnalysisStatus.completed.value,
+                extra_fields={"results_json": analysis},
+            )
+        return analysis
+    except Exception:
+        logger.exception("Could not backfill STEP preview for analysis %s", analysis.get("analysis_id"))
+        return analysis
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 @asynccontextmanager
@@ -54,6 +181,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -62,6 +190,10 @@ def _error_response(status_code: int, error_type: str, message, details=None) ->
     Builds the standardized error envelope used by all exception handlers:
     {"error": {"code": <int>, "type": <slug>, "message": <str>, "details": <optional>}}
     """
+    if isinstance(message, dict):
+        details = details or message
+        message = message.get("message", "Request failed.")
+
     error = {"code": status_code, "type": error_type, "message": message}
     if details is not None:
         error["details"] = details
@@ -111,6 +243,22 @@ def health_check():
     """
     return {"status": "ok", "message": "FaberAI backend is running."}
 
+
+@app.get("/health/dependencies", tags=["Health"])
+def dependency_health_check():
+    """
+    Verifies the upload processing dependencies that can otherwise leave the
+    frontend waiting on a background job forever.
+    """
+    _check_analysis_queue()
+    return {
+        "status": "ok",
+        "dependencies": {
+            "celery_broker": "ok",
+            "celery_worker": "ok",
+        },
+    }
+
 @app.post("/upload/", status_code=status.HTTP_202_ACCEPTED, tags=["Upload"])
 async def upload_cad_file(file: UploadFile):
     """
@@ -119,6 +267,8 @@ async def upload_cad_file(file: UploadFile):
     Celery task for geometry analysis.
     Returns the task ID and analysis ID for status polling.
     """
+    _check_analysis_queue()
+
     # Upload file to Supabase Storage and get back the URL
     upload_result = upload_cad_file_to_storage(file)
 
@@ -127,14 +277,28 @@ async def upload_cad_file(file: UploadFile):
         filename=upload_result["original_filename"],
         status=AnalysisStatus.pending,
     )
-    insert_analysis_result(analysis)
+    try:
+        insert_analysis_result(analysis)
+    except APIError as exc:
+        _raise_backend_unhealthy(
+            "analysis_store",
+            "The analysis database is unavailable. Check Supabase before uploading again.",
+            cause=exc,
+        )
 
     # Pass analysis_id to the worker so it can update the record
-    task = extract_geometry_task.delay(
-        upload_result["public_url"],
-        upload_result["original_filename"],
-        analysis.analysis_id,
-    )
+    try:
+        task = extract_geometry_task.delay(
+            upload_result["public_url"],
+            upload_result["original_filename"],
+            analysis.analysis_id,
+        )
+    except (CeleryError, OSError, TimeoutError) as exc:
+        _raise_backend_unhealthy(
+            "analysis_queue",
+            "The analysis job could not be queued. Check Redis and the Celery worker.",
+            cause=exc,
+        )
 
     return {
         "message": "File received and uploaded successfully. Processing started in background.",
@@ -142,6 +306,8 @@ async def upload_cad_file(file: UploadFile):
         "analysis_id": analysis.analysis_id,
         "filename": upload_result["original_filename"],
         "storage_path": upload_result["storage_path"],
+        "file_url": upload_result["public_url"],
+        "source_file_url": upload_result["public_url"],
         "status": "pending",
     }
 
@@ -168,6 +334,7 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
             if db_status == "completed":
                 results_json = record.get("results_json")
                 if results_json:
+                    results_json = _attach_missing_step_preview(results_json)
                     analysis = AnalysisResult.model_validate(results_json)
                     return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id, "result": analysis}
                 return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id}
@@ -175,35 +342,73 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
             if db_status == "failed":
                 return {"task_id": task_id, "status": "FAILED", "analysis_id": analysis_id}
 
-            if db_status in {"pending", "processing"}:
+            if db_status in {"pending", "processing"} and state in {"PENDING", "STARTED", "RETRY"}:
                 return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
+
+    if state == "PENDING":
+        _check_analysis_queue()
+        return {
+            "task_id": task_id,
+            "status": "PENDING",
+            **({"analysis_id": analysis_id} if analysis_id else {}),
+        }
+
+    if state in {"STARTED", "RETRY"}:
+        return {
+            "task_id": task_id,
+            "status": "PROCESSING",
+            **({"analysis_id": analysis_id} if analysis_id else {}),
+        }
+
+    if state == "SUCCESS":
+        task_output = task_result.result
+        if isinstance(task_output, dict):
+            resolved_analysis_id = (
+                task_output.get("analysis_id")
+                or analysis_id
+                or task_id
+            )
+            if task_output.get("status") == AnalysisStatus.completed.value:
+                return {
+                    "task_id": task_id,
+                    "status": "SUCCESS",
+                    "analysis_id": resolved_analysis_id,
+                    "result": task_output,
+                }
+        else:
+            resolved_analysis_id = analysis_id or task_id
 
     if state == "FAILURE":
         # Keep the raw exception in server logs only; never expose it to clients.
         logger.error(
             "Task %s failed: %s\n%s", task_id, task_result.result, task_result.traceback
         )
+        if analysis_id:
+            try:
+                record = get_analysis_by_id(analysis_id)
+                if record is not None and record.get("status") in {"pending", "processing"}:
+                    update_analysis_status(analysis_id, AnalysisStatus.failed.value)
+            except APIError:
+                logger.exception(
+                    "Could not mark failed analysis %s after Celery task failure.",
+                    analysis_id,
+                )
         return {
             "task_id": task_id,
             "status": "FAILURE",
+            **({"analysis_id": analysis_id} if analysis_id else {}),
             "error": "Analysis failed. Please try again later.",
         }
 
     if state == "SUCCESS":
-        task_output = task_result.result
-        resolved_analysis_id = (
-            task_output.get("analysis_id", analysis_id or task_id)
-            if isinstance(task_output, dict)
-            else analysis_id or task_id
-        )
-
         try:
             record = get_analysis_by_id(resolved_analysis_id)
         except APIError:
             record = None
 
         if record is not None and record.get("results_json"):
-            analysis = AnalysisResult.model_validate(record["results_json"])
+            results_json = _attach_missing_step_preview(record["results_json"])
+            analysis = AnalysisResult.model_validate(results_json)
             return {
                 "task_id": task_id,
                 "status": "SUCCESS",
@@ -247,6 +452,10 @@ def analyze_mock():
         "filename": "box_prism.stl", 
         "status": "completed",
         "manufacturability_score": 72,
+        "printing_score": 81,
+        "molding_score": 55,
+        "printing_manufacturable": True,
+        "molding_manufacturable": False,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
         "file_url": "http://127.0.0.1:8000/mock-file", 
         "part_metadata": {
@@ -343,6 +552,15 @@ class AIAskRequest(BaseModel):
     geometry: Optional[Dict[str, Any]] = None
 
 
+class ReportDownloadRequest(BaseModel):
+    """Generate a supplier-ready PDF from the completed analysis in the UI."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    analysis: Dict[str, Any]
+    include_comparison: bool = False
+
+
 def _load_stored_analysis(analysis_id: str) -> dict:
     try:
         record = get_analysis_by_id(analysis_id)
@@ -353,7 +571,23 @@ def _load_stored_analysis(analysis_id: str) -> dict:
             detail="Could not reach the analysis store. Please try again.",
         ) from exc
 
-    if not record or not record.get("results_json"):
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No completed analysis found for analysis_id '{analysis_id}'.",
+        )
+
+    record_status = record.get("status")
+    if record_status and record_status != AnalysisStatus.completed.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Analysis '{analysis_id}' is {record_status}, not completed. "
+                "The assistant only answers from completed DFM reports."
+            ),
+        )
+
+    if not record.get("results_json"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No completed analysis found for analysis_id '{analysis_id}'.",
@@ -389,6 +623,57 @@ def get_dfm_report(analysis_id: str):
             ),
         )
     return DFMReport.model_validate(report)
+
+
+@app.get("/analysis/{analysis_id}/report.pdf", tags=["Reports"])
+def download_stored_analysis_report(
+    analysis_id: str,
+    include_comparison: bool = False,
+):
+    """Download a PDF report for a stored completed analysis."""
+    analysis = _load_stored_analysis(analysis_id)
+    if not analysis.get("dfm_report"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Analysis '{analysis_id}' has no completed DFM report yet. "
+                "Run the analysis before downloading a PDF."
+            ),
+        )
+
+    pdf = build_report_pdf(analysis, include_comparison=include_comparison)
+    filename = report_pdf_filename(analysis)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/analysis/report.pdf", tags=["Reports"])
+def download_inline_analysis_report(request: ReportDownloadRequest):
+    """Download a PDF report from the completed analysis payload held by the UI."""
+    if request.analysis.get("status") != AnalysisStatus.completed.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A completed analysis is required before downloading a PDF.",
+        )
+    if not request.analysis.get("dfm_report") and not request.analysis.get("issues"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No DFM report or issue list is available to export.",
+        )
+
+    pdf = build_report_pdf(
+        request.analysis,
+        include_comparison=request.include_comparison,
+    )
+    filename = report_pdf_filename(request.analysis)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

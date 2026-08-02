@@ -24,3 +24,8 @@ import main
 @pytest.fixture()
 def client():
     return TestClient(main.app)
+
+
+@pytest.fixture(autouse=True)
+def bypass_dependency_health_checks(monkeypatch):
+    monkeypatch.setattr(main, "_check_analysis_queue", lambda: None)

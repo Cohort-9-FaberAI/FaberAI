@@ -1,38 +1,68 @@
 import { useRef, useState } from 'react'
-import { uploadFile } from '../../lib/api'
 import { useStore } from '../../store'
 
 export default function UploadDropzone() {
   const inputRef = useRef<HTMLInputElement>(null)
   const addFile = useStore((s) => s.addFile)
-  const updateFile = useStore((s) => s.updateFile)
   const setCurrentFileBuffer = useStore((s) => s.setCurrentFileBuffer)
+  const setFileBuffer = useStore((s) => s.setFileBuffer)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleFile(file: File) {
+  async function handleSingleFile(file: File) {
     const id = crypto.randomUUID()
-    addFile({ id, name: file.name, taskId: null, analysisId: null, status: 'pending' })
-    setUploading(true)
-    setError(null)
+    const lowerName = file.name.toLowerCase()
+    const sourceFormat = lowerName.endsWith('.stl')
+      ? 'stl'
+      : lowerName.endsWith('.step') || lowerName.endsWith('.stp')
+        ? 'step'
+        : null
 
-    try {
-      const buffer = await file.arrayBuffer()
-      setCurrentFileBuffer(buffer)
-    } catch {
-      // buffer read failed, preview won't work but upload can still proceed
+    addFile({
+      id,
+      name: file.name,
+      file,
+      taskId: null,
+      analysisId: null,
+      fileUrl: null,
+      sourceFormat,
+      status: 'pending',
+      analysisResult: null,
+    })
+
+    if (sourceFormat === 'stl') {
+      try {
+        const buffer = await file.arrayBuffer()
+        setFileBuffer(id, buffer)
+        setCurrentFileBuffer(buffer)
+      } catch {
+        // buffer read failed, preview won't work immediately but upload proceeds
+      }
+    } else {
+      setFileBuffer(id, null)
+      setCurrentFileBuffer(null)
+    }
+  }
+
+  async function handleFiles(fileList: FileList | File[] | null | undefined) {
+    if (!fileList || fileList.length === 0) return
+    const files = Array.from(fileList).filter((f) => {
+      const name = f.name.toLowerCase()
+      return name.endsWith('.stl') || name.endsWith('.step') || name.endsWith('.stp')
+    })
+    if (files.length === 0) {
+      setError('Please upload valid CAD files (.STEP, .STP, .STL)')
+      return
     }
 
+    setUploading(true)
+    setError(null)
     try {
-      const res = await uploadFile(file)
-      updateFile(id, {
-        taskId: res.task_id,
-        analysisId: res.analysis_id ?? null,
-        status: 'processing',
-      })
+      for (const file of files) {
+        await handleSingleFile(file)
+      }
     } catch (err) {
-      updateFile(id, { status: 'failed' })
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      setError(err instanceof Error ? err.message : 'Failed to process files')
     } finally {
       setUploading(false)
     }
@@ -40,13 +70,11 @@ export default function UploadDropzone() {
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+    handleFiles(e.dataTransfer.files)
   }
 
   function onChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) handleFile(file)
+    handleFiles(e.target.files)
     e.target.value = ''
   }
 
@@ -58,11 +86,29 @@ export default function UploadDropzone() {
         onDrop={onDrop}
       >
         {uploading ? (
-          <p>Uploading...</p>
+          <div className="scan-loading">
+            <span className="scan-line-inline" />
+            <p>Uploading CAD files</p>
+            <small>Creating analysis jobs</small>
+          </div>
         ) : (
           <>
-            <p>Drag and drop a CAD file here</p>
-            <p className="upload-formats">.step, .stp, .stl</p>
+            <svg className="upload-glyph" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+              <path
+                d="M26 6L44 16V36L26 46L8 36V16L26 6Z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+              />
+              <path d="M26 26L44 16M26 26V46M26 26L8 16" stroke="currentColor" strokeWidth="1.6" />
+              <circle cx="26" cy="26" r="3" fill="var(--toolpath)" />
+            </svg>
+            <h2>Drag and drop CAD files here</h2>
+            <p className="upload-formats">.STEP · .STP · .STL (Multiple files allowed)</p>
+            {error ? (
+              <p className="chat-error" style={{ margin: '8px 0 0' }}>
+                {error}
+              </p>
+            ) : null}
             <button
               className="upload-browse-btn"
               type="button"
@@ -76,12 +122,11 @@ export default function UploadDropzone() {
           ref={inputRef}
           type="file"
           accept=".step,.stp,.stl"
+          multiple={true}
           className="sr-only"
           onChange={onChange}
-          disabled={uploading}
         />
       </div>
-      {error && <p className="upload-error">{error}</p>}
     </div>
   )
 }

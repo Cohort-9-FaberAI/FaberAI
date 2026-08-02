@@ -19,12 +19,55 @@ from geometry.measurements import (
     compute_moment_inertia_occ,
     compute_moment_inertia_mesh,
     is_mesh_reliable,
+    
 )
 from .stl_loader_trimesh import load_stl
 
 
 STEP_EXTENSIONS = {".step", ".stp"}
 STL_EXTENSIONS = {".stl"}
+STEP_UNIT_SCALE_THRESHOLD = 10_000
+STEP_MICRON_TO_MM_SCALE = 0.001
+
+
+def _is_missing_step_dependency(exc: BaseException) -> bool:
+    if isinstance(exc, StepSupportUnavailableError):
+        return True
+    if isinstance(exc, ModuleNotFoundError):
+        missing = getattr(exc, "name", "") or ""
+        return missing == "OCC" or missing.startswith("OCC.")
+    if isinstance(exc, ImportError):
+        message = str(exc)
+        return "OCC" in message or "pythonocc" in message or "build123d" in message
+    return False
+
+
+def _raise_step_dependency_error(exc: BaseException) -> None:
+    raise StepSupportUnavailableError(
+        "STEP support is unavailable because required optional dependencies "
+        "(pythonocc-core / build123d) are not installed."
+    ) from exc
+
+
+def _scale_occ_shape(shape, scale_factor: float):
+    try:
+        from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCC.Core.gp import gp_Pnt, gp_Trsf
+    except (ImportError, ModuleNotFoundError):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.gp import gp_Pnt, gp_Trsf
+
+    transform = gp_Trsf()
+    transform.SetScale(gp_Pnt(0, 0, 0), scale_factor)
+    return BRepBuilderAPI_Transform(shape, transform, True).Shape()
+
+
+def _step_unit_scale_factor(shape) -> float:
+    box = compute_bbox_occ(shape)
+    max_dimension = max(box.width, box.depth, box.height)
+    if max_dimension > STEP_UNIT_SCALE_THRESHOLD:
+        return STEP_MICRON_TO_MM_SCALE
+    return 1.0
 
 
 def get_file_format(path: str) -> SourceFormat:
@@ -106,17 +149,32 @@ def _load_step(path: str) -> GeometryModel:
         raise ValueError(
             f"STEP file '{path}' could not be loaded — the file may be empty or corrupted."
         )
+    reference_shape = shape_occ or getattr(shape_b123, "wrapped", None)
+    if reference_shape is not None:
+        scale_factor = _step_unit_scale_factor(reference_shape)
+        if scale_factor != 1.0:
+            print(f"Normalizing STEP units for {path}: scale factor {scale_factor}")
+            if shape_b123 is not None and hasattr(shape_b123, "scale"):
+                shape_b123 = shape_b123.scale(scale_factor)
+                shape_occ = shape_b123.wrapped
+            elif shape_occ is not None:
+                shape_occ = _scale_occ_shape(shape_occ, scale_factor)
 
     model = GeometryModel(
         source_format=SourceFormat.STEP, source_path=path, raw_occ=shape_occ, raw_b123=shape_b123
     )
 
-    model.bounding_box = compute_bbox_occ(shape_occ)
-    model.oriented_bbox = None
-    model.volume_mm3 = compute_volume_occ(shape_occ)
-    model.surface_area_mm2 = compute_surface_area_occ(shape_occ)
-    model.center_mass = compute_center_mass_occ(shape_occ)
-    model.moment_of_inertia = compute_moment_inertia_occ(shape_occ)
+    try:
+        model.bounding_box = compute_bbox_occ(shape_occ)
+        model.oriented_bbox = None
+        model.volume_mm3 = compute_volume_occ(shape_occ)
+        model.surface_area_mm2 = compute_surface_area_occ(shape_occ)
+        model.center_mass = compute_center_mass_occ(shape_occ)
+        model.moment_of_inertia = compute_moment_inertia_occ(shape_occ)
+    except Exception as exc:
+        if _is_missing_step_dependency(exc):
+            _raise_step_dependency_error(exc)
+        raise
 
     # Topology: faces, edges, face graph
     try:
@@ -262,6 +320,8 @@ def _load_stl(path: str) -> GeometryModel:
                     graph_to_faces_and_edges,
         )
         from geometry.measurements.face_graph_mesh import build_face_graph
+        from geometry.features.overhangs import detect_overhangs
+
 
         vertices, indices = extract_faces_mesh(mesh)
         face_graph = build_face_graph(mesh)
@@ -276,14 +336,63 @@ def _load_stl(path: str) -> GeometryModel:
             node: list(face_graph.neighbors(node))
             for node in face_graph.nodes()
         }
+        try:
+            from geometry.Mesh_features.holes import detect_mesh_holes
+            model.holes = detect_mesh_holes(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL hole detection failed for {path}: {e}")
+            model.holes = []
+
+        try:
+            from geometry.Mesh_features.bosses import detect_mesh_bosses
+            model.bosses = detect_mesh_bosses(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL boss detection failed for {path}: {e}")
+            model.bosses = []
+
+        try:
+            from geometry.Mesh_features.ribs import detect_mesh_ribs
+            model.ribs = detect_mesh_ribs(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL rib detection failed for {path}: {e}")
+            model.ribs = []
+
+        try:
+            from geometry.Mesh_features.fillets import detect_mesh_fillets
+            model.fillets = detect_mesh_fillets(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL fillet detection failed for {path}: {e}")
+            model.fillets = []
+
+        try:
+            from geometry.Mesh_features.chamfers import detect_mesh_chamfers
+            model.chamfers = detect_mesh_chamfers(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL chamfer detection failed for {path}: {e}")
+            model.chamfers = []
+
     except Exception as e:
             print(f"Warning: face extraction failed for {path}: {e}")
+            model.faces = []
+            model.edges = []
+            model.face_graph = None
 
+            model.holes = []
+            model.bosses = []
+            model.ribs = []
+            model.fillets = []
+            model.chamfers = []
     try:
         from geometry.models.mesh_quality import check_mesh_quality
         model.mesh_quality = check_mesh_quality(mesh)
     except Exception as e:
         print(f"Warning: mesh quality check failed for {path}: {e}")
+
+    try:
+        model.overhangs = detect_overhangs(face_graph, max_overhang_angle=45.0)
+    except Exception as e:
+        print(f"Warning: overhang detection failed for {path}: {e}")    
+        model.overhangs = []
 
     try:
         from geometry.measurements.wall_thickness import compute_wall_thickness_mesh

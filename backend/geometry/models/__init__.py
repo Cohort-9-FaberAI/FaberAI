@@ -15,7 +15,7 @@ from .cavity import Cavity
 from .fillet import Fillet
 from .rib import Rib
 from .chamfer import Chamfer
-
+from .overhang import Overhang
 
 
 __all__ = [
@@ -24,5 +24,5 @@ __all__ = [
     "Face", "Edge", "WallSample",
     "MeshQuality", "check_mesh_quality",
     "Hole", "Boss", "Cavity",
-    "Fillet", "Rib", "Chamfer"
+    "Fillet", "Rib", "Chamfer", "Overhang"
 ]

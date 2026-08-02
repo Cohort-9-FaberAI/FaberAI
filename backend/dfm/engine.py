@@ -69,6 +69,17 @@ def run_dfm_analysis(
     report.processes = process_reports
     report.recommendation = scorer.recommend_process(process_reports)
 
+    # Expose per-process headline values so callers can easily read
+    # printing vs moulding scores without searching the `processes` list.
+    printing_report = report.process_report(ProcessType.printing)
+    molding_report = report.process_report(ProcessType.injection_molding)
+    if printing_report is not None:
+        report.printing_manufacturable = printing_report.manufacturable
+        report.printing_score = printing_report.score
+    if molding_report is not None:
+        report.molding_manufacturable = molding_report.manufacturable
+        report.molding_score = molding_report.score
+
     headline = _headline_report(report, context)
     if headline is not None:
         report.manufacturable = headline.manufacturable
