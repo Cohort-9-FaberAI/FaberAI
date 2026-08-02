@@ -102,10 +102,6 @@ function ModelCanvas() {
 
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
-      <color
-        attach="background"
-        args={[window.matchMedia('(prefers-color-scheme: dark)').matches ? '#22252f' : '#adc5de']}
-      />
       <ambientLight intensity={2.4} />
       <directionalLight position={[4, 6, 3]} intensity={5} castShadow />
       <directionalLight position={[-3, 1, -4]} intensity={0.5} castShadow />
