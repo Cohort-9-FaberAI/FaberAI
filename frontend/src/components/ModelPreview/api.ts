@@ -26,8 +26,6 @@ export async function getGeometry(url: string, type: 'STL' | 'STEP') {
 }
 
 async function getSTEPGeometry(url: string) {
-  url = 'https://jody-web-server.vercel.app/api/cad/step'
-
   const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`HTTP error! Status: ${response.status}`)

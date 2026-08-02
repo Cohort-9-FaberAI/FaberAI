@@ -22,6 +22,7 @@ from dfm.models import DFMReport, ProcessReport, ProcessType, RuleStatus, Severi
 
 
 class QuestionIntent(str, Enum):
+    small_talk = "small_talk"
     not_manufacturable = "not_manufacturable"
     failed_rules = "failed_rules"
     improve = "improve"
@@ -32,6 +33,9 @@ class QuestionIntent(str, Enum):
 
 
 _INTENT_PATTERNS: list[tuple[QuestionIntent, str]] = [
+    (QuestionIntent.small_talk,
+     r"^(hi|hello|hey|yo|good\s+(morning|afternoon|evening)|thanks|thank\s+you|ok|okay|cool|nice)\b"
+     r"|^what\s+can\s+you\s+do\??$|^help\??$"),
     (QuestionIntent.not_manufacturable,
      r"not\s+manufactur|un\s?manufactur|can'?t\s+(be\s+)?(made|manufactur|mould|mold|print)"
      r"|why.*(blocked|blocker|not viable|fail\b)"),
@@ -66,6 +70,7 @@ def answer_from_report(report: DFMReport, question: str) -> tuple[str, List[str]
     """(answer_text, referenced_rule_ids) for a question about the report."""
     intent = classify_intent(question)
     handler = {
+        QuestionIntent.small_talk: _answer_small_talk,
         QuestionIntent.not_manufacturable: _answer_not_manufacturable,
         QuestionIntent.failed_rules: _answer_failed_rules,
         QuestionIntent.improve: _answer_improve,
@@ -81,12 +86,44 @@ def answer_from_report(report: DFMReport, question: str) -> tuple[str, List[str]
 # Answers
 # ---------------------------------------------------------------------------
 
+def _answer_small_talk(report: DFMReport) -> tuple[str, List[str]]:
+    return (
+        "Hello. I am tied to this completed DFM report, so I can help with "
+        "failed rules, score impact, process choice, assumptions, and design improvements. "
+        "Try asking: \"Which rules failed?\" or \"How can I improve this part?\"",
+        [],
+    )
+
 def _answer_not_manufacturable(report: DFMReport) -> tuple[str, List[str]]:
     blocked = [p for p in report.processes if not p.manufacturable]
     if not blocked:
         viable = ", ".join(
             f"{_label(p.process)} ({p.score:.0f}/100)" for p in report.processes
         )
+        failed = [
+            (process, rule)
+            for process in report.processes
+            for rule in process.rule_results
+            if rule.status == RuleStatus.failed
+        ]
+        if failed:
+            lines = [
+                f"This part is manufacturable in the DFM engine because no rule returned a Blocker. "
+                f"It still needs review: {viable}.",
+                "",
+                "The main failed checks are:",
+            ]
+            rule_ids: List[str] = []
+            for process, rule in sorted(failed, key=lambda item: -item[1].score_impact)[:5]:
+                rule_ids.append(rule.rule_id)
+                severity = rule.severity.value if rule.severity else "issue"
+                lines.append(
+                    f"- `{rule.rule_id}` {_label(process.process)} / {rule.name}: "
+                    f"{severity}, -{rule.score_impact:.1f} pts. {rule.summary}"
+                )
+            lines.append("")
+            lines.append("Only Blocker findings make a process not viable; Major findings reduce the score.")
+            return "\n".join(lines), _dedupe(rule_ids)
         return (
             f"This part **is** manufacturable as designed: {viable}. "
             "No rule returned a Blocker.",

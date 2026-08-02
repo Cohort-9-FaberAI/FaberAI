@@ -7,13 +7,25 @@ import numpy as np
 from geometry.models import BoundingBox
 
 
+def _bbox_modules():
+    try:
+        from OCC.Core.Bnd import Bnd_Box
+        from OCC.Core.BRepBndLib import brepbndlib
+
+        return Bnd_Box, brepbndlib.Add
+    except (ImportError, ModuleNotFoundError):
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+
+        return Bnd_Box, BRepBndLib.Add_s
+
+
 def compute_bbox_occ(shape_occ) -> BoundingBox:
     """Axis-aligned bounding box of a TopoDS_Shape via Bnd_Box/BRepBndLib."""
-    from OCC.Core.Bnd import Bnd_Box
-    from OCC.Core.BRepBndLib import brepbndlib
+    Bnd_Box, add_shape_to_box = _bbox_modules()
 
     box = Bnd_Box()
-    brepbndlib.Add(shape_occ, box)
+    add_shape_to_box(shape_occ, box)
     xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
     return BoundingBox(
         min_corner=np.array([xmin, ymin, zmin]),

@@ -21,9 +21,10 @@ export default function IssueAccordion({
   emptyLabel,
 }: IssueAccordionProps) {
   const [open, setOpen] = useState(false)
+  const preview = items[0]?.message ?? emptyLabel ?? 'No findings in this category yet.'
 
   return (
-    <div className="issue-accordion">
+    <div className={`issue-accordion${open ? ' is-open' : ''}`}>
       <button
         type="button"
         className="issue-accordion-header"
@@ -35,6 +36,7 @@ export default function IssueAccordion({
         <span className="issue-accordion-count">{count}</span>
         <span className="issue-accordion-chevron">&#9662;</span>
       </button>
+      {!open && <p className="issue-accordion-preview">{preview}</p>}
       {open && (
         <ul className="issue-accordion-list">
           {items.length === 0 && emptyLabel && (

@@ -101,12 +101,79 @@ class TestStoredReportEndpoint:
         with patch.object(main, "get_analysis_by_id", return_value=None):
             assert client.get("/analysis/nope/dfm").status_code == 404
 
+    def test_409_when_the_analysis_is_not_completed(self, client, step_geometry):
+        report = run_dfm_analysis(step_geometry).model_dump(mode="json")
+        with patch.object(main, "get_analysis_by_id",
+                          return_value={
+                              "status": "processing",
+                              "results_json": {"dfm_report": report},
+                          }):
+            response = client.get("/analysis/abc-123/dfm")
+        assert response.status_code == 409
+        assert "only answers from completed" in response.json()["error"]["message"]
+
     def test_404_when_the_analysis_predates_the_rule_engine(self, client):
         with patch.object(main, "get_analysis_by_id",
                           return_value={"results_json": {"geometry_data": {}}}):
             response = client.get("/analysis/old/dfm")
         assert response.status_code == 404
         assert "no DFM report" in response.json()["error"]["message"]
+
+
+class TestReportDownloadEndpoint:
+    def test_downloads_a_stored_pdf_report(self, client, step_geometry):
+        report = run_dfm_analysis(step_geometry).model_dump(mode="json")
+        stored = {
+            "status": "completed",
+            "results_json": {
+                "analysis_id": "abc-123",
+                "filename": "bracket.stl",
+                "status": "completed",
+                "manufacturability_score": report["manufacturability_score"],
+                "summary": "Stored report summary.",
+                "dfm_report": report,
+            },
+        }
+        with patch.object(main, "get_analysis_by_id", return_value=stored):
+            response = client.get("/analysis/abc-123/report.pdf?include_comparison=true")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert "bracket-dfm-report.pdf" in response.headers["content-disposition"]
+        assert response.content.startswith(b"%PDF-1.4")
+        assert b"Manufacturability report" in response.content
+
+    def test_downloads_an_inline_pdf_report(self, client, step_geometry):
+        report = run_dfm_analysis(step_geometry).model_dump(mode="json")
+        response = client.post(
+            "/analysis/report.pdf",
+            json={
+                "include_comparison": False,
+                "analysis": {
+                    "analysis_id": "abc-123",
+                    "filename": "inline.stl",
+                    "status": "completed",
+                    "manufacturability_score": report["manufacturability_score"],
+                    "summary": "Inline report summary.",
+                    "dfm_report": report,
+                    "issues": [],
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert "inline-dfm-report.pdf" in response.headers["content-disposition"]
+        assert response.content.startswith(b"%PDF-1.4")
+
+    def test_rejects_inline_pdf_without_completed_analysis(self, client):
+        response = client.post(
+            "/analysis/report.pdf",
+            json={"analysis": {"filename": "part.stl", "status": "processing"}},
+        )
+
+        assert response.status_code == 409
+        assert "completed analysis" in response.json()["error"]["message"]
 
 
 class TestAIAskEndpoint:
@@ -147,6 +214,21 @@ class TestAIAskEndpoint:
             })
         assert response.status_code == 409
         assert "does not compute it" in response.json()["error"]["message"]
+
+    def test_refuses_to_answer_from_a_processing_analysis(self, client, stl_geometry):
+        stored = {
+            "status": "processing",
+            "results_json": {
+                "dfm_report": self._report(stl_geometry, process=ProcessType.printing),
+                "geometry_data": stl_geometry,
+            },
+        }
+        with patch.object(main, "get_analysis_by_id", return_value=stored):
+            response = client.post("/ai/ask", json={
+                "question": "Which rules failed?", "analysis_id": "abc-123",
+            })
+        assert response.status_code == 409
+        assert "not completed" in response.json()["error"]["message"]
 
     def test_requires_a_report_or_an_analysis_id(self, client):
         response = client.post("/ai/ask", json={"question": "Why?"})

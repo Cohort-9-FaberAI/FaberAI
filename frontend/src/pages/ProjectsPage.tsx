@@ -66,6 +66,7 @@ export default function ProjectsPage() {
         <SearchBar value={query} onChange={setQuery} placeholder="Search projects..." />
         <button
           type="button"
+          className="list-add-btn"
           onClick={() => {
             setEditTarget(null)
             setShowCreate(true)

@@ -59,6 +59,12 @@ class AnalysisResult(BaseModel):
     molding_manufacturable: Optional[bool] = None
     molding_score: Optional[float] = None
     summary: Optional[str] = None
+    # Public URL loadable by the frontend 3D preview. For STL uploads this is
+    # the original file URL; for STEP uploads this is a generated STL preview.
+    file_url: Optional[str] = None
+    # Original uploaded CAD file URL, preserved when file_url points to a
+    # converted preview mesh.
+    source_file_url: Optional[str] = None
     part_metadata: Optional[PartMetadata] = None
     issues: List[Issue] = []
     # Raw geometry engine output — passed through as-is, no nested validation.

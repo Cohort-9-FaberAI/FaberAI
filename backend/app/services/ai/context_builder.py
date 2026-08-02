@@ -12,13 +12,18 @@ this module runs geometry or evaluates a rule.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from dfm.models import DFMReport, ProcessReport, RuleResult, RuleStatus
 
 # Findings per rule handed to the model. The full list stays in the report;
 # this keeps the prompt bounded on parts with hundreds of thin-wall regions.
 MAX_FINDINGS_PER_RULE = 5
+MAX_RECOMMENDATIONS_PER_RULE = 5
+MAX_ASSUMPTIONS_PER_SCOPE = 8
+MAX_INPUT_WARNINGS = 8
+MAX_PRINT_ORIENTATION_CANDIDATES = 6
+MAX_FEATURE_COUNT_FIELDS = 12
 
 
 def build_ai_context(
@@ -38,7 +43,21 @@ def build_ai_context(
         },
         "processes": [_process_context(p) for p in report.processes],
         "recommendation": report.recommendation.model_dump(exclude_none=True),
-        "input_warnings": report.warnings,
+        "input_warnings": _bounded_strings(report.warnings, MAX_INPUT_WARNINGS),
+        "context_policy": {
+            "source": "completed_dfm_report",
+            "raw_geometry_arrays_included": False,
+            "rules": [
+                "The assistant may explain existing measurements and verdicts only.",
+                "The assistant must not compute geometry or rerun DFM rules.",
+                "Large per-element arrays are replaced with aggregate facts and counts.",
+            ],
+            "limits": {
+                "max_findings_per_rule": MAX_FINDINGS_PER_RULE,
+                "max_recommendations_per_rule": MAX_RECOMMENDATIONS_PER_RULE,
+                "max_print_orientation_candidates": MAX_PRINT_ORIENTATION_CANDIDATES,
+            },
+        },
     }
 
     if geometry:
@@ -58,7 +77,7 @@ def _process_context(process: ProcessReport) -> Dict[str, Any]:
         "orientation_assumed": process.orientation_assumed,
         "blocking_rules": process.blocking_rule_ids,
         "not_assessed_rules": process.not_assessed_rule_ids,
-        "assumptions": process.assumptions,
+        "assumptions": _bounded_strings(process.assumptions, MAX_ASSUMPTIONS_PER_SCOPE),
         "sub_scores": [
             {
                 "name": s.sub_score.value,
@@ -86,11 +105,20 @@ def _rule_context(rule: RuleResult) -> Dict[str, Any]:
     }
 
     if rule.recommendations:
-        entry["recommendations"] = rule.recommendations
+        entry["recommendations"] = _bounded_strings(
+            rule.recommendations, MAX_RECOMMENDATIONS_PER_RULE
+        )
+        if len(rule.recommendations) > MAX_RECOMMENDATIONS_PER_RULE:
+            entry["recommendations_truncated"] = (
+                f"Showing {MAX_RECOMMENDATIONS_PER_RULE} of "
+                f"{len(rule.recommendations)} recommendations."
+            )
     if rule.thresholds_used:
         entry["thresholds_used"] = rule.thresholds_used
     if rule.assumptions:
-        entry["assumptions"] = rule.assumptions
+        entry["assumptions"] = _bounded_strings(
+            rule.assumptions, MAX_ASSUMPTIONS_PER_SCOPE
+        )
     if rule.status in (RuleStatus.not_assessed, RuleStatus.suppressed, RuleStatus.error):
         entry["not_assessed_reason"] = rule.not_assessed_reason
         if rule.missing_inputs:
@@ -184,10 +212,13 @@ def _geometry_facts(geometry: Dict[str, Any]) -> Dict[str, Any]:
                     "axis": o.get("axis_label"),
                     "overhang_ratio": o.get("overhang_ratio"),
                 }
-                for o in (orientations.get("orientations") or [])
+                for o in (orientations.get("orientations") or [])[:MAX_PRINT_ORIENTATION_CANDIDATES]
                 if isinstance(o, dict)
             ],
         }
+        all_candidates = orientations.get("orientations") or []
+        if len(all_candidates) > MAX_PRINT_ORIENTATION_CANDIDATES:
+            facts["print_orientations"]["candidate_count"] = len(all_candidates)
 
     counts = {
         name: len(geometry[name])
@@ -195,9 +226,14 @@ def _geometry_facts(geometry: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(geometry.get(name), list)
     }
     if counts:
-        facts["feature_counts"] = counts
+        facts["feature_counts"] = dict(list(counts.items())[:MAX_FEATURE_COUNT_FIELDS])
 
     return facts
+
+
+def _bounded_strings(values: Iterable[str], limit: int) -> List[str]:
+    """Keep human text fields useful without letting them dominate the prompt."""
+    return [str(value) for value in list(values or [])[:limit]]
 
 
 def summarise_failures(report: DFMReport) -> List[str]:

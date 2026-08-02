@@ -9,16 +9,22 @@ export function useTaskPolling(
   taskId: string | null,
   analysisId: string | null | undefined,
   onResult?: (data: Record<string, unknown>) => void,
+  onError?: (error: Error) => void,
   intervalMs = DEFAULT_INTERVAL_MS,
   maxRetries = DEFAULT_MAX_RETRIES,
 ) {
   const cancelledRef = useRef(false)
   const onResultRef = useRef(onResult)
+  const onErrorRef = useRef(onError)
   const retryCountRef = useRef(0)
 
   useEffect(() => {
     onResultRef.current = onResult
   }, [onResult])
+
+  useEffect(() => {
+    onErrorRef.current = onError
+  }, [onError])
 
   useEffect(() => {
     cancelledRef.current = false
@@ -42,10 +48,13 @@ export function useTaskPolling(
         }
 
         setTimeout(poll, intervalMs)
-      } catch {
+      } catch (err) {
         if (cancelledRef.current) return
         retryCountRef.current++
-        if (retryCountRef.current >= maxRetries) return
+        if (retryCountRef.current >= maxRetries) {
+          onErrorRef.current?.(err instanceof Error ? err : new Error('Task polling failed.'))
+          return
+        }
         setTimeout(poll, intervalMs)
       }
     }

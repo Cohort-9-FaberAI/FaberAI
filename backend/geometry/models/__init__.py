@@ -15,6 +15,7 @@ from .cavity import Cavity
 from .fillet import Fillet
 from .rib import Rib
 from .chamfer import Chamfer
+from .overhang import Overhang
 
 
 __all__ = [
@@ -22,7 +23,6 @@ __all__ = [
     "BoundingBox", "GeometryModel",
     "Face", "Edge", "WallSample",
     "MeshQuality", "check_mesh_quality",
-    "Edge", "Hole", "Boss", "Cavity",
-    "Fillet", "Rib", "Chamfer"
+    "Hole", "Boss", "Cavity",
+    "Fillet", "Rib", "Chamfer", "Overhang"
 ]
-

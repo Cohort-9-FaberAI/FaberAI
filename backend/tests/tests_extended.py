@@ -143,10 +143,11 @@ class TestTaskStatusEdgeCases:
         body = response.json()
         assert body["status"] == "PENDING"
 
-    def test_success_task_with_no_db_record_returns_404(self, client):
+    def test_success_task_with_no_db_record_returns_worker_payload(self, client):
         """
-        If Celery reports SUCCESS but no record exists in Supabase,
-        the endpoint must return 404, not 500.
+        If Celery reports SUCCESS but no record exists in Supabase, the
+        endpoint should still return a terminal response from the worker
+        payload so the UI does not keep polling forever.
         """
         mock_result = MagicMock()
         mock_result.state = "SUCCESS"
@@ -156,9 +157,11 @@ class TestTaskStatusEdgeCases:
              patch.object(main, "get_analysis_by_id", return_value=None):
             response = client.get("/tasks/some-task-id")
 
-        assert response.status_code == 404
-        error = response.json()["error"]
-        assert error["type"] == "http_error"
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "SUCCESS"
+        assert body["result"]["mock_score"] == 85
+        assert "warning" in body
 
     def test_failed_task_returns_failure_status(self, client):
         """
