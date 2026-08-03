@@ -127,7 +127,7 @@ def _svg_to_pdf(path_str: str, x0: float, y0: float, scale: float, view_height: 
 
         if active_cmd in ('m', 'M'):
             x = float(tokens[i])
-                y = float(tokens[i+1])
+            y = float(tokens[i+1])
             i += 2
             if active_cmd == 'm':
                 cur_x += x
@@ -140,7 +140,7 @@ def _svg_to_pdf(path_str: str, x0: float, y0: float, scale: float, view_height: 
             active_cmd = 'l' if active_cmd == 'm' else 'L'
         elif active_cmd in ('l', 'L'):
             x = float(tokens[i])
-                y = float(tokens[i+1])
+            y = float(tokens[i+1])
             i += 2
             if active_cmd == 'l':
                 cur_x += x
@@ -151,46 +151,54 @@ def _svg_to_pdf(path_str: str, x0: float, y0: float, scale: float, view_height: 
             cmds.append(f"{px} {py} l")
         elif active_cmd in ('h', 'H'):
             x = float(tokens[i])
-                i += 1
+            i += 1
             cur_x = cur_x + x if active_cmd == 'h' else x
             px, py = to_pdf(cur_x, cur_y)
             cmds.append(f"{px} {py} l")
         elif active_cmd in ('v', 'V'):
             y = float(tokens[i])
-                i += 1
+            i += 1
             cur_y = cur_y + y if active_cmd == 'v' else y
             px, py = to_pdf(cur_x, cur_y)
             cmds.append(f"{px} {py} l")
         elif active_cmd in ('c', 'C'):
             x1 = float(tokens[i])
-                y1 = float(tokens[i+1])
+            y1 = float(tokens[i+1])
             x2 = float(tokens[i+2])
-                y2 = float(tokens[i+3])
+            y2 = float(tokens[i+3])
             x3 = float(tokens[i+4])
-                y3 = float(tokens[i+5])
+            y3 = float(tokens[i+5])
             i += 6
             if active_cmd == 'c':
                 x1 += cur_x
-                y1 += cur_y; x2 += cur_x; y2 += cur_y; x3 += cur_x; y3 += cur_y
+                y1 += cur_y
+                x2 += cur_x
+                y2 += cur_y
+                x3 += cur_x
+                y3 += cur_y
             px1, py1 = to_pdf(x1, y1)
-                px2, py2 = to_pdf(x2, y2); px3, py3 = to_pdf(x3, y3)
+            px2, py2 = to_pdf(x2, y2)
+            px3, py3 = to_pdf(x3, y3)
             cmds.append(f"{px1} {py1} {px2} {py2} {px3} {py3} c")
             cur_x, cur_y = x3, y3
         elif active_cmd in ('q', 'Q'):
             qx = float(tokens[i])
-                qy = float(tokens[i+1])
+            qy = float(tokens[i+1])
             x3 = float(tokens[i+2])
-                y3 = float(tokens[i+3])
+            y3 = float(tokens[i+3])
             i += 4
             if active_cmd == 'q':
                 qx += cur_x
-                qy += cur_y; x3 += cur_x; y3 += cur_y
+                qy += cur_y
+                x3 += cur_x
+                y3 += cur_y
             x1 = cur_x + 2.0 / 3.0 * (qx - cur_x)
-                y1 = cur_y + 2.0 / 3.0 * (qy - cur_y)
+            y1 = cur_y + 2.0 / 3.0 * (qy - cur_y)
             x2 = x3 + 2.0 / 3.0 * (qx - x3)
-                y2 = y3 + 2.0 / 3.0 * (qy - y3)
+            y2 = y3 + 2.0 / 3.0 * (qy - y3)
             px1, py1 = to_pdf(x1, y1)
-                px2, py2 = to_pdf(x2, y2); px3, py3 = to_pdf(x3, y3)
+            px2, py2 = to_pdf(x2, y2)
+            px3, py3 = to_pdf(x3, y3)
             cmds.append(f"{px1} {py1} {px2} {py2} {px3} {py3} c")
             cur_x, cur_y = x3, y3
         else:
