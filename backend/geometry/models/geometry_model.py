@@ -48,6 +48,18 @@ class GeometryModel:
     chamfers: list = field(default_factory=list)
     overhangs: list = field(default_factory=list)
 
+    # FIX: was previously set by dispatcher.py (model.overhangs = ...) but
+    # never declared here. On the STL path, where dispatcher.py never sets
+    # it at all, run_geometry_engine's `model.overhangs` read would raise
+    # AttributeError. Declaring it here with a default fixes that for both
+    # paths, matching the same pattern as fillets/ribs/chamfers above.
+    overhangs: list = field(default_factory=list)
+
+    # Undercuts (populated by geometry.features.undercuts on the STEP path,
+    # for a single given pull/parting direction — see pull_direction below).
+    undercuts: list = field(default_factory=list)
+    pull_direction: Optional[np.ndarray] = None  # the mold-opening axis undercuts were computed against
+
     # False when the source mesh has holes/damage that couldn't be
     # auto-repaired — volume_mm3 (and to a lesser extent center_mass)
     # should NOT be trusted for DFM scoring when this is False.
@@ -61,7 +73,6 @@ class GeometryModel:
     raw: Any = field(default=None, repr=False)
     raw_occ: Any = field(default=None, repr=False)
     raw_b123: Any = field(default=None, repr=False)
-    
 
     # Additional data structures for the faces, edges, and wall samples of the model.
     faces: list[Face] = field(default_factory=list)
@@ -116,5 +127,9 @@ class GeometryModel:
             "num_fillets": len(self.fillets),
             "num_chamfers": len(self.chamfers),
             "num_ribs": len(self.ribs),
+            "num_overhangs": len(self.overhangs),
+            "num_undercuts": len(self.undercuts),
+            "pull_direction": self.pull_direction.tolist()
+            if self.pull_direction is not None
+            else None,
         }
-    
