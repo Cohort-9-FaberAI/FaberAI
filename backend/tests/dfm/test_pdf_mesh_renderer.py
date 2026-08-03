@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from app.services.pdf_mesh_renderer import generate_mesh_snapshots
 

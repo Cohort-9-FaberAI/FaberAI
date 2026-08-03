@@ -138,7 +138,6 @@ def render_mesh_snapshot(
     bound_radius = max(bound_radius, 1e-5)
 
     theta = np.radians(azimuth)
-    phi = np.radians(elevation)
 
     # In mechanical engineering CAD, Z is vertical height. Rotate azimuth around Z axis (turntable yaw)
     R_z = np.array([
