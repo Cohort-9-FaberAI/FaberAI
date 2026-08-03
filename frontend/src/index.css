@@ -4704,6 +4704,46 @@ select option {
   background: rgba(255, 255, 255, 0.15);
 }
 
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalScaleOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
 /* Workspace Modal Picker */
 .workspace-modal-overlay {
   position: fixed;
@@ -4715,6 +4755,11 @@ select option {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workspace-modal-overlay.closing {
+  animation: modalFadeOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .workspace-modal-card {
@@ -4728,6 +4773,11 @@ select option {
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workspace-modal-overlay.closing .workspace-modal-card {
+  animation: modalScaleOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .workspace-modal-header {
