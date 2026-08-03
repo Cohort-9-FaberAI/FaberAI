@@ -18,6 +18,7 @@ from core.workers import celery_app, extract_geometry_task, _upload_preview_stl_
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
 from app.services.ai import AIAnswer, answer_dfm_question
+from app.services.dfm_knowledge import KnowledgeAnswer, answer_dfm_knowledge_question
 from app.services.report_pdf import build_report_pdf, report_pdf_filename
 from app.services.storage import upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
@@ -725,6 +726,43 @@ def ask_faber_ai(request: AIAskRequest):
         question=request.question,
         geometry=geometry if isinstance(geometry, dict) else None,
         analysis_id=request.analysis_id,
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# DFM reference-standards knowledge base (RAG over ASME etc.)
+# ---------------------------------------------------------------------------
+
+class KnowledgeAskRequest(BaseModel):
+    """Ask a general DFM/GD&T question against the ingested reference standards.
+
+    Unlike /ai/ask, this is not scoped to a specific part's report — it's a
+    lookup against the standards themselves (e.g. "what's the max positional
+    tolerance for a clearance hole?").
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1)
+    top_k: int = Field(default=5, ge=1, le=20)
+    source: Optional[str] = Field(
+        default=None, description='Restrict to one ingested source, e.g. "ASME Y14.5-2018".'
+    )
+
+
+@app.post("/dfm/knowledge/ask", response_model=KnowledgeAnswer, tags=["AI"])
+def ask_dfm_knowledge(request: KnowledgeAskRequest):
+    """Answer a DFM/GD&T question from the ingested reference standards.
+
+    Retrieves the most similar chunks from dfm_reference_docs (populated by
+    app/services/dfm_knowledge/ingest.py) and answers from them only — it
+    never reasons about a specific uploaded part.
+    """
+    return answer_dfm_knowledge_question(
+        question=request.question,
+        top_k=request.top_k,
+        source=request.source,
     )
 
 
