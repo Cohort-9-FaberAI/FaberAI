@@ -991,7 +991,7 @@ a {
   min-width: 92px;
 }
 
-.analysis-report-summary span {
+.analysis-report-summary > div > span:first-child {
   display: block;
   margin-bottom: 2px;
   color: rgba(255, 255, 255, 0.68);
@@ -1001,6 +1001,13 @@ a {
 .analysis-report-summary strong {
   color: #fff;
   font-size: 24px;
+}
+
+.analysis-report-summary strong span {
+  display: inline !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  margin: 0 !important;
 }
 
 .analysis-report-summary p {
@@ -3173,7 +3180,7 @@ select option {
   font-size: 11px;
 }
 
-.viewer-panel-header span {
+.viewer-panel-header > div > span:first-child {
   display: block;
 }
 
@@ -3190,10 +3197,21 @@ select option {
 }
 
 .viewer-score {
-  padding: 5px 10px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(30, 138, 92, 0.16);
-  color: var(--toolpath);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+}
+
+.viewer-score span {
+  display: inline !important;
+  line-height: 1 !important;
+  margin: 0 !important;
 }
 
 .extra-info-form,
@@ -4686,6 +4704,46 @@ select option {
   background: rgba(255, 255, 255, 0.15);
 }
 
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modalScaleOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
 /* Workspace Modal Picker */
 .workspace-modal-overlay {
   position: fixed;
@@ -4697,6 +4755,11 @@ select option {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workspace-modal-overlay.closing {
+  animation: modalFadeOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .workspace-modal-card {
@@ -4710,6 +4773,11 @@ select option {
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8);
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workspace-modal-overlay.closing .workspace-modal-card {
+  animation: modalScaleOut 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .workspace-modal-header {
@@ -5795,7 +5863,7 @@ select option {
     inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
 }
 
-:root[data-theme='light'] .analysis-report-summary span {
+:root[data-theme='light'] .analysis-report-summary > div > span:first-child {
   color: var(--mist) !important;
   font-weight: 600 !important;
 }
@@ -5805,6 +5873,13 @@ select option {
   font-weight: 800 !important;
 }
 
+:root[data-theme='light'] .analysis-report-summary strong span {
+  display: inline !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  margin: 0 !important;
+}
+
 :root[data-theme='light'] .analysis-report-summary p {
   color: var(--porcelain, #0b136b) !important;
   font-weight: 600 !important;
@@ -5812,11 +5887,21 @@ select option {
 
 /* Viewer Score Badge ("85/100" in Live Inspection & 3D Preview) */
 :root[data-theme='light'] .viewer-score {
-  background: rgba(8, 88, 244, 0.12) !important;
-  color: var(--ferrule, #0858f4) !important;
-  border: 1px solid rgba(8, 88, 244, 0.35) !important;
-  font-weight: 800 !important;
-  box-shadow: 0 2px 8px rgba(8, 88, 244, 0.1) !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 88, 244, 0.08) !important;
+  color: rgba(11, 19, 107, 0.65) !important;
+  border: 1px solid rgba(8, 88, 244, 0.25) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(8, 88, 244, 0.06) !important;
+  white-space: nowrap;
+}
+
+:root[data-theme='light'] .viewer-score span {
+  display: inline !important;
+  line-height: 1 !important;
+  margin: 0 !important;
 }
 
 /* Login Visual Readout Badges in Light Mode */
@@ -5862,7 +5947,7 @@ select option {
 }
 
 /* 3D Viewer Panel Header & Fullscreen Preview Popup Headers */
-:root[data-theme='light'] .viewer-panel-header span,
+:root[data-theme='light'] .viewer-panel-header > div > span:first-child,
 :root[data-theme='light'] .fullscreen-subtitle {
   color: var(--mist) !important;
   font-weight: 600 !important;

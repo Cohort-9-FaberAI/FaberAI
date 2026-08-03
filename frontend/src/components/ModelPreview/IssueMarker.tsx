@@ -10,12 +10,18 @@ type IssueMarkerProps = {
   boundingBox?: Box3
   type: 'BOUNDING BOX' | 'POINT'
   color: string
+  overrideColor?: string
+  radius?: number
+  renderAsSphere?: boolean
   issue: ManufacturabilityIssue
 }
 
 export default function IssueMarker({
   position,
   color,
+  overrideColor,
+  radius,
+  renderAsSphere,
   issue,
   type,
   boundingBox,
@@ -25,7 +31,7 @@ export default function IssueMarker({
   const context = useContext(ModelContext)
 
   useFrame(({ camera }) => {
-    if (type == 'POINT') meshRef.current?.lookAt(camera.position)
+    if (type == 'POINT' && !renderAsSphere) meshRef.current?.lookAt(camera.position)
   })
 
   //set this as the selected issue when hovered
@@ -45,13 +51,15 @@ export default function IssueMarker({
       }}
       onPointerOut={() => setHovered(false)}
     >
-      {type == 'POINT' ? (
-        <circleGeometry args={[POINT_MARKER_RADIUS, 32]} />
+      {renderAsSphere ? (
+        <sphereGeometry args={[radius ?? 0.22, 24, 24]} />
+      ) : type == 'POINT' ? (
+        <circleGeometry args={[radius ?? POINT_MARKER_RADIUS, 32]} />
       ) : (
         <boxGeometry args={boundingBox?.getSize(new Vector3()).toArray()} />
       )}
 
-      <meshBasicMaterial color={hovered ? 'yellow' : color} />
+      <meshBasicMaterial color={hovered ? '#ffff00' : (overrideColor ?? color)} />
     </mesh>
   )
 }

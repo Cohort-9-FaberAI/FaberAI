@@ -1,5 +1,7 @@
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store'
+import { useEffect, useState } from 'react'
 
 interface AddTabModalProps {
   isOpen: boolean
@@ -12,12 +14,31 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
   const openTab = useStore((s) => s.openTab)
   const openTabIds = useStore((s) => s.openTabIds)
 
-  if (!isOpen) return null
+  const [shouldRender, setShouldRender] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShouldRender(true)
+
+      setIsClosing(false)
+    } else if (shouldRender) {
+      setIsClosing(true)
+      const timer = setTimeout(() => {
+        setShouldRender(false)
+        setIsClosing(false)
+      }, 200) // matches the CSS fade-out animation duration
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen, shouldRender])
+
+  if (!shouldRender) return null
 
   const sessionFiles = files.filter((f) => f.taskId !== 'dev-manual')
 
-  return (
-    <div className="workspace-modal-overlay" onClick={onClose}>
+  const modalContent = (
+    <div className={`workspace-modal-overlay${isClosing ? ' closing' : ''}`} onClick={onClose}>
       <div className="workspace-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="workspace-modal-header">
           <h2>Select CAD File to Open</h2>
@@ -106,4 +127,6 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }

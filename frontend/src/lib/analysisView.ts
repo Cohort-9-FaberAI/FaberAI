@@ -129,3 +129,74 @@ export function getDisplayIssues(analysis: AnalysisResult | null): DisplayIssue[
     ? analysis.issues.filter((issue) => isVisibleIssueSeverity(issue.severity)).map(fromLegacyIssue)
     : []
 }
+
+export function getMoldingScore(analysis: AnalysisResult | null): number | null {
+  if (!analysis) return null
+  if (typeof analysis.molding_score === 'number') return analysis.molding_score
+  const report = getRecord(analysis.dfm_report)
+  if (typeof report?.molding_score === 'number') return report.molding_score
+  const processes = Array.isArray(report?.processes) ? report.processes : []
+  for (const p of processes) {
+    const pRec = getRecord(p)
+    if (pRec?.process === 'injection_molding' || pRec?.process === 'molding') {
+      const s = getNumber(pRec.score)
+      if (s !== null) return s
+    }
+  }
+  return null
+}
+
+export function getPrintingScore(analysis: AnalysisResult | null): number | null {
+  if (!analysis) return null
+  if (typeof analysis.printing_score === 'number') return analysis.printing_score
+  const report = getRecord(analysis.dfm_report)
+  if (typeof report?.printing_score === 'number') return report.printing_score
+  const processes = Array.isArray(report?.processes) ? report.processes : []
+  for (const p of processes) {
+    const pRec = getRecord(p)
+    if (pRec?.process === 'printing' || pRec?.process === '3d_printing') {
+      const s = getNumber(pRec.score)
+      if (s !== null) return s
+    }
+  }
+  return null
+}
+
+export function getProcessIssues(
+  analysis: AnalysisResult | null,
+  processType: 'injection_molding' | 'printing',
+): DisplayIssue[] {
+  if (!analysis) return []
+
+  const report = getRecord(analysis.dfm_report)
+  const processes = Array.isArray(report?.processes) ? report.processes : []
+  const matchingProcesses = processes.filter((proc) => {
+    const pRec = getRecord(proc)
+    if (!pRec?.process) return false
+    if (processType === 'injection_molding') {
+      return pRec.process === 'injection_molding' || pRec.process === 'molding'
+    }
+    return pRec.process === 'printing' || pRec.process === '3d_printing'
+  })
+
+  const reportIssues = matchingProcesses.flatMap((proc) => {
+    const processRecord = getRecord(proc)
+    const rules = Array.isArray(processRecord?.rule_results) ? processRecord.rule_results : []
+    return rules
+      .map((rule) => {
+        const ruleRecord = getRecord(rule)
+        return ruleRecord ? fromRuleResult(ruleRecord) : null
+      })
+      .filter((issue): issue is DisplayIssue => issue !== null)
+  })
+
+  if (reportIssues.length > 0) return reportIssues
+  return getDisplayIssues(analysis)
+}
+
+export function getScoreColor(score: number | null | undefined): string {
+  if (score === null || score === undefined || !Number.isFinite(score)) return 'var(--text-h)'
+  if (score >= 50) return '#66bb6a' // Green / Pro
+  if (score >= 30) return '#ffb74d' // Amber / Neutral
+  return '#ef5350' // Red / Fail
+}

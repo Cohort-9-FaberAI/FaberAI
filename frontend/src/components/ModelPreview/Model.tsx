@@ -38,6 +38,7 @@ export function Model() {
   const fileBuffer = context?.fileBuffer
   const onModelError = context?.onModelError
   const onModelLoaded = context?.onModelLoaded
+  const onGeometryLoaded = context?.onGeometryLoaded
   const onModelTransform = context?.onModelTransform
   const [geometry, setGeometry] = useState<BufferGeometry | undefined>(undefined)
   const { camera } = useThree()
@@ -57,6 +58,7 @@ export function Model() {
           if (cancelled) return
           onModelTransform?.(transform)
           setGeometry(geom)
+          onGeometryLoaded?.(geom)
           onModelLoaded?.()
         } catch {
           if (cancelled) return
@@ -73,6 +75,7 @@ export function Model() {
           if (cancelled) return
           onModelTransform?.(transform)
           setGeometry(geom)
+          onGeometryLoaded?.(geom)
           onModelLoaded?.()
         } catch {
           if (cancelled) return
@@ -85,7 +88,7 @@ export function Model() {
     return () => {
       cancelled = true
     }
-  }, [modelUrl, fileBuffer, onModelError, onModelLoaded, onModelTransform])
+  }, [modelUrl, fileBuffer, onModelError, onModelLoaded, onGeometryLoaded, onModelTransform])
 
   //Gives the camera an initial position along the bounding box of the mesh
   useEffect(() => {
