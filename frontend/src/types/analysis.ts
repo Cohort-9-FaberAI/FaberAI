@@ -59,6 +59,10 @@ export interface AnalysisResult {
   filename: string
   status: AnalysisStatus
   manufacturability_score: number
+  printing_score?: number | null
+  molding_score?: number | null
+  printing_manufacturable?: boolean | null
+  molding_manufacturable?: boolean | null
   summary: string
   file_url?: string
   source_file_url?: string

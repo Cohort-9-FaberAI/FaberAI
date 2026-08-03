@@ -8,6 +8,9 @@ import {
   asAnalysisResult,
   getAnalysisScore,
   getDisplayIssues,
+  getMoldingScore,
+  getPrintingScore,
+  getScoreColor,
   hasCompletedReport,
 } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
@@ -59,8 +62,8 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
         ]
 
   const showBoth = process === null
-  const moldingScore = score
-  const printingScore = score
+  const moldingScore = getMoldingScore(analysis) ?? score
+  const printingScore = getPrintingScore(analysis) ?? score
 
   if (!hasCompletedReport(analysis)) {
     return (
@@ -81,7 +84,11 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
       previewBuffer={fileBuffer}
       previewFilename={livePreviewFilename}
       viewerMeta={
-        score !== null ? <span className="viewer-score">{Math.round(score)}/100</span> : null
+        score !== null ? (
+          <span className="viewer-score">
+            <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
+          </span>
+        ) : null
       }
     >
       <section className="conclusion-score-panel" aria-label="Manufacturability verdict">
@@ -91,7 +98,7 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
           </div>
           {score !== null && (
             <div className="conclusion-score-summary">
-              <strong>{Math.round(score)}</strong>
+              <strong style={{ color: getScoreColor(score) }}>{Math.round(score)}</strong>
               <span>/100 overall</span>
             </div>
           )}

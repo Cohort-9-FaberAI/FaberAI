@@ -8,7 +8,10 @@ import { useStore } from '../../../store'
 import {
   asAnalysisResult,
   getAnalysisScore,
-  getDisplayIssues,
+  getMoldingScore,
+  getPrintingScore,
+  getProcessIssues,
+  getScoreColor,
   hasCompletedReport,
 } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
@@ -32,8 +35,15 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
   const livePreviewFilename = activeFile?.name ?? null
 
-  const issues = getDisplayIssues(analysis)
-  const score = getAnalysisScore(analysis)
+  const overallScore = getAnalysisScore(analysis)
+  const score =
+    activeTab === 'molding'
+      ? (getMoldingScore(analysis) ?? overallScore)
+      : (getPrintingScore(analysis) ?? overallScore)
+  const issues =
+    activeTab === 'molding'
+      ? getProcessIssues(analysis, 'injection_molding')
+      : getProcessIssues(analysis, 'printing')
   const loading =
     !isDevManual && activeFile?.status === 'processing' && taskId !== null && !analysis
   const error =
@@ -107,7 +117,9 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
           previewFilename={livePreviewFilename}
           viewerMeta={
             canContinue && score !== null ? (
-              <span className="viewer-score">{Math.round(score)}/100</span>
+              <span className="viewer-score">
+                <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
+              </span>
             ) : null
           }
         >
@@ -139,7 +151,15 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
               <div className="analysis-report-summary">
                 <div>
                   <span>Score</span>
-                  <strong>{score !== null ? `${Math.round(score)}/100` : 'Ready'}</strong>
+                  <strong>
+                    {score !== null ? (
+                      <>
+                        <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
+                      </>
+                    ) : (
+                      'Ready'
+                    )}
+                  </strong>
                 </div>
                 <p>{analysis?.summary ?? 'DFM report completed successfully.'}</p>
               </div>
