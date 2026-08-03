@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store'
 
@@ -16,7 +17,7 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
 
   const sessionFiles = files.filter((f) => f.taskId !== 'dev-manual')
 
-  return (
+  const modalContent = (
     <div className="workspace-modal-overlay" onClick={onClose}>
       <div className="workspace-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="workspace-modal-header">
@@ -106,4 +107,6 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
       </div>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
