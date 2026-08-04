@@ -73,22 +73,99 @@ def _edge_convexity(edge, n1, n2) -> bool:
     return None
 
 
+def _make_point(x, y, z):
+  class _Point:
+    def __init__(self, x, y, z):
+      self.X = x
+      self.Y = y
+      self.Z = z
+  return _Point(x, y, z)
+
+
+def _face_centroid(face):
+  # Prefer the face's native center method when available.
+  if hasattr(face, "center"):
+    try:
+      return face.center()
+    except Exception:
+      pass
+
+  # Fall back to OCC's surface centroid if the native face center fails.
+  try:
+    from OCC.Core.GProp import GProp_GProps
+    from OCC.Core.BRepGProp import brepgprop
+    surface_properties = brepgprop.SurfaceProperties
+  except (ImportError, ModuleNotFoundError):
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    surface_properties = BRepGProp.SurfaceProperties_s
+
+  try:
+    props = GProp_GProps()
+    topo_face = face.wrapped if hasattr(face, "wrapped") else face
+    surface_properties(topo_face, props)
+    centroid = props.CentreOfMass()
+    return _make_point(centroid.X(), centroid.Y(), centroid.Z())
+  except Exception:
+    pass
+
+  # Finally, fall back to the face's bounding box center.
+  try:
+    from OCC.Core.Bnd import Bnd_Box
+    from OCC.Core.BRepBndLib import brepbndlib
+  except (ImportError, ModuleNotFoundError):
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    brepbndlib = BRepBndLib.Add_s
+  else:
+    brepbndlib = brepbndlib.Add
+
+  try:
+    box = Bnd_Box()
+    topo_face = face.wrapped if hasattr(face, "wrapped") else face
+    brepbndlib(topo_face, box)
+    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+    return _make_point((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0)
+  except Exception:
+    return None
+
+
+def _face_normal(face, centroid):
+  if centroid is None:
+    return _make_point(0.0, 0.0, 0.0)
+
+  try:
+    normal = face.normal_at(centroid)
+    return normal
+  except Exception:
+    return _make_point(0.0, 0.0, 0.0)
+
+
 def build_face_graph(faces, shape_b123=None) -> nx.Graph:
   graph = nx.Graph()
   face_index = {}
 
   for i, face in enumerate(faces):
-    surface_info = classify_surface_occ(face)
-    centroid = face.center()
-    normal = face.normal_at(centroid)
+    try:
+      surface_info = classify_surface_occ(face)
+    except Exception:
+      surface_info = {"type": "UNKNOWN"}
+
+    centroid = _face_centroid(face)
+    normal = _face_normal(face, centroid)
+
     graph.add_node(
         i,
         face=face,
-        surface_type=surface_info["type"],
+        surface_type=surface_info.get("type", "UNKNOWN"),
         surface=surface_info,
-        area=face.area,
-        centroid=(centroid.X, centroid.Y, centroid.Z),
-        normal=(normal.X, normal.Y, normal.Z),
+        area=getattr(face, "area", 0.0),
+        centroid=(centroid.X, centroid.Y, centroid.Z)
+        if centroid is not None
+        else (0.0, 0.0, 0.0),
+        normal=(normal.X, normal.Y, normal.Z)
+        if normal is not None
+        else (0.0, 0.0, 0.0),
     )
     face_index[i] = face
 
