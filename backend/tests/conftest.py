@@ -29,3 +29,22 @@ def client():
 @pytest.fixture(autouse=True)
 def bypass_dependency_health_checks(monkeypatch):
     monkeypatch.setattr(main, "_check_analysis_queue", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def no_live_llm_calls(monkeypatch):
+    """Keep the unit suite offline and free.
+
+    ``app.database`` calls ``load_dotenv()`` at import time, so a developer .env
+    holding a real key would otherwise put every AI test on the live Claude API:
+    slow, billable, and non-deterministic. The AI benchmark under
+    ``tests/ai_eval`` is the one place that is allowed to call the provider, and
+    it reads the key itself rather than going through this fixture.
+    """
+    from app.services.ai.client import reset_llm_client
+
+    for name in ("FABERAI_AI_API_KEY", "ANTHROPIC_API_KEY", "FABERAI_AI_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    reset_llm_client()
+    yield
+    reset_llm_client()

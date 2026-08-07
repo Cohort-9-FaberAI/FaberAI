@@ -191,12 +191,16 @@ class TestLLMPath:
     def test_unconfigured_client_answers_deterministically(self, blocked_report, monkeypatch):
         monkeypatch.delenv("FABERAI_AI_API_KEY", raising=False)
         monkeypatch.delenv("FABERAI_AI_BASE_URL", raising=False)
+        # The client also accepts the SDK-standard name; a developer .env that
+        # only sets ANTHROPIC_API_KEY must not leak into this test.
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         answer = answer_dfm_question(blocked_report, "Which rules failed?", client=LLMClient())
         assert answer.mode == AnswerMode.deterministic
         assert answer.degraded_reason is None
 
     def test_unconfigured_client_raises_on_direct_use(self, monkeypatch):
         monkeypatch.delenv("FABERAI_AI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         with pytest.raises(LLMNotConfigured):
             LLMClient(base_url="", api_key="").complete([])
 
