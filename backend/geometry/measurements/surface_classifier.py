@@ -1,5 +1,8 @@
-from OCP.BRepAdaptor import BRepAdaptor_Surface
-from build123d import GeomType
+# OCP (OpenCASCADE) and build123d are imported inside classify_surface_occ
+# rather than at module scope. They are optional STEP-only dependencies, and
+# importing them here would make this module — and everything that imports it,
+# including face_graph — unimportable on installs without them.
+
 
 def _safe_bspline_properties(bspline) -> dict:
     props = {}
@@ -17,6 +20,9 @@ def classify_surface_occ(face) -> dict:
     geom_object = {}
 
     try:
+        from build123d import GeomType
+        from OCP.BRepAdaptor import BRepAdaptor_Surface
+
         occ_geom_surface = BRepAdaptor_Surface(face.wrapped)
 
         if geom_type == GeomType.PLANE:

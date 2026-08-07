@@ -1,16 +1,26 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import networkx as nx
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED
-from OCP.TopExp import TopExp
-from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
-from OCP.TopoDS import TopoDS
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.GeomAbs import (GeomAbs_Line, GeomAbs_Circle, GeomAbs_Ellipse,GeomAbs_BSplineCurve, GeomAbs_BezierCurve,)
-from OCP.gp import gp_Pnt, gp_Vec
 import numpy as np
+
 from .surface_classifier import classify_surface_occ
-from build123d import Edge
+
+if TYPE_CHECKING:  # annotation only — never imported at runtime
+  from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+# OCP (OpenCASCADE) and build123d are imported inside the functions that need
+# them rather than at module scope, matching the pattern already used in
+# _face_centroid below. Only the STEP path reaches the OCP-dependent branches,
+# and that path always has the optional CAD dependencies installed — deferring
+# the imports lets the pure-Python face-graph logic import and run without them.
+
 
 def compute_face_adjacency(shape_b123) -> TopTools_IndexedDataMapOfShapeListOfShape:
+  from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+  from OCP.TopExp import TopExp
+  from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 
   topo_shape = shape_b123.wrapped if hasattr(shape_b123, "wrapped") else shape_b123
   edge_face_map = TopTools_IndexedDataMapOfShapeListOfShape()
@@ -28,6 +38,16 @@ def _match_face_index(topo_face, face_index):
 def _edge_endpoints_and_curve_type(edge) -> dict:
   """Extract start point, end point, and curve type from a TopoDS_Edge."""
   try:
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import (
+      GeomAbs_BezierCurve,
+      GeomAbs_BSplineCurve,
+      GeomAbs_Circle,
+      GeomAbs_Ellipse,
+      GeomAbs_Line,
+    )
+    from OCP.gp import gp_Pnt
+
     adaptor = BRepAdaptor_Curve(edge)
     t_first = adaptor.FirstParameter()
     t_last = adaptor.LastParameter()
@@ -56,6 +76,10 @@ def _edge_endpoints_and_curve_type(edge) -> dict:
 
 def _edge_convexity(edge, n1, n2) -> bool:
   try:
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopAbs import TopAbs_REVERSED
+
     adaptor = BRepAdaptor_Curve(edge)
     t_mid = (adaptor.FirstParameter() + adaptor.LastParameter()) / 2.0
     pnt, tangent = gp_Pnt(), gp_Vec()
@@ -171,6 +195,11 @@ def build_face_graph(faces, shape_b123=None) -> nx.Graph:
 
   if shape_b123 is None:
     return graph
+
+  # Past this point the STEP/OpenCASCADE path is in use, so the optional CAD
+  # dependencies are guaranteed present.
+  from build123d import Edge
+  from OCP.TopoDS import TopoDS
 
   edge_face_map = compute_face_adjacency(shape_b123)
 
