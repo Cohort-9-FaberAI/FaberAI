@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { askFaberAI } from '../../lib/api'
 import { useStore } from '../../store'
 import BrandMark from './BrandMark'
-import { getPageQuestions } from './chatPresets'
+import { getPageQuestions, isChatEnabledForRoute } from './chatPresets'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -175,6 +175,7 @@ export default function ChatPanel() {
   const isOpen = useStore((s) => s.isOpen)
   const setOpen = useStore((s) => s.setOpen)
   const location = useLocation()
+  const chatEnabled = isChatEnabledForRoute(location.pathname)
   const files = useStore((s) => s.files)
   const activeFileId = useStore((s) => s.activeFileId)
   const latestFile = files.find((f) => f.id === activeFileId) ?? files[files.length - 1]
@@ -227,6 +228,13 @@ export default function ChatPanel() {
     if (!node) return
     node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' })
   }, [messages, isSending])
+
+  // Chat is only offered on the analysis workspace — force it closed if the
+  // user navigates away while it's open, rather than leaving it open behind
+  // a hidden panel.
+  useEffect(() => {
+    if (!chatEnabled && isOpen) setOpen(false)
+  }, [chatEnabled, isOpen, setOpen])
 
   const sendMessage = async (eventOrText?: FormEvent | string) => {
     if (typeof eventOrText !== 'string') eventOrText?.preventDefault()
@@ -297,7 +305,7 @@ export default function ChatPanel() {
 
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isOpen && chatEnabled && (
         <>
           <motion.div
             className="chat-overlay"
