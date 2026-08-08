@@ -1,46 +1,42 @@
-import { useEffect, useRef } from 'react'
 import { useStore } from '../store'
 import { uploadFile } from './api'
 
-export function useSequentialFileProcessor() {
-  const files = useStore((s) => s.files)
-  const updateFile = useStore((s) => s.updateFile)
-  const uploadingRef = useRef(false)
+const inFlight = new Set<string>()
 
-  useEffect(() => {
-    // 1. Is any file currently processing in the background or being uploaded?
-    const isCurrentlyProcessing =
-      uploadingRef.current ||
-      files.some((f) => f.taskId !== 'dev-manual' && f.status === 'processing')
+/**
+ * Analyze a single active file by uploading it to the backend. Intended to be
+ * triggered by the "Analyze" action in the Setup & Inputs step instead of
+ * auto-uploading files the moment they are dropped.
+ *
+ * Skips files that are already analyzed, still being processed, or that have
+ * lost their in-memory File blob (e.g. after a page reload, persist.null).
+ */
+export async function analyzeFile(fileId: string): Promise<void> {
+  const { files, updateFile } = useStore.getState()
+  const file = files.find((f) => f.id === fileId)
 
-    if (isCurrentlyProcessing) return
+  if (!file) return
+  if (file.taskId === 'dev-manual') return
+  if (file.status === 'completed' || file.status === 'processing') return
+  if (file.taskId) return
+  if (!file.file) return
+  if (inFlight.has(fileId)) return
 
-    // 2. Find the very next pending file waiting in line
-    const nextPending = files.find(
-      (f) => f.taskId !== 'dev-manual' && f.status === 'pending' && f.file !== null && !f.taskId,
-    )
+  inFlight.add(fileId)
+  updateFile(fileId, { status: 'processing' })
 
-    if (!nextPending || !nextPending.file) return
-
-    // 3. Process exactly ONE file at a time
-    uploadingRef.current = true
-    updateFile(nextPending.id, { status: 'processing' })
-
-    uploadFile(nextPending.file)
-      .then((res) => {
-        updateFile(nextPending.id, {
-          taskId: res.task_id,
-          analysisId: res.analysis_id ?? null,
-          fileUrl: res.file_url ?? null,
-          status: 'processing',
-        })
-      })
-      .catch((err) => {
-        const errMsg = err instanceof Error ? err.message : 'Failed to upload CAD file to server.'
-        updateFile(nextPending.id, { status: 'failed', errorMessage: errMsg })
-      })
-      .finally(() => {
-        uploadingRef.current = false
-      })
-  }, [files, updateFile])
+  try {
+    const res = await uploadFile(file.file)
+    updateFile(fileId, {
+      taskId: res.task_id,
+      analysisId: res.analysis_id ?? null,
+      fileUrl: res.file_url ?? null,
+      status: 'processing',
+    })
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'Failed to upload CAD file to server.'
+    updateFile(fileId, { status: 'failed', errorMessage: errMsg })
+  } finally {
+    inFlight.delete(fileId)
+  }
 }

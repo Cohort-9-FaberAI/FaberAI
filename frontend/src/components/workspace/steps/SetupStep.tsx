@@ -15,11 +15,9 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
   const quantity = useStore((s) => s.quantity)
   const material = useStore((s) => s.material)
   const tolerance = useStore((s) => s.tolerance)
-  const notes = useStore((s) => s.notes)
   const setQuantity = useStore((s) => s.setQuantity)
   const setMaterial = useStore((s) => s.setMaterial)
   const setTolerance = useStore((s) => s.setTolerance)
-  const setNotes = useStore((s) => s.setNotes)
 
   const analysis = asAnalysisResult(analysisResult)
   const activeFileIsStl =
@@ -44,6 +42,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
       analysis={completedPreviewAnalysis}
       previewFileUrl={livePreviewUrl}
       previewBuffer={fileBuffer}
+      previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
     >
       <form className="extra-info-form" onSubmit={(e) => e.preventDefault()}>
@@ -85,19 +84,6 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
             <option value="precision">Precision (&plusmn;0.1mm)</option>
           </select>
         </div>
-
-        <div className="form-group">
-          <label htmlFor="notes">Notes & Specifications</label>
-          <textarea
-            id="notes"
-            rows={3}
-            placeholder="Critical surfaces, material assumptions, target process, or supplier notes."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
-
-        <div className="token-estimate">Estimated token cost: ~2,400 tokens</div>
       </form>
     </WorkflowLayout>
   )
