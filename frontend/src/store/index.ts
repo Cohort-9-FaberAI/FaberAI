@@ -143,6 +143,11 @@ interface ThemeSlice {
   setTheme: (t: ThemeMode) => void
 }
 
+interface SelectedIssueSlice {
+  highlightedIssue: string | null
+  setHighlightedIssue: (issue: string | null) => void
+}
+
 type StoreState = ProjectSettingsSlice &
   WizardSlice &
   ProjectSlice &
@@ -151,7 +156,8 @@ type StoreState = ProjectSettingsSlice &
   ChatSlice &
   ModelSlice &
   RecordsSlice &
-  ThemeSlice
+  ThemeSlice &
+  SelectedIssueSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
 
@@ -322,6 +328,10 @@ export const useStore = create<StoreState>()(
         set((s) => ({
           libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
         })),
+
+      // SelectedIssue Slice
+      highlightedIssue: null,
+      setHighlightedIssue: (issue) => set({ highlightedIssue: issue }),
     }),
     {
       name: 'faberai-store',
