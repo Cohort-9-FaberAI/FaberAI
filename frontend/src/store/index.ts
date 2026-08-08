@@ -131,7 +131,6 @@ type StoreState = ProjectSettingsSlice &
   AnalysisSlice &
   ChatSlice &
   ModelSlice &
-  RecordsSlice &
   ThemeSlice &
   SelectedIssueSlice
 
@@ -291,17 +290,6 @@ export const useStore = create<StoreState>()(
       messages: [],
       addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
       clearMessages: () => set({ messages: [] }),
-
-      // Records slice
-      libraryItems: [],
-      historyEntries: [],
-      deleteLibraryItem: (id) =>
-        set((s) => ({ libraryItems: s.libraryItems.filter((l) => l.id !== id) })),
-      addLibraryItem: (l) => set((s) => ({ libraryItems: [...s.libraryItems, l] })),
-      linkLibraryItemToProject: (itemId, projectId) =>
-        set((s) => ({
-          libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
-        })),
 
       // SelectedIssue Slice
       highlightedIssue: null,
