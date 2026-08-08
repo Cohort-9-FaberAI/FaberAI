@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 import type { BufferGeometry } from 'three'
-import { type AnalysisResult, type ManufacturabilityIssue } from '../../types/analysis'
+import { type AnalysisResult } from '../../types/analysis'
 
 export type ModelTransform = {
   center: [number, number, number]
@@ -19,7 +19,6 @@ export type ModelContextType = {
   onModelLoaded?: () => void
   onGeometryLoaded?: (geometry: BufferGeometry) => void
   onModelTransform?: (transform: ModelTransform) => void
-  selectedIssueSetter: (issue: ManufacturabilityIssue | null) => void
 }
 
 export const ModelContext = createContext<ModelContextType | null>(null)

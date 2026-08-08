@@ -1,6 +1,7 @@
 import { useState } from 'react'
-
+import { useStore } from '../../store'
 interface Issue {
+  issue_id?: string
   message: string
   recommendation: string
 }
@@ -22,6 +23,8 @@ export default function IssueAccordion({
 }: IssueAccordionProps) {
   const [open, setOpen] = useState(false)
   const preview = items[0]?.message ?? emptyLabel ?? 'No findings in this category yet.'
+  const highlightedIssue = useStore((s) => s.highlightedIssue)
+  const setHighlightedIssue = useStore((s) => s.setHighlightedIssue)
 
   return (
     <div className={`issue-accordion${open ? ' is-open' : ''}`}>
@@ -45,8 +48,19 @@ export default function IssueAccordion({
             </li>
           )}
           {items.map((item, i) => (
-            <li key={i} className="issue-accordion-item">
-              <p className="issue-message">{item.message}</p>
+            <li
+              key={i}
+              className="issue-accordion-item"
+              onMouseOver={() => item.issue_id && setHighlightedIssue(item.issue_id)}
+              onMouseLeave={() => setHighlightedIssue(null)}
+            >
+              {highlightedIssue != null && highlightedIssue === item.issue_id ? (
+                <strong>
+                  <p className="issue-message">{item.message}</p>
+                </strong>
+              ) : (
+                <p className="issue-message">{item.message}</p>
+              )}
               <p className="issue-recommendation">{item.recommendation}</p>
             </li>
           ))}

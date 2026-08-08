@@ -1,5 +1,5 @@
 import styles from './ModelPreview.module.css'
-import { useState, useEffect, useContext, useCallback, useMemo, useRef } from 'react'
+import { useState, useContext, useCallback, useMemo, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Float, GizmoHelper, GizmoViewport } from '@react-three/drei'
 
@@ -193,10 +193,8 @@ export default function ModelPreview({
   previewFileUrl = null,
   previewBuffer,
   previewSourceFormat = null,
-  onIssueSelected,
   height,
 }: ModelPreviewProps) {
-  const [selectedIssue, setSelectedIssue] = useState<ManufacturabilityIssue | null>(null)
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
   const [loadedSource, setLoadedSource] = useState<string | null>(null)
   const [loadedTransform, setLoadedTransform] = useState<{
@@ -266,10 +264,6 @@ export default function ModelPreview({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullScreen, setFullScreen] = useState<boolean>(false)
-  //triggers onIssueSelected callback when the selected issue changes
-  useEffect(() => {
-    if (onIssueSelected) onIssueSelected(selectedIssue)
-  }, [onIssueSelected, selectedIssue])
 
   if (!canRenderModel) {
     return (
@@ -329,7 +323,6 @@ export default function ModelPreview({
             onModelLoaded: handleModelLoaded,
             onGeometryLoaded: handleGeometryLoaded,
             onModelTransform: handleModelTransform,
-            selectedIssueSetter: setSelectedIssue,
           }}
         >
           {shouldDisplayXRay ? <XRayCanvas /> : <ModelCanvas />}

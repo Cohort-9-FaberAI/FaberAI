@@ -1,6 +1,7 @@
 import type { AnalysisResult, IssueSeverity, ManufacturabilityIssue } from '../types/analysis'
 
 export interface DisplayIssue {
+  issue_id?: string
   severity: IssueSeverity
   message: string
   recommendation: string
@@ -45,6 +46,7 @@ function issueRecommendation(issue: ManufacturabilityIssue): string {
 
 function fromLegacyIssue(issue: ManufacturabilityIssue): DisplayIssue {
   return {
+    issue_id: issue.issue_id,
     severity: normalizeSeverity(issue.severity),
     message: issueMessage(issue),
     recommendation: issueRecommendation(issue),
