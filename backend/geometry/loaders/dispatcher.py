@@ -1,0 +1,398 @@
+from __future__ import annotations
+
+import os
+
+from geometry.models import GeometryModel, SourceFormat
+from .exceptions import StepSupportUnavailableError
+from geometry.measurements import (
+    compute_bbox_occ,
+    compute_bbox_mesh,
+    compute_oriented_bbox_mesh,
+    compute_volume_occ,
+    compute_volume_mesh,
+    compute_surface_area_occ,
+    compute_surface_area_mesh,
+    compute_center_mass_occ,
+    compute_center_mass_mesh,
+    compute_moment_inertia_occ,
+    compute_moment_inertia_mesh,
+    is_mesh_reliable,
+    
+)
+from .stl_loader_trimesh import load_stl
+
+
+STEP_EXTENSIONS = {".step", ".stp"}
+STL_EXTENSIONS = {".stl"}
+STEP_UNIT_SCALE_THRESHOLD = 10_000
+STEP_MICRON_TO_MM_SCALE = 0.001
+
+
+def _is_missing_step_dependency(exc: BaseException) -> bool:
+    if isinstance(exc, StepSupportUnavailableError):
+        return True
+    if isinstance(exc, ModuleNotFoundError):
+        missing = getattr(exc, "name", "") or ""
+        return missing == "OCC" or missing.startswith("OCC.")
+    if isinstance(exc, ImportError):
+        message = str(exc)
+        return "OCC" in message or "pythonocc" in message or "build123d" in message
+    return False
+
+
+def _raise_step_dependency_error(exc: BaseException) -> None:
+    raise StepSupportUnavailableError(
+        "STEP support is unavailable because required optional dependencies "
+        "(pythonocc-core / build123d) are not installed."
+    ) from exc
+
+
+def _scale_occ_shape(shape, scale_factor: float):
+    try:
+        from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCC.Core.gp import gp_Pnt, gp_Trsf
+    except (ImportError, ModuleNotFoundError):
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+        from OCP.gp import gp_Pnt, gp_Trsf
+
+    transform = gp_Trsf()
+    transform.SetScale(gp_Pnt(0, 0, 0), scale_factor)
+    return BRepBuilderAPI_Transform(shape, transform, True).Shape()
+
+
+def _step_unit_scale_factor(shape) -> float:
+    box = compute_bbox_occ(shape)
+    max_dimension = max(box.width, box.depth, box.height)
+    if max_dimension > STEP_UNIT_SCALE_THRESHOLD:
+        return STEP_MICRON_TO_MM_SCALE
+    return 1.0
+
+
+def get_file_format(path: str) -> SourceFormat:
+    """Determine SourceFormat from a file's extension."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in STEP_EXTENSIONS:
+        return SourceFormat.STEP
+    elif ext in STL_EXTENSIONS:
+        return SourceFormat.STL
+    raise ValueError(
+        f"Unsupported file extension '{ext}' for {path}. "
+        f"Expected one of {STEP_EXTENSIONS | STL_EXTENSIONS}."
+    )
+
+
+def load_geometry(path: str) -> GeometryModel:
+    """Load a STEP or STL file and populate a fully-measured GeometryModel.
+
+    Dispatches on extension:
+        .step / .stp -> pythonOCC path
+        .stl         -> trimesh path
+
+    STEP support is optional: if pythonocc-core is not installed, the STEP
+    path raises StepSupportUnavailableError with installation instructions
+    instead of an unhandled ImportError. The STL path has no optional
+    dependencies and always works.
+    """
+    fmt = get_file_format(path)
+
+    if fmt == SourceFormat.STEP:
+        return _load_step(path)
+    else:
+        return _load_stl(path)
+
+
+
+# STEP / OCC path
+
+def _load_step(path: str) -> GeometryModel:
+    # STEP loading is tricky because there are two competing loaders: build123d and pythonOCC.
+    # We need both loaders for the different use cases.
+    # So we load twice and generate two shapes, one for build123d and one for pythonOCC.
+    # The build123d shape is used for the build123d path, and the pythonOCC shape is used for the pythonOCC path.
+    #
+    #
+    # --- Try build123d ---
+    shape_b123 = None
+    b123_missing = False
+    try:
+        from geometry.loaders.step_loader import load_step as load_step_b123d
+        shape_b123 = load_step_b123d(path)
+    except StepSupportUnavailableError:
+        b123_missing = True
+    except Exception as e:
+        print(f"Warning: build123d STEP loader failed for {path}: {e}")
+
+    # --- Try pythonOCC ---
+    shape_occ = None
+    occ_missing = False
+    try:
+        from geometry.loaders.step_loader_pythonocc import load_step as load_step_occ
+        shape_occ = load_step_occ(path)
+    except StepSupportUnavailableError:
+        occ_missing = True
+
+    except Exception as e:
+        print(f"Warning: pythonOCC STEP loader failed for {path}: {e}")
+
+
+    # If both dependencies are missing, signal that STEP support is unavailable
+    if b123_missing and occ_missing:
+        raise StepSupportUnavailableError(
+            "STEP support is unavailable because required optional dependencies "
+            "(pythonocc-core / build123d) are not installed."
+        )
+
+    # Safety net: the loaders should already reject null/None shapes, but
+    # guard here too so no downstream OCC call receives an invalid shape.
+    if shape_occ is None and shape_b123 is None:
+        raise ValueError(
+            f"STEP file '{path}' could not be loaded — the file may be empty or corrupted."
+        )
+    reference_shape = shape_occ or getattr(shape_b123, "wrapped", None)
+    if reference_shape is not None:
+        scale_factor = _step_unit_scale_factor(reference_shape)
+        if scale_factor != 1.0:
+            print(f"Normalizing STEP units for {path}: scale factor {scale_factor}")
+            if shape_b123 is not None and hasattr(shape_b123, "scale"):
+                shape_b123 = shape_b123.scale(scale_factor)
+                shape_occ = shape_b123.wrapped
+            elif shape_occ is not None:
+                shape_occ = _scale_occ_shape(shape_occ, scale_factor)
+
+    model = GeometryModel(
+        source_format=SourceFormat.STEP, source_path=path, raw_occ=shape_occ, raw_b123=shape_b123
+    )
+
+    try:
+        model.bounding_box = compute_bbox_occ(shape_occ)
+        model.oriented_bbox = None
+        model.volume_mm3 = compute_volume_occ(shape_occ)
+        model.surface_area_mm2 = compute_surface_area_occ(shape_occ)
+        model.center_mass = compute_center_mass_occ(shape_occ)
+        model.moment_of_inertia = compute_moment_inertia_occ(shape_occ)
+    except Exception as exc:
+        if _is_missing_step_dependency(exc):
+            _raise_step_dependency_error(exc)
+        raise
+
+    # Topology: faces, edges, face graph
+    try:
+        from geometry.measurements.face_extraction import (
+            extract_faces_occ,
+            graph_to_faces_and_edges,
+        )
+        from geometry.measurements.face_graph import build_face_graph
+
+        vertices, indices = extract_faces_occ(shape_b123)
+        face_graph = build_face_graph(shape_b123.faces(), shape_b123)
+        faces_list, edges_list = graph_to_faces_and_edges(face_graph, vertices, indices)
+
+        model.faces = faces_list
+        model.edges = edges_list
+        model.face_graph = {
+            node: list(face_graph.neighbors(node))
+            for node in face_graph.nodes()
+        }
+
+        # Cylindrical manufacturing feature detection (holes/bosses/cavities)
+        # Requires faces_list/edges_list from the block above, so it's
+        # nested in the same try — if topology extraction fails, feature
+        # detection can't run either.
+        try:
+            from geometry.features.holes import detect_holes
+            from geometry.features.bosses import detect_bosses_full
+            from geometry.features.cavities import detect_cavities_full
+            from geometry.features.fillets import detect_fillets
+            from geometry.features.ribs import detect_ribs
+            from geometry.features.chamfers import detect_chamfers
+            from geometry.features.overhangs import detect_overhangs
+
+            model.holes = detect_holes(faces_list, edges_list)
+            model.bosses = detect_bosses_full(faces_list, edges_list, holes=model.holes)
+            model.cavities = detect_cavities_full(faces_list, edges_list)
+            model.fillets = detect_fillets(faces_list, edges_list, max_fillet_radius=10.0) # in mm
+            model.ribs = detect_ribs(faces_list, edges_list, min_thickness=0.5, max_thickness=12.0, max_draft_deg=5.0, min_length_thickness_ratio=4.0)
+            model.chamfers = detect_chamfers(faces_list, edges_list, max_chamfer_width=8.0, min_angle_deg=15.0, max_angle_deg=75.0)
+            model.overhangs = detect_overhangs(face_graph, max_overhang_angle=45.0)
+        except Exception as e:
+            print(f"Warning: feature detection (holes/bosses/cavities) failed for {path}: {e}")
+            model.holes = []
+            model.bosses = []
+            model.cavities = []
+            model.fillets = []
+            model.ribs = []
+            model.chamfers = []
+            model.overhangs = []
+
+    except Exception as e:
+        print(f"Warning: face/edge extraction failed for {path}: {e}")
+        model.faces = []
+        model.edges = []
+        model.face_graph = None
+        model.holes = []
+        model.bosses = []
+        model.cavities = []
+        model.fillets = []
+        model.ribs = []
+        model.chamfers = []
+        model.overhangs = []
+
+    # Wall thickness sampling
+    try:
+        from geometry.measurements.wall_thickness import compute_wall_thickness_occ
+        samples, stats = compute_wall_thickness_occ(shape_b123)
+        model.wall_samples = samples
+        model.wall_thickness_stats = stats
+        model.nominal_wall = stats.median_wall if stats else None
+    except Exception as e:
+        print(f"Warning: wall thickness (OCP) failed for {path}: {e}")
+
+    # Print orientation analysis (requires faces to be populated)
+    if model.faces:
+        try:
+            from geometry.measurements.print_orientations import compute_print_orientations
+            model.print_orientations = compute_print_orientations(model.faces)
+        except Exception as e:
+            print(f"Warning: print orientation analysis failed for {path}: {e}")
+
+    return model
+
+
+
+# STL / trimesh path
+
+def _load_stl(path: str) -> GeometryModel:
+    mesh = load_stl(path)
+    model = GeometryModel(
+        source_format=SourceFormat.STL, source_path=path, raw=mesh
+    )
+
+    model.bounding_box = compute_bbox_mesh(mesh)
+    model.oriented_bbox = compute_oriented_bbox_mesh(mesh)
+    model.volume_mm3 = compute_volume_mesh(mesh)
+    model.surface_area_mm2 = compute_surface_area_mesh(mesh)
+    model.center_mass = compute_center_mass_mesh(mesh)
+    model.moment_of_inertia = compute_moment_inertia_mesh(mesh)
+    model.measurements_reliable = is_mesh_reliable(mesh)
+
+    # NOTE: holes/bosses/cavities are intentionally left empty on the STL
+    # path. Mesh faces (from extract_faces_mesh) have no surface-type
+    # classification (no cylinder/plane distinction without real curvature
+    # analysis on a triangle soup), so cylindrical feature detection can't
+    # run against them yet — this matches the feature spec's STL placeholder
+    # allowance.
+
+    # Topology: faces, edges, face graph
+    try:
+        from geometry.measurements.face_extraction import (
+                    extract_faces_mesh,
+                    graph_to_faces_and_edges,
+        )
+        from geometry.measurements.face_graph_mesh import build_face_graph
+        from geometry.features.overhangs import detect_overhangs
+
+
+        vertices, indices = extract_faces_mesh(mesh)
+        face_graph = build_face_graph(mesh)
+        faces_list, edges_list = graph_to_faces_and_edges(
+            face_graph,
+            vertices,
+            indices,
+        )
+        model.faces = faces_list
+        model.edges = edges_list
+        model.face_graph = {
+            node: list(face_graph.neighbors(node))
+            for node in face_graph.nodes()
+        }
+        try:
+            from geometry.Mesh_features.holes import detect_mesh_holes
+            model.holes = detect_mesh_holes(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL hole detection failed for {path}: {e}")
+            model.holes = []
+
+        try:
+            from geometry.Mesh_features.bosses import detect_mesh_bosses
+            model.bosses = detect_mesh_bosses(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL boss detection failed for {path}: {e}")
+            model.bosses = []
+
+        try:
+            from geometry.Mesh_features.ribs import detect_mesh_ribs
+            model.ribs = detect_mesh_ribs(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL rib detection failed for {path}: {e}")
+            model.ribs = []
+
+        try:
+            from geometry.Mesh_features.fillets import detect_mesh_fillets
+            model.fillets = detect_mesh_fillets(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL fillet detection failed for {path}: {e}")
+            model.fillets = []
+
+        try:
+            from geometry.Mesh_features.chamfers import detect_mesh_chamfers
+            model.chamfers = detect_mesh_chamfers(mesh, face_graph)
+        except Exception as e:
+            print(f"Warning: STL chamfer detection failed for {path}: {e}")
+            model.chamfers = []
+
+    except Exception as e:
+            print(f"Warning: face extraction failed for {path}: {e}")
+            model.faces = []
+            model.edges = []
+            model.face_graph = None
+
+            model.holes = []
+            model.bosses = []
+            model.ribs = []
+            model.fillets = []
+            model.chamfers = []
+    try:
+        from geometry.models.mesh_quality import check_mesh_quality
+        model.mesh_quality = check_mesh_quality(mesh)
+    except Exception as e:
+        print(f"Warning: mesh quality check failed for {path}: {e}")
+
+    try:
+        model.overhangs = detect_overhangs(face_graph, max_overhang_angle=45.0)
+    except Exception as e:
+        print(f"Warning: overhang detection failed for {path}: {e}")    
+        model.overhangs = []
+
+    try:
+        from geometry.measurements.wall_thickness import compute_wall_thickness_mesh
+        samples, stats = compute_wall_thickness_mesh(mesh)
+        model.wall_samples = samples
+        model.wall_thickness_stats = stats
+        model.nominal_wall = stats.median_wall if stats else None
+    except Exception as e:
+        print(f"Warning: wall thickness (mesh) failed for {path}: {e}")
+
+    try:
+        from geometry.measurements.print_orientations import compute_print_orientations
+        from geometry.models.face import Face
+        from geometry.models.enums import SurfaceType
+
+        face_normals = mesh.face_normals
+        face_areas = mesh.area_faces
+        centroids = mesh.vertices[mesh.faces].mean(axis=1)
+
+        pseudo_faces = [
+            Face(
+                id=i,
+                area=float(face_areas[i]),
+                centroid=centroids[i],
+                normal=face_normals[i],
+                surface_type=SurfaceType.UNKNOWN,
+            )
+            for i in range(len(face_normals))
+        ]
+        model.print_orientations = compute_print_orientations(pseudo_faces)
+    except Exception as e:
+        print(f"Warning: print orientation analysis failed for {path}: {e}")
+
+    return model
