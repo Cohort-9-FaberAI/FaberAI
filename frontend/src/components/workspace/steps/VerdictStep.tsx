@@ -82,7 +82,6 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
       analysis={cleanAnalysis}
       previewFileUrl={livePreviewUrl}
       previewBuffer={fileBuffer}
-      previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
       viewerMeta={
         score !== null ? (

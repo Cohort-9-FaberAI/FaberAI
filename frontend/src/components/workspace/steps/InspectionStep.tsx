@@ -54,8 +54,8 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const noAnalysisStarted = !activeFile && !analysis
   const canContinue = hasCompletedReport(analysis)
 
-  const severe = issues.filter((i) => i.severity === 'high' || i.severity === 'blocker')
-  const problematic = issues.filter((i) => i.severity === 'medium' || i.severity === 'major')
+  const cons = issues.filter((i) => i.severity === 'high' || i.severity === 'blocker')
+  const neutral = issues.filter((i) => i.severity === 'medium' || i.severity === 'major')
   const minor = issues.filter((i) => i.severity === 'low' || i.severity === 'minor')
 
   return (
@@ -114,7 +114,6 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
           analysis={analysis}
           previewFileUrl={livePreviewUrl}
           previewBuffer={fileBuffer}
-          previewSourceFormat={activeFile?.sourceFormat ?? null}
           previewFilename={livePreviewFilename}
           viewerMeta={
             canContinue && score !== null ? (
@@ -167,27 +166,27 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
             )}
             <div className="analysis-findings-scroll" aria-label="Analysis findings">
               <IssueAccordion
-                title="Minor"
+                title="Pros"
                 count={minor.length}
-                color="var(--severity-low)"
+                color="var(--severity-pro)"
                 items={minor}
                 emptyLabel={
                   analysis
-                    ? 'No minor findings are available for this report yet.'
+                    ? 'No minor positive notes are available for this report yet.'
                     : 'Findings will appear once analysis is complete.'
                 }
               />
               <IssueAccordion
-                title="Problematic"
-                count={problematic.length}
+                title="Neutral"
+                count={neutral.length}
                 color="var(--severity-medium)"
-                items={problematic}
+                items={neutral}
               />
               <IssueAccordion
-                title="Severe"
-                count={severe.length}
+                title="Cons"
+                count={cons.length}
                 color="var(--severity-high)"
-                items={severe}
+                items={cons}
               />
             </div>
           </motion.div>

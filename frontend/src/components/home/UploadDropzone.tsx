@@ -30,17 +30,17 @@ export default function UploadDropzone() {
       analysisResult: null,
     })
 
-    try {
-      const buffer = await file.arrayBuffer()
-      setFileBuffer(id, buffer)
-      if (sourceFormat === 'stl') {
+    if (sourceFormat === 'stl') {
+      try {
+        const buffer = await file.arrayBuffer()
+        setFileBuffer(id, buffer)
         setCurrentFileBuffer(buffer)
+      } catch {
+        // buffer read failed, preview won't work immediately but upload proceeds
       }
-    } catch {
-      // buffer read failed, preview won't work immediately but upload proceeds
-      if (sourceFormat === 'stl') {
-        setCurrentFileBuffer(null)
-      }
+    } else {
+      setFileBuffer(id, null)
+      setCurrentFileBuffer(null)
     }
   }
 

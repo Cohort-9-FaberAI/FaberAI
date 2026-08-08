@@ -10,7 +10,6 @@ import VerdictStep from '../components/workspace/steps/VerdictStep'
 import ExportStep from '../components/workspace/steps/ExportStep'
 import { useStore } from '../store'
 import { useTaskPolling } from '../lib/useTaskPolling'
-import { analyzeFile } from '../lib/useSequentialFileProcessor'
 import { asAnalysisResult, hasCompletedReport } from '../lib/analysisView'
 
 function FilePoller({
@@ -131,12 +130,6 @@ export default function AnalysisPage() {
   const analysis = asAnalysisResult(analysisResult)
   const canProceedToVerdict = hasCompletedReport(analysis)
 
-  const canAnalyze =
-    !!activeFile &&
-    activeFile.file !== null &&
-    activeFile.status === 'pending' &&
-    !activeFile.taskId
-
   // Configure WizardNav internal transitions
   const stepOrder: WorkspaceStep[] = ['setup', 'inspection', 'verdict', 'export']
   const currentIndex = stepOrder.indexOf(currentStep)
@@ -151,28 +144,15 @@ export default function AnalysisPage() {
 
   const handleNext = () => {
     if (currentIndex < stepOrder.length - 1) {
-      if (currentStep === 'setup' && activeFile && canAnalyze) {
-        void analyzeFile(activeFile.id)
-      }
       handleSetStep(stepOrder[currentIndex + 1])
     }
   }
 
-  const isNextDisabled =
-    (currentStep === 'setup' && !canAnalyze) ||
-    (currentStep === 'inspection' && !canProceedToVerdict)
+  const isNextDisabled = currentStep === 'inspection' && !canProceedToVerdict
   const hint =
-    currentStep === 'setup' && !canAnalyze
-      ? activeFile
-        ? activeFile.status === 'processing'
-          ? 'This CAD file is currently being analyzed. Results will appear in the DFM Analysis step.'
-          : activeFile.status === 'failed'
-            ? 'Analysis failed for this file. Re-upload it to retry.'
-            : 'This CAD file has already been analyzed.'
-        : 'Upload a CAD file in the Uploads step, then run the DFM inspection.'
-      : currentStep === 'inspection' && !canProceedToVerdict
-        ? 'A completed DFM report is required before proceeding to Conclusion.'
-        : null
+    currentStep === 'inspection' && !canProceedToVerdict
+      ? 'A completed DFM report is required before proceeding to Conclusion.'
+      : null
 
   return (
     <AppShell>
@@ -199,21 +179,10 @@ export default function AnalysisPage() {
               label: currentIndex === 0 ? 'Uploads' : 'Previous',
               onClick: handlePrev,
             }}
-            extra={
-              currentStep === 'export' ? (
-                <button
-                  type="button"
-                  className="wizard-nav-btn wizard-nav-prev"
-                  onClick={() => navigate('/home')}
-                >
-                  Back to Home
-                </button>
-              ) : undefined
-            }
             next={
               currentIndex < stepOrder.length - 1
                 ? {
-                    label: currentStep === 'setup' ? 'Analyze' : 'Next Step',
+                    label: 'Next Step',
                     onClick: handleNext,
                     disabled: isNextDisabled,
                     title: hint ?? undefined,

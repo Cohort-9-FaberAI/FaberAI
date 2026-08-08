@@ -1,4 +1,5 @@
 import AskFaberAIButton from './AskFaberAIButton'
+import UsageIndicator from './UsageIndicator'
 
 export default function TopHeader() {
   return (
@@ -8,6 +9,7 @@ export default function TopHeader() {
         <strong>DFM review</strong>
       </div>
       <div className="top-header-actions">
+        <UsageIndicator />
         <AskFaberAIButton />
       </div>
     </header>
