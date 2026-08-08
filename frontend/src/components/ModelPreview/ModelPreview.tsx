@@ -21,6 +21,7 @@ type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
   previewBuffer?: ArrayBuffer | null
+  previewSourceFormat?: 'stl' | 'step' | null
   onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
   height?: number | string
 }
@@ -191,6 +192,7 @@ export default function ModelPreview({
   analysis = null,
   previewFileUrl = null,
   previewBuffer,
+  previewSourceFormat = null,
   height,
 }: ModelPreviewProps) {
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
@@ -206,11 +208,13 @@ export default function ModelPreview({
   const [showXRay, setShowXRay] = useState<boolean>(false)
   const devFileBuffer = useStore((s) => s.currentFileBuffer)
   const fileBuffer = previewBuffer !== undefined ? previewBuffer : devFileBuffer
+  const bufferSourceFormat =
+    previewSourceFormat ?? (analysis?.geometry_data?.source_format === 'step' ? 'step' : null)
   const modelUrl = useMemo(
     () => getPreviewUrl(analysis, previewFileUrl),
     [analysis, previewFileUrl],
   )
-  const modelSource = modelUrl ?? (fileBuffer ? 'local-stl-buffer' : null)
+  const modelSource = modelUrl ?? (fileBuffer ? 'local-buffer' : null)
   const hasRawStepOnly = Boolean(
     analysis?.geometry_data?.source_format === 'step' &&
     !analysis?.geometry_data?.preview_url &&
@@ -266,7 +270,7 @@ export default function ModelPreview({
       <div className={styles.placeholder}>
         {hasRawStepOnly
           ? 'This STEP report completed, but no converted STL preview was attached.'
-          : 'Upload an STL file or wait for a completed analysis preview.'}
+          : 'Upload a CAD file or wait for a completed analysis preview.'}
       </div>
     )
   }
@@ -310,6 +314,7 @@ export default function ModelPreview({
           value={{
             analysis,
             fileBuffer,
+            sourceFormat: bufferSourceFormat,
             modelUrl,
             modelTransform: activeTransform,
             previewFileUrl,

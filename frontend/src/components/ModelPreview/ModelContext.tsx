@@ -10,6 +10,7 @@ export type ModelTransform = {
 export type ModelContextType = {
   analysis: AnalysisResult | null
   fileBuffer: ArrayBuffer | null
+  sourceFormat?: 'stl' | 'step' | null
   modelUrl?: string | null
   modelTransform?: ModelTransform | null
   previewFileUrl?: string | null
