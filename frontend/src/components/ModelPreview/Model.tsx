@@ -3,6 +3,7 @@ import { STLLoader } from 'three/examples/jsm/Addons.js'
 import { Box3, DoubleSide, Object3D, Vector3, type BufferGeometry } from 'three'
 import { ModelContext, type ModelTransform } from './ModelContext'
 import { useThree } from '@react-three/fiber'
+import { stepBufferToGeometry } from './api'
 
 function preparePreviewGeometry(source: BufferGeometry): {
   geometry: BufferGeometry
@@ -36,6 +37,7 @@ export function Model() {
   const context = useContext(ModelContext)
   const modelUrl = context?.modelUrl
   const fileBuffer = context?.fileBuffer
+  const sourceFormat = context?.sourceFormat
   const onModelError = context?.onModelError
   const onModelLoaded = context?.onModelLoaded
   const onGeometryLoaded = context?.onGeometryLoaded
@@ -69,9 +71,10 @@ export function Model() {
 
       if (fileBuffer) {
         try {
-          const { geometry: geom, transform } = preparePreviewGeometry(
-            new STLLoader().parse(fileBuffer),
-          )
+          const { geometry: geom, transform } =
+            sourceFormat === 'step'
+              ? preparePreviewGeometry(await stepBufferToGeometry(fileBuffer))
+              : preparePreviewGeometry(new STLLoader().parse(fileBuffer))
           if (cancelled) return
           onModelTransform?.(transform)
           setGeometry(geom)
@@ -79,7 +82,11 @@ export function Model() {
           onModelLoaded?.()
         } catch {
           if (cancelled) return
-          onModelError?.('The local STL preview could not be parsed.')
+          onModelError?.(
+            sourceFormat === 'step'
+              ? 'The local STEP preview could not be parsed.'
+              : 'The local STL preview could not be parsed.',
+          )
         }
       }
     }
@@ -88,7 +95,15 @@ export function Model() {
     return () => {
       cancelled = true
     }
-  }, [modelUrl, fileBuffer, onModelError, onModelLoaded, onGeometryLoaded, onModelTransform])
+  }, [
+    modelUrl,
+    fileBuffer,
+    sourceFormat,
+    onModelError,
+    onModelLoaded,
+    onGeometryLoaded,
+    onModelTransform,
+  ])
 
   //Gives the camera an initial position along the bounding box of the mesh
   useEffect(() => {

@@ -69,6 +69,7 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       analysis={cleanAnalysis}
       previewFileUrl={livePreviewUrl}
       previewBuffer={fileBuffer}
+      previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
       viewerMeta={
         score !== null ? (

@@ -25,6 +25,63 @@ export async function getGeometry(url: string, type: 'STL' | 'STEP') {
   }
 }
 
+export async function stepBufferToGeometry(arrayBuffer: ArrayBuffer): Promise<BufferGeometry> {
+  const importer = await getOcctImporter()
+  const result = importer.ReadStepFile(new Uint8Array(arrayBuffer), null)
+
+  if (!result.success) throw new Error(`Occt Importer failed to read step file!`)
+
+  return mergeGeometries(result.meshes.map((x) => importedMeshToGeometry(x)))
+}
+
+function mergeGeometries(geometries: BufferGeometry[]): BufferGeometry {
+  if (geometries.length === 1) return geometries[0]
+
+  const merged = new BufferGeometry()
+  const position: number[] = []
+  const normal: number[] = []
+  const index: number[] = []
+
+  let vertexOffset = 0
+
+  for (const geometry of geometries) {
+    const posAttr = geometry.getAttribute('position')
+    const normAttr = geometry.getAttribute('normal')
+    const indexAttr = geometry.getIndex()
+
+    if (!posAttr) continue
+    const posArray = posAttr.array as ArrayLike<number>
+    const normArray = normAttr && (normAttr.array as ArrayLike<number>)
+
+    for (let i = 0; i < posAttr.count; i++) {
+      position.push(posArray[i * 3], posArray[i * 3 + 1], posArray[i * 3 + 2])
+      if (normArray) {
+        normal.push(normArray[i * 3], normArray[i * 3 + 1], normArray[i * 3 + 2])
+      }
+    }
+
+    if (indexAttr) {
+      const indexArray = indexAttr.array as ArrayLike<number>
+      for (let i = 0; i < indexAttr.count; i++) {
+        index.push(indexArray[i] + vertexOffset)
+      }
+    }
+
+    vertexOffset += posAttr.count
+  }
+
+  merged.setAttribute('position', new Float32BufferAttribute(position, 3))
+  merged.setIndex(index)
+  if (normal.length > 0) {
+    merged.setAttribute('normal', new Float32BufferAttribute(normal, 3))
+  }
+  merged.computeBoundingBox()
+  merged.computeBoundingSphere()
+  merged.computeVertexNormals()
+
+  return merged
+}
+
 async function getSTEPGeometry(url: string) {
   const response = await fetch(url)
   if (!response.ok) {
