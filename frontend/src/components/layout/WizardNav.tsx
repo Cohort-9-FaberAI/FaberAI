@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 interface WizardNavProps {
   previous?: {
     label?: string
@@ -11,11 +13,12 @@ interface WizardNavProps {
     disabled?: boolean
     title?: string
   }
+  extra?: ReactNode
   hint?: string | null
 }
 
-export default function WizardNav({ previous, next, hint }: WizardNavProps) {
-  if (!previous && !next && !hint) return null
+export default function WizardNav({ previous, next, extra, hint }: WizardNavProps) {
+  if (!previous && !next && !extra && !hint) return null
 
   return (
     <div className="wizard-nav-shell">
@@ -32,6 +35,7 @@ export default function WizardNav({ previous, next, hint }: WizardNavProps) {
             {previous.label ?? 'Previous'}
           </button>
         ) : null}
+        {extra ? extra : null}
         {next ? (
           <button
             type="button"

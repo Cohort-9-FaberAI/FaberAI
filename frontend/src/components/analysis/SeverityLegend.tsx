@@ -8,9 +8,9 @@ interface SeverityLegendProps {
 }
 
 const defaultItems: LegendItem[] = [
-  { label: 'Pro', color: '#4caf50' },
-  { label: 'Neutral', color: '#ffb84d' },
-  { label: 'Con', color: '#ff4d4d' },
+  { label: 'Minor', color: '#ffd54f' },
+  { label: 'Problematic', color: '#ffb74d' },
+  { label: 'Severe', color: '#ef5350' },
 ]
 
 export default function SeverityLegend({ items = defaultItems }: SeverityLegendProps) {

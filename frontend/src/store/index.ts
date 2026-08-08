@@ -30,13 +30,11 @@ interface ProjectSettingsSlice {
   quantity: number
   material: string
   tolerance: string
-  notes: string
   setProject: (v: boolean) => void
   setProcess: (v: 'molding' | 'printing' | null) => void
   setQuantity: (v: number) => void
   setMaterial: (v: string) => void
   setTolerance: (v: string) => void
-  setNotes: (v: string) => void
 }
 
 interface WizardSlice {
@@ -113,28 +111,6 @@ interface ModelSlice {
   setFileBuffer: (fileId: string, buf: ArrayBuffer | null) => void
 }
 
-interface LibraryRecord {
-  id: string
-  fileName: string
-  diagnosis: string
-  projectId?: string | null
-}
-
-interface HistoryRecord {
-  id: string
-  fileName: string
-  diagnosis: string
-  date: string
-}
-
-interface RecordsSlice {
-  libraryItems: LibraryRecord[]
-  historyEntries: HistoryRecord[]
-  deleteLibraryItem: (id: string) => void
-  addLibraryItem: (l: LibraryRecord) => void
-  linkLibraryItemToProject: (itemId: string, projectId: string) => void
-}
-
 export type ThemeMode = 'dark' | 'light'
 
 interface ThemeSlice {
@@ -150,7 +126,6 @@ type StoreState = ProjectSettingsSlice &
   AnalysisSlice &
   ChatSlice &
   ModelSlice &
-  RecordsSlice &
   ThemeSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
@@ -179,13 +154,11 @@ export const useStore = create<StoreState>()(
       quantity: 1,
       material: '',
       tolerance: '',
-      notes: '',
       setProject: (v) => set({ isProject: v }),
       setProcess: (v) => set({ process: v }),
       setQuantity: (v) => set({ quantity: v }),
       setMaterial: (v) => set({ material: v }),
       setTolerance: (v) => set({ tolerance: v }),
-      setNotes: (v) => set({ notes: v }),
 
       // Wizard slice
       ...EMPTY_WIZARD,
@@ -311,17 +284,6 @@ export const useStore = create<StoreState>()(
       messages: [],
       addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
       clearMessages: () => set({ messages: [] }),
-
-      // Records slice
-      libraryItems: [],
-      historyEntries: [],
-      deleteLibraryItem: (id) =>
-        set((s) => ({ libraryItems: s.libraryItems.filter((l) => l.id !== id) })),
-      addLibraryItem: (l) => set((s) => ({ libraryItems: [...s.libraryItems, l] })),
-      linkLibraryItemToProject: (itemId, projectId) =>
-        set((s) => ({
-          libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
-        })),
     }),
     {
       name: 'faberai-store',
