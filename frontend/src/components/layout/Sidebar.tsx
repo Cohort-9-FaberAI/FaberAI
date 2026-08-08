@@ -6,8 +6,6 @@ const navItems = [
   { label: 'Upload', to: '/home', icon: 'M10 4l8 4.5v9L10 22l-8-4.5v-9L10 4z' },
   { label: 'Analysis', to: '/analysis', icon: 'M4 18h12 M6 14v4 M10 10v8 M14 6v12' },
   { label: 'Projects', to: '/projects', icon: 'M3 6.5h14M3 12h14M3 17.5h9' },
-  { label: 'Library', to: '/library', icon: 'M5 4h10a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V4z' },
-  { label: 'History', to: '/history', icon: 'M10 4a8 8 0 1 1-7.1 4.3M10 8v4l3 2' },
 ]
 
 interface SidebarProps {
