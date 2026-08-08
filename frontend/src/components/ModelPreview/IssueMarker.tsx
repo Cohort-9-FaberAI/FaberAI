@@ -41,7 +41,7 @@ export default function IssueMarker({
   useEffect(() => {
     if (hovered) setHighlightedIssue(issue.issue_id)
     else setHighlightedIssue(null)
-  }, [hovered])
+  }, [hovered, issue.issue_id, setHighlightedIssue])
 
   return (
     <mesh
