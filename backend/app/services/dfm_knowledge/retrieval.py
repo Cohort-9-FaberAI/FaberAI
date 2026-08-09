@@ -8,9 +8,13 @@ decides what to do with what comes back.
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from .embeddings import embed_query
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TOP_K = 5
 DEFAULT_MIN_SIMILARITY = 0.3
@@ -34,7 +38,11 @@ def retrieve_relevant_chunks(
     # --dry-run) don't require Supabase credentials just to be imported.
     from app.database import supabase
 
+    embed_start = time.monotonic()
     query_vector = embed_query(query)
+    embed_seconds = time.monotonic() - embed_start
+
+    rpc_start = time.monotonic()
     response = supabase.rpc(
         "match_dfm_reference_docs",
         {
@@ -44,4 +52,9 @@ def retrieve_relevant_chunks(
             "filter_source": source,
         },
     ).execute()
+    rpc_seconds = time.monotonic() - rpc_start
+
+    logger.info(
+        "Retrieval timing — embed: %.2fs, supabase rpc: %.2fs", embed_seconds, rpc_seconds
+    )
     return response.data or []
