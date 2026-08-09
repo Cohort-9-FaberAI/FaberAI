@@ -65,6 +65,7 @@ export default function AnalysisPage() {
   const openTabIds = useStore((s) => s.openTabIds)
   const openTab = useStore((s) => s.openTab)
   const activeFileId = useStore((s) => s.activeFileId)
+  const updateFile = useStore((s) => s.updateFile)
 
   const uploadedFiles = files.filter((f) => f.taskId !== 'dev-manual')
   const activeFile =
@@ -75,6 +76,9 @@ export default function AnalysisPage() {
   const setRequestedStep = useStore((s) => s.setRequestedStep)
   const storedStepByFile = useStore((s) => s.stepByFile)
   const setStoredStepByFile = useStore((s) => s.setStepByFile)
+  const process = useStore((s) => s.process)
+  const material = useStore((s) => s.material)
+  const tolerance = useStore((s) => s.tolerance)
 
   // Jump to a requested workspace step (e.g. "inspection" from a project's View Analysis)
   useEffect(() => {
@@ -173,6 +177,12 @@ export default function AnalysisPage() {
   const handleNext = () => {
     if (currentIndex < stepOrder.length - 1) {
       if (currentStep === 'setup' && activeFile && canAnalyze) {
+        updateFile(activeFile.id, {
+          analysisResult: {
+            ...activeFile.analysisResult,
+            inputs: { process, material, tolerance },
+          },
+        })
         void analyzeFile(activeFile.id)
       }
       handleSetStep(stepOrder[currentIndex + 1])
