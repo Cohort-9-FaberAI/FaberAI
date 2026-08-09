@@ -1,6 +1,9 @@
+fpdf2==2.8.7
+Pillow==12.3.0
 amqp==5.3.1
 annotated-doc==0.0.4
 annotated-types==0.7.0
+anthropic==0.120.2
 anyio==4.14.1
 billiard==4.2.4
 boto3==1.38.0
@@ -111,4 +114,15 @@ wrapt==1.17.3
 yarl==1.24.2
 build123d>=0.6
 networkx>=3.0
-sentence-transformers>=3.0
+
+# --- Optional STEP support (intentionally NOT installed by this file) ---
+# STEP/.stp file analysis needs two optional dependencies:
+#   * pythonocc-core — cannot be listed here: it is not published on PyPI and
+#     is only distributed via Conda:
+#       conda install -c conda-forge pythonocc-core
+#   * build123d — pip-installable (pip install build123d) but kept optional
+#     so non-STEP users don't need it.
+# For a full STEP-capable environment use the Conda spec in
+# backend/environment-ds.yml (conda env create -f environment-ds.yml).
+# Without these packages the backend starts and analyzes STL normally; STEP
+# uploads fail gracefully with geometry.loaders.StepSupportUnavailableError.

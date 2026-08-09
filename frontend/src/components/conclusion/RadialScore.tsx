@@ -1,3 +1,5 @@
+import { getScoreColor } from '../../lib/analysisView'
+
 interface RadialScoreProps {
   percentage: number
   label: string
@@ -9,6 +11,7 @@ export default function RadialScore({ percentage, label, recommended }: RadialSc
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (percentage / 100) * circumference
   const roundedPercentage = Math.round(percentage)
+  const color = getScoreColor(percentage)
 
   return (
     <div className="radial-score">
@@ -25,7 +28,7 @@ export default function RadialScore({ percentage, label, recommended }: RadialSc
           cy="50"
           r={radius}
           fill="none"
-          stroke="var(--accent)"
+          stroke={color}
           strokeWidth="8"
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -38,6 +41,7 @@ export default function RadialScore({ percentage, label, recommended }: RadialSc
           textAnchor="middle"
           dominantBaseline="central"
           className="radial-score-text"
+          fill={color}
         >
           {roundedPercentage}%
         </text>
@@ -45,7 +49,13 @@ export default function RadialScore({ percentage, label, recommended }: RadialSc
       <span className="radial-score-copy">
         <span className="radial-label">{label}</span>
         <span className="radial-score-meta">
-          {recommended ? 'Recommended process' : `${roundedPercentage}/100`}
+          {recommended ? (
+            'Recommended process'
+          ) : (
+            <span>
+              <span style={{ color }}>{roundedPercentage}</span>/100
+            </span>
+          )}
         </span>
       </span>
       {recommended && <span className="radial-recommended">Best fit</span>}

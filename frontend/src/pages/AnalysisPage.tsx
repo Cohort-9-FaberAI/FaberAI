@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/layout/AppShell'
 import WizardNav from '../components/layout/WizardNav'
@@ -10,6 +10,7 @@ import VerdictStep from '../components/workspace/steps/VerdictStep'
 import ExportStep from '../components/workspace/steps/ExportStep'
 import { useStore } from '../store'
 import { useTaskPolling } from '../lib/useTaskPolling'
+import { analyzeFile } from '../lib/useSequentialFileProcessor'
 import { asAnalysisResult, hasCompletedReport } from '../lib/analysisView'
 
 function FilePoller({
@@ -19,6 +20,7 @@ function FilePoller({
 }) {
   const updateFile = useStore((s) => s.updateFile)
   const setAnalysisResult = useStore((s) => s.setAnalysisResult)
+  const syncProjectFile = useStore((s) => s.syncProjectFile)
 
   useTaskPolling(
     file.status === 'processing' && file.taskId && file.taskId !== 'dev-manual'
@@ -27,8 +29,13 @@ function FilePoller({
     file.analysisId,
     (data) => {
       const status = typeof data?.status === 'string' ? data.status : null
+      const result = data?.result as Record<string, unknown> | undefined
       if (status === 'SUCCESS') {
-        updateFile(file.id, { status: 'completed' })
+        updateFile(file.id, { status: 'completed', analysisResult: result ?? null })
+        if (result) {
+          setAnalysisResult(file.id, result)
+        }
+        syncProjectFile(file.id)
       }
       if (status === 'FAILED' || status === 'FAILURE') {
         const errorMsg =
@@ -38,10 +45,7 @@ function FilePoller({
               ? data.message
               : 'DFM inspection failed during background processing.'
         updateFile(file.id, { status: 'failed', errorMessage: errorMsg })
-      }
-      const result = data?.result as Record<string, unknown> | undefined
-      if (result) {
-        setAnalysisResult(file.id, result)
+        syncProjectFile(file.id)
       }
     },
     () => {
@@ -49,6 +53,7 @@ function FilePoller({
         status: 'failed',
         errorMessage: 'Network timeout or server connection error while checking task status.',
       })
+      syncProjectFile(file.id)
     },
   )
   return null
@@ -61,17 +66,30 @@ export default function AnalysisPage() {
   const openTab = useStore((s) => s.openTab)
   const activeFileId = useStore((s) => s.activeFileId)
 
-  const [stepByFile, setStepByFile] = useState<Record<string, WorkspaceStep>>({})
-
   const uploadedFiles = files.filter((f) => f.taskId !== 'dev-manual')
   const activeFile =
     files.find((f) => f.id === activeFileId) ?? uploadedFiles[uploadedFiles.length - 1] ?? null
   const activeId = activeFile?.id ?? ''
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
+  const requestedStep = useStore((s) => s.requestedStep)
+  const setRequestedStep = useStore((s) => s.setRequestedStep)
+  const storedStepByFile = useStore((s) => s.stepByFile)
+  const setStoredStepByFile = useStore((s) => s.setStepByFile)
 
-  // Auto-open last file tab if no tabs are open and files exist
+  // Jump to a requested workspace step (e.g. "inspection" from a project's View Analysis)
   useEffect(() => {
+    if (!requestedStep) return
+    if (requestedStep.fileId !== activeId) return
+    setStoredStepByFile(activeId, requestedStep.step)
+    setRequestedStep(null)
+  }, [requestedStep, activeId, setStoredStepByFile, setRequestedStep])
+
+  // Auto-open last file tab on first mount if no tabs are open and files exist
+  const didInitialOpen = useRef(false)
+  useEffect(() => {
+    if (didInitialOpen.current) return
     if (uploadedFiles.length > 0 && openTabIds.length === 0) {
+      didInitialOpen.current = true
       const lastFile = uploadedFiles[uploadedFiles.length - 1]
       if (lastFile) {
         openTab(lastFile.id)
@@ -119,16 +137,26 @@ export default function AnalysisPage() {
     )
   }
 
-  const currentStep: WorkspaceStep = activeFile ? (stepByFile[activeFile.id] ?? 'setup') : 'setup'
+  const currentStep: WorkspaceStep = activeFile
+    ? (storedStepByFile[activeFile.id] ?? 'setup')
+    : 'setup'
 
   function handleSetStep(newStep: WorkspaceStep) {
     if (activeFile) {
-      setStepByFile((prev) => ({ ...prev, [activeFile.id]: newStep }))
+      setStoredStepByFile(activeFile.id, newStep)
     }
   }
 
   const analysis = asAnalysisResult(analysisResult)
   const canProceedToVerdict = hasCompletedReport(analysis)
+
+  const canAnalyze =
+    !!activeFile &&
+    activeFile.file !== null &&
+    activeFile.status === 'pending' &&
+    !activeFile.taskId
+
+  const canViewAnalysis = canProceedToVerdict
 
   // Configure WizardNav internal transitions
   const stepOrder: WorkspaceStep[] = ['setup', 'inspection', 'verdict', 'export']
@@ -144,15 +172,29 @@ export default function AnalysisPage() {
 
   const handleNext = () => {
     if (currentIndex < stepOrder.length - 1) {
+      if (currentStep === 'setup' && activeFile && canAnalyze) {
+        void analyzeFile(activeFile.id)
+      }
       handleSetStep(stepOrder[currentIndex + 1])
     }
   }
 
-  const isNextDisabled = currentStep === 'inspection' && !canProceedToVerdict
+  const setupNextDisabled = !canAnalyze && !canViewAnalysis
+  const isNextDisabled =
+    (currentStep === 'setup' && setupNextDisabled) ||
+    (currentStep === 'inspection' && !canProceedToVerdict)
   const hint =
-    currentStep === 'inspection' && !canProceedToVerdict
-      ? 'A completed DFM report is required before proceeding to Conclusion.'
-      : null
+    currentStep === 'setup' && setupNextDisabled
+      ? activeFile
+        ? activeFile.status === 'processing'
+          ? 'This CAD file is currently being analyzed. Results will appear in the DFM Analysis step.'
+          : activeFile.status === 'failed'
+            ? 'Analysis failed for this file. Re-upload it to retry.'
+            : 'This CAD file has already been analyzed.'
+        : 'Upload a CAD file in the Uploads step, then run the DFM inspection.'
+      : currentStep === 'inspection' && !canProceedToVerdict
+        ? 'A completed DFM report is required before proceeding to Conclusion.'
+        : null
 
   return (
     <AppShell>
@@ -179,10 +221,26 @@ export default function AnalysisPage() {
               label: currentIndex === 0 ? 'Uploads' : 'Previous',
               onClick: handlePrev,
             }}
+            extra={
+              currentStep === 'export' ? (
+                <button
+                  type="button"
+                  className="wizard-nav-btn wizard-nav-prev"
+                  onClick={() => navigate('/home')}
+                >
+                  Back to Home
+                </button>
+              ) : undefined
+            }
             next={
               currentIndex < stepOrder.length - 1
                 ? {
-                    label: 'Next Step',
+                    label:
+                      currentStep === 'setup'
+                        ? canViewAnalysis
+                          ? 'View Analysis'
+                          : 'Analyze'
+                        : 'Next Step',
                     onClick: handleNext,
                     disabled: isNextDisabled,
                     title: hint ?? undefined,

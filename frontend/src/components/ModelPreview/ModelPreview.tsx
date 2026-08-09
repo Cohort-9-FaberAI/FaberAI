@@ -1,5 +1,5 @@
 import styles from './ModelPreview.module.css'
-import { useState, useEffect, useContext, useCallback, useMemo, useRef } from 'react'
+import { useState, useContext, useCallback, useMemo, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Float, GizmoHelper, GizmoViewport } from '@react-three/drei'
 
@@ -11,14 +11,17 @@ import {
 import { ModelContext, type ModelTransform } from './ModelContext'
 import { Model } from './Model'
 import IssueMarker from './IssueMarker'
-import { PCFShadowMap } from 'three'
+import { PCFShadowMap, type BufferGeometry } from 'three'
 import { useStore } from '../../store'
 import { isVisibleIssueSeverity } from '../../lib/analysisView'
 import Toolbar from './Toolbar'
+import XRayCanvas from './XRayCanvas'
+import { LuBox, LuLayers } from 'react-icons/lu'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
   previewBuffer?: ArrayBuffer | null
+  previewSourceFormat?: 'stl' | 'step' | null
   onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
   height?: number | string
 }
@@ -57,6 +60,44 @@ function transformPoint(
   ]
 }
 
+const MESH_SCALE = 0.5
+
+function getClosestSurfacePoint(
+  point: [number, number, number],
+  geometry?: BufferGeometry | null,
+): [number, number, number] {
+  if (!geometry) return point
+  const posAttr = geometry.getAttribute('position')
+  if (!posAttr || posAttr.count === 0) return point
+
+  const arr = posAttr.array
+  const count = posAttr.count * 3
+  let minDistanceSq = Infinity
+  let closestX = point[0]
+  let closestY = point[1]
+  let closestZ = point[2]
+
+  for (let i = 0; i < count; i += 3) {
+    const vx = arr[i]
+    const vy = arr[i + 1]
+    const vz = arr[i + 2]
+
+    const dx = vx - point[0]
+    const dy = vy - point[1]
+    const dz = vz - point[2]
+    const distSq = dx * dx + dy * dy + dz * dz
+
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq
+      closestX = vx
+      closestY = vy
+      closestZ = vz
+    }
+  }
+
+  return [closestX, closestY, closestZ]
+}
+
 function markerColor(issue: ManufacturabilityIssue) {
   if (issue.three_js_highlight?.color) return issue.three_js_highlight.color
   if (issue.severity === 'blocker' || issue.severity === 'high') return 'red'
@@ -90,6 +131,7 @@ function getPreviewUrl(analysis: AnalysisResult | null, previewFileUrl: string |
 function ModelCanvas() {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
+  const sharedGeometry = context?.sharedGeometry
   const isLoginLogo = context?.modelUrl === '/logo.stl' || context?.modelUrl?.endsWith('logo.stl')
   const issueMarkers =
     context?.analysis?.issues
@@ -98,7 +140,17 @@ function ModelCanvas() {
       .filter(
         (marker): marker is { issue: ManufacturabilityIssue; position: [number, number, number] } =>
           marker.position !== null,
-      ) ?? []
+      )
+      .map(({ issue, position }) => {
+        const localPos = transformPoint(position, modelTransform)
+        const surfacePos = getClosestSurfacePoint(localPos, sharedGeometry)
+        const worldPos: [number, number, number] = [
+          surfacePos[0] * MESH_SCALE,
+          surfacePos[1] * MESH_SCALE,
+          surfacePos[2] * MESH_SCALE,
+        ]
+        return { issue, worldPos }
+      }) ?? []
 
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
@@ -114,11 +166,13 @@ function ModelCanvas() {
         <Model />
       )}
 
-      {issueMarkers.map(({ issue, position }) => (
+      {issueMarkers.map(({ issue, worldPos }) => (
         <IssueMarker
-          key={`${issue.issue_id}:${position.join(':')}`}
-          position={transformPoint(position, modelTransform)}
+          key={`${issue.issue_id}:${worldPos.join(':')}`}
+          position={worldPos}
           color={markerColor(issue)}
+          radius={0.5}
+          renderAsSphere={true}
           issue={issue}
           type="POINT"
         />
@@ -138,23 +192,29 @@ export default function ModelPreview({
   analysis = null,
   previewFileUrl = null,
   previewBuffer,
-  onIssueSelected,
+  previewSourceFormat = null,
   height,
 }: ModelPreviewProps) {
-  const [selectedIssue, setSelectedIssue] = useState<ManufacturabilityIssue | null>(null)
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
   const [loadedSource, setLoadedSource] = useState<string | null>(null)
   const [loadedTransform, setLoadedTransform] = useState<{
     source: string
     transform: ModelTransform
   } | null>(null)
+  const [sharedGeometry, setSharedGeometry] = useState<{
+    source: string
+    geometry: BufferGeometry
+  } | null>(null)
+  const [showXRay, setShowXRay] = useState<boolean>(false)
   const devFileBuffer = useStore((s) => s.currentFileBuffer)
   const fileBuffer = previewBuffer !== undefined ? previewBuffer : devFileBuffer
+  const bufferSourceFormat =
+    previewSourceFormat ?? (analysis?.geometry_data?.source_format === 'step' ? 'step' : null)
   const modelUrl = useMemo(
     () => getPreviewUrl(analysis, previewFileUrl),
     [analysis, previewFileUrl],
   )
-  const modelSource = modelUrl ?? (fileBuffer ? 'local-stl-buffer' : null)
+  const modelSource = modelUrl ?? (fileBuffer ? 'local-buffer' : null)
   const hasRawStepOnly = Boolean(
     analysis?.geometry_data?.source_format === 'step' &&
     !analysis?.geometry_data?.preview_url &&
@@ -182,23 +242,35 @@ export default function ModelPreview({
     },
     [modelSource],
   )
+  const handleGeometryLoaded = useCallback(
+    (geometry: BufferGeometry) => {
+      if (modelSource) {
+        setSharedGeometry({ source: modelSource, geometry })
+      }
+    },
+    [modelSource],
+  )
   const activeLoadError = loadError?.source === modelSource ? loadError.message : null
   const activeTransform = loadedTransform?.source === modelSource ? loadedTransform.transform : null
+  const activeGeometry = sharedGeometry?.source === modelSource ? sharedGeometry.geometry : null
   const isLoadingModel = Boolean(modelSource && loadedSource !== modelSource && !activeLoadError)
+
+  const isLoginLogo = modelUrl === '/logo.stl' || Boolean(modelUrl?.endsWith('logo.stl'))
+  const hasIssues = Boolean(
+    analysis?.issues &&
+    analysis.issues.filter((issue) => isVisibleIssueSeverity(issue.severity)).length > 0,
+  )
+  const shouldDisplayXRay = hasIssues && !isLoginLogo && showXRay
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullScreen, setFullScreen] = useState<boolean>(false)
-  //triggers onIssueSelected callback when the selected issue changes
-  useEffect(() => {
-    if (onIssueSelected) onIssueSelected(selectedIssue)
-  }, [onIssueSelected, selectedIssue])
 
   if (!canRenderModel) {
     return (
       <div className={styles.placeholder}>
         {hasRawStepOnly
           ? 'This STEP report completed, but no converted STL preview was attached.'
-          : 'Upload an STL file or wait for a completed analysis preview.'}
+          : 'Upload a CAD file or wait for a completed analysis preview.'}
       </div>
     )
   }
@@ -206,7 +278,27 @@ export default function ModelPreview({
   return (
     <div className={styles.wrapper} style={{ height }}>
       <div ref={containerRef} className={styles.canvasContainer}>
-        {!(modelUrl === '/logo.stl' || modelUrl?.endsWith('logo.stl')) && (
+        {hasIssues && !isLoginLogo && (
+          <div className={styles.viewModeSelector}>
+            <button
+              type="button"
+              className={`${styles.viewModeOption} ${!showXRay ? styles.activeOption : ''}`}
+              onClick={() => setShowXRay(false)}
+            >
+              <LuBox size={16} />
+              <span>Solid</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.viewModeOption} ${showXRay ? styles.activeOption : ''}`}
+              onClick={() => setShowXRay(true)}
+            >
+              <LuLayers size={16} />
+              <span>X-Ray</span>
+            </button>
+          </div>
+        )}
+        {!isLoginLogo && (
           <Toolbar
             onFullScreenPressed={() => {
               if (isFullScreen) document.exitFullscreen()
@@ -222,16 +314,18 @@ export default function ModelPreview({
           value={{
             analysis,
             fileBuffer,
+            sourceFormat: bufferSourceFormat,
             modelUrl,
             modelTransform: activeTransform,
             previewFileUrl,
+            sharedGeometry: activeGeometry,
             onModelError: handleModelError,
             onModelLoaded: handleModelLoaded,
+            onGeometryLoaded: handleGeometryLoaded,
             onModelTransform: handleModelTransform,
-            selectedIssueSetter: setSelectedIssue,
           }}
         >
-          <ModelCanvas />
+          {shouldDisplayXRay ? <XRayCanvas /> : <ModelCanvas />}
         </ModelContext.Provider>
       </div>
     </div>

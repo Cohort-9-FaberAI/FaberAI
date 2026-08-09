@@ -8,7 +8,10 @@ import { useStore } from '../../../store'
 import {
   asAnalysisResult,
   getAnalysisScore,
-  getDisplayIssues,
+  getMoldingScore,
+  getPrintingScore,
+  getProcessIssues,
+  getScoreColor,
   hasCompletedReport,
 } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
@@ -32,10 +35,16 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
   const livePreviewFilename = activeFile?.name ?? null
 
-  const issues = getDisplayIssues(analysis)
-  const score = getAnalysisScore(analysis)
-  const loading =
-    !isDevManual && activeFile?.status === 'processing' && taskId !== null && !analysis
+  const overallScore = getAnalysisScore(analysis)
+  const score =
+    activeTab === 'molding'
+      ? (getMoldingScore(analysis) ?? overallScore)
+      : (getPrintingScore(analysis) ?? overallScore)
+  const issues =
+    activeTab === 'molding'
+      ? getProcessIssues(analysis, 'injection_molding')
+      : getProcessIssues(analysis, 'printing')
+  const loading = !isDevManual && activeFile?.status === 'processing' && !analysis
   const error =
     activeFile?.status === 'failed' && !isDevManual
       ? activeFile.errorMessage ||
@@ -44,8 +53,8 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const noAnalysisStarted = !activeFile && !analysis
   const canContinue = hasCompletedReport(analysis)
 
-  const cons = issues.filter((i) => i.severity === 'high' || i.severity === 'blocker')
-  const neutral = issues.filter((i) => i.severity === 'medium' || i.severity === 'major')
+  const severe = issues.filter((i) => i.severity === 'high' || i.severity === 'blocker')
+  const problematic = issues.filter((i) => i.severity === 'medium' || i.severity === 'major')
   const minor = issues.filter((i) => i.severity === 'low' || i.severity === 'minor')
 
   return (
@@ -104,10 +113,13 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
           analysis={analysis}
           previewFileUrl={livePreviewUrl}
           previewBuffer={fileBuffer}
+          previewSourceFormat={activeFile?.sourceFormat ?? null}
           previewFilename={livePreviewFilename}
           viewerMeta={
             canContinue && score !== null ? (
-              <span className="viewer-score">{Math.round(score)}/100</span>
+              <span className="viewer-score">
+                <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
+              </span>
             ) : null
           }
         >
@@ -139,34 +151,42 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
               <div className="analysis-report-summary">
                 <div>
                   <span>Score</span>
-                  <strong>{score !== null ? `${Math.round(score)}/100` : 'Ready'}</strong>
+                  <strong>
+                    {score !== null ? (
+                      <>
+                        <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
+                      </>
+                    ) : (
+                      'Ready'
+                    )}
+                  </strong>
                 </div>
                 <p>{analysis?.summary ?? 'DFM report completed successfully.'}</p>
               </div>
             )}
             <div className="analysis-findings-scroll" aria-label="Analysis findings">
               <IssueAccordion
-                title="Pros"
+                title="Minor"
                 count={minor.length}
-                color="var(--severity-pro)"
+                color="var(--severity-low)"
                 items={minor}
                 emptyLabel={
                   analysis
-                    ? 'No minor positive notes are available for this report yet.'
+                    ? 'No minor findings are available for this report yet.'
                     : 'Findings will appear once analysis is complete.'
                 }
               />
               <IssueAccordion
-                title="Neutral"
-                count={neutral.length}
+                title="Problematic"
+                count={problematic.length}
                 color="var(--severity-medium)"
-                items={neutral}
+                items={problematic}
               />
               <IssueAccordion
-                title="Cons"
-                count={cons.length}
+                title="Severe"
+                count={severe.length}
                 color="var(--severity-high)"
-                items={cons}
+                items={severe}
               />
             </div>
           </motion.div>

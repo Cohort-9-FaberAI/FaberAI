@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import { useStore } from '../../../store'
-import { asAnalysisResult, getAnalysisScore, hasCompletedReport } from '../../../lib/analysisView'
+import {
+  asAnalysisResult,
+  getAnalysisScore,
+  getScoreColor,
+  hasCompletedReport,
+} from '../../../lib/analysisView'
 import { downloadAnalysisReportPdf } from '../../../lib/api'
 import type { UploadedFile } from '../../../store'
 
@@ -64,9 +69,14 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       analysis={cleanAnalysis}
       previewFileUrl={livePreviewUrl}
       previewBuffer={fileBuffer}
+      previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
       viewerMeta={
-        score !== null ? <span className="viewer-score">{Math.round(score)}/100</span> : null
+        score !== null ? (
+          <span className="viewer-score">
+            <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
+          </span>
+        ) : null
       }
     >
       <section className="download-options" aria-label="Report export options">

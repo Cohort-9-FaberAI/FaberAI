@@ -10,8 +10,14 @@ export default function Toolbar({ onFullScreenPressed, isFullScreen }: ToolbarPr
   return (
     <div className={styles.toolBar}>
       <div className={styles.fullscreenContainer}>
-        <button className={styles.btn} onClick={onFullScreenPressed}>
-          {isFullScreen ? <LuShrink size={20} /> : <LuExpand size={20} />}
+        <button
+          type="button"
+          title={isFullScreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          aria-label={isFullScreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          className={styles.btn}
+          onClick={onFullScreenPressed}
+        >
+          {isFullScreen ? <LuShrink size={18} /> : <LuExpand size={18} />}
         </button>
       </div>
     </div>

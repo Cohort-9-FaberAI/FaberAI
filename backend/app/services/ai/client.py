@@ -1,24 +1,28 @@
-"""Provider-agnostic LLM client for the DFM assistant.
+"""Anthropic Claude client for the DFM assistant.
 
-Talks to either an OpenAI-compatible ``/chat/completions`` endpoint or
-Anthropic's native ``/v1/messages`` API, picked automatically from
-``FABERAI_AI_BASE_URL`` (Anthropic is used when the base URL contains
-"anthropic.com"; everything else assumes OpenAI-shaped). Configured entirely
-through environment variables, so the model/provider can be swapped without a
-code change. Default model: claude-opus-4-8 (team decision, updated from the
-earlier muse-spark-1.1 placeholder).
+Talks to the Claude Messages API (``POST /v1/messages``) through the official
+``anthropic`` SDK, configured entirely through environment variables so the
+model can be swapped without a code change.
 
-    FABERAI_AI_BASE_URL   provider base URL (no trailing /chat/completions
-                           or /v1/messages — that suffix is added per-provider)
-    FABERAI_AI_API_KEY    bearer token / Anthropic API key; absent means
-                           "AI not configured"
-    FABERAI_AI_MODEL      model id (default: claude-opus-4-8)
+    FABERAI_AI_API_KEY    Claude API key (falls back to ANTHROPIC_API_KEY)
+    FABERAI_AI_MODEL      model id (default: claude-opus-5)
+    FABERAI_AI_BASE_URL   optional API base URL override (gateway/proxy)
     FABERAI_AI_TIMEOUT    request timeout in seconds (default: 90)
-    FABERAI_AI_MAX_TOKENS response cap (default: 900)
+    FABERAI_AI_MAX_TOKENS response cap (default: 2000)
+    FABERAI_AI_EFFORT     low | medium | high | xhigh | max (default: low)
 
 When no key is configured the client raises ``LLMNotConfigured`` and the service
 layer answers deterministically from the report instead. The endpoint stays
 useful with no provider account attached.
+
+Two Claude-specific details this module exists to get right:
+
+* the Messages API takes the system prompt as a **top-level** parameter, not as
+  a ``system`` entry in ``messages`` — ``complete()`` splits the message list
+  the prompt builder produces;
+* on Claude Opus 5 thinking is on by default and ``max_tokens`` caps thinking
+  *plus* answer text, so the cap is sized with headroom and depth is controlled
+  with ``effort`` rather than a sampling temperature (which the model rejects).
 """
 
 from __future__ import annotations
@@ -27,14 +31,14 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-import requests
+import anthropic
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-opus-4-8"
+DEFAULT_MODEL = "claude-opus-5"
 DEFAULT_TIMEOUT_SECONDS = 90.0
-DEFAULT_MAX_TOKENS = 900
-ANTHROPIC_API_VERSION = "2023-06-01"
+DEFAULT_MAX_TOKENS = 2000
+DEFAULT_EFFORT = "low"
 
 
 class LLMNotConfigured(RuntimeError):
@@ -46,7 +50,7 @@ class LLMRequestError(RuntimeError):
 
 
 class LLMClient:
-    """Minimal chat-completions client — one call, no streaming, no retries.
+    """Minimal Messages API client — one call, no streaming, no retries.
 
     Deliberately thin: the DFM verdicts are deterministic, so the model is only
     writing explanation text. A failed call degrades to the deterministic
@@ -60,9 +64,18 @@ class LLMClient:
         model: Optional[str] = None,
         timeout: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        effort: Optional[str] = None,
     ):
-        self.base_url = (base_url or os.environ.get("FABERAI_AI_BASE_URL", "")).rstrip("/")
-        self.api_key = api_key or os.environ.get("FABERAI_AI_API_KEY", "")
+        # Optional: only set for a gateway in front of the Claude API. Empty
+        # means "use the SDK default endpoint".
+        self.base_url = (base_url or os.environ.get("FABERAI_AI_BASE_URL") or "").rstrip("/")
+        # ANTHROPIC_API_KEY is the name the Claude SDK and every Anthropic doc
+        # uses; accept it so a standard .env works without a rename.
+        self.api_key = (
+            api_key
+            or os.environ.get("FABERAI_AI_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY", "")
+        )
         self.model = model or os.environ.get("FABERAI_AI_MODEL", DEFAULT_MODEL)
         self.timeout = float(
             timeout or os.environ.get("FABERAI_AI_TIMEOUT", DEFAULT_TIMEOUT_SECONDS)
@@ -70,143 +83,74 @@ class LLMClient:
         self.max_tokens = int(
             max_tokens or os.environ.get("FABERAI_AI_MAX_TOKENS", DEFAULT_MAX_TOKENS)
         )
+        self.effort = effort or os.environ.get("FABERAI_AI_EFFORT", DEFAULT_EFFORT)
+        self._client: Optional[anthropic.Anthropic] = None
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.api_key and self.base_url)
+        return bool(self.api_key)
 
-    @property
-    def is_anthropic(self) -> bool:
-        """True when FABERAI_AI_BASE_URL points at Anthropic's own API.
-
-        Anthropic's ``/v1/messages`` endpoint uses a different auth header,
-        request body, and response shape than the OpenAI-style
-        ``/chat/completions`` convention this client otherwise assumes — so
-        this flag decides which branch ``complete()`` takes.
-        """
-        return "anthropic.com" in self.base_url
+    def _sdk(self) -> anthropic.Anthropic:
+        if self._client is None:
+            kwargs = {"api_key": self.api_key, "timeout": self.timeout, "max_retries": 0}
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+            self._client = anthropic.Anthropic(**kwargs)
+        return self._client
 
     def complete(self, messages: List[Dict[str, str]]) -> str:
-        """Send a chat completion and return the assistant's text."""
+        """Send a Messages API request and return the assistant's text."""
         if not self.is_configured:
             raise LLMNotConfigured(
-                "No LLM provider configured. Set FABERAI_AI_BASE_URL and FABERAI_AI_API_KEY "
+                "No LLM provider configured. Set FABERAI_AI_API_KEY (or ANTHROPIC_API_KEY) "
                 "to enable generated explanations."
             )
-        if self.is_anthropic:
-            return self._complete_anthropic(messages)
-        return self._complete_openai(messages)
 
-    def _complete_openai(self, messages: List[Dict[str, str]]) -> str:
+        # The prompt builder emits an OpenAI-style [system, user] list; the
+        # Claude Messages API wants the system prompt hoisted out.
+        system = "\n\n".join(
+            str(m.get("content", "")) for m in messages if m.get("role") == "system"
+        )
+        turns = [
+            {"role": m["role"], "content": m["content"]}
+            for m in messages
+            if m.get("role") != "system"
+        ]
+        if not turns:
+            raise LLMRequestError("No user message to send.")
+
         try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    # Low temperature: the same report should produce the same
-                    # explanation. DFM answers that drift destroy trust.
-                    "temperature": 0.1,
-                    "max_tokens": self.max_tokens,
-                },
-                timeout=self.timeout,
+            response = self._sdk().messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system=system or anthropic.NOT_GIVEN,
+                messages=turns,
+                # Depth, not randomness: Opus 5 rejects `temperature`, and the
+                # same report should produce the same explanation. DFM answers
+                # that drift destroy trust.
+                output_config={"effort": self.effort},
             )
-        except requests.exceptions.RequestException as exc:
+        except anthropic.APIError as exc:
             raise LLMRequestError(f"LLM request failed: {exc}") from exc
 
-        if not response.ok:
-            raise LLMRequestError(
-                f"LLM provider returned {response.status_code}: {response.text}"
+        # Safety classifiers can decline with HTTP 200 and empty content; treat
+        # that as a failed call so the deterministic answer is served instead.
+        if response.stop_reason == "refusal":
+            raise LLMRequestError("The model declined to answer this request.")
+        if response.stop_reason == "max_tokens":
+            logger.warning(
+                "AI answer hit max_tokens (%s); raise FABERAI_AI_MAX_TOKENS.",
+                self.max_tokens,
             )
 
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise LLMRequestError(f"LLM returned a non-JSON response: {exc}") from exc
-
-        try:
-            return payload["choices"][0]["message"]["content"].strip()
-        except (KeyError, IndexError, AttributeError, TypeError) as exc:
+        text = "\n".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        ).strip()
+        if not text:
             raise LLMRequestError(
-                f"Unexpected LLM response shape: {payload!r}"
-            ) from exc
-
-    def _complete_anthropic(self, messages: List[Dict[str, str]]) -> str:
-        # Anthropic takes "system" as a top-level field, not a message with
-        # role="system" — every caller in this codebase builds messages the
-        # OpenAI way, so split it out here rather than touching every caller.
-        system_prompt, chat_messages = _split_system_message(messages)
-        if not chat_messages:
-            raise LLMRequestError("No user/assistant messages to send (only a system message).")
-
-        body = {
-            "model": self.model,
-            "max_tokens": self.max_tokens,
-            "messages": chat_messages,
-            # No "temperature" here on purpose: newer Anthropic models (e.g.
-            # claude-opus-4-8) reject it outright with a 400 "temperature is
-            # deprecated for this model" error. Older models accept omitting
-            # it fine too (falls back to their own default), so leaving it
-            # out is the version that works across the model lineup.
-        }
-        if system_prompt:
-            body["system"] = system_prompt
-
-        try:
-            response = requests.post(
-                f"{self.base_url}/v1/messages",
-                headers={
-                    "x-api-key": self.api_key,
-                    "anthropic-version": ANTHROPIC_API_VERSION,
-                    "Content-Type": "application/json",
-                },
-                json=body,
-                timeout=self.timeout,
+                f"LLM returned no text content (stop_reason={response.stop_reason!r})."
             )
-        except requests.exceptions.RequestException as exc:
-            raise LLMRequestError(f"LLM request failed: {exc}") from exc
-
-        if not response.ok:
-            # requests' raise_for_status() only gives "400 Bad Request" — the
-            # useful part is Anthropic's own error body, e.g. {"error":
-            # {"type": "invalid_request_error", "message": "model: ... "}}.
-            raise LLMRequestError(
-                f"Anthropic API returned {response.status_code}: {response.text}"
-            )
-
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise LLMRequestError(f"LLM returned a non-JSON response: {exc}") from exc
-
-        try:
-            blocks = payload["content"]
-            text = "".join(b["text"] for b in blocks if b.get("type") == "text")
-            if not text:
-                raise KeyError("no text content blocks")
-            return text.strip()
-        except (KeyError, IndexError, AttributeError, TypeError) as exc:
-            raise LLMRequestError(
-                f"Unexpected LLM response shape: {payload!r}"
-            ) from exc
-
-
-def _split_system_message(
-    messages: List[Dict[str, str]]
-) -> tuple[Optional[str], List[Dict[str, str]]]:
-    """Pull out role="system" messages (Anthropic wants them separately).
-
-    Concatenates multiple system messages if present, in order. Everything
-    else passes through unchanged and in order.
-    """
-    system_parts = [m["content"] for m in messages if m.get("role") == "system"]
-    chat_messages = [m for m in messages if m.get("role") != "system"]
-    system_prompt = "\n\n".join(system_parts) if system_parts else None
-    return system_prompt, chat_messages
+        return text
 
 
 _default_client: Optional[LLMClient] = None
