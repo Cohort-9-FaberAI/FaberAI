@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from celery.result import AsyncResult
 from celery.exceptions import CeleryError
-from fastapi import FastAPI, HTTPException, Request, UploadFile, status
+from fastapi import Form, FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -282,7 +282,14 @@ def dependency_health_check():
     }
 
 @app.post("/upload/", status_code=status.HTTP_202_ACCEPTED, tags=["Upload"])
-async def upload_cad_file(file: UploadFile):
+async def upload_cad_file(
+    file: UploadFile,
+    quantity: Optional[int] = Form(default=None),
+    material: Optional[str] = Form(default=None),
+    tolerance: Optional[str] = Form(default=None),
+    process: Optional[str] = Form(default=None),
+    notes: Optional[str] = Form(default=None),
+):
     """
     Accepts a CAD file (STEP or STL), uploads it to Supabase Storage,
     creates a pending record in Supabase, and dispatches a background
@@ -309,11 +316,20 @@ async def upload_cad_file(file: UploadFile):
         )
 
     # Pass analysis_id to the worker so it can update the record
+    setup_inputs = {
+        "quantity": quantity,
+        "material": material,
+        "tolerance": tolerance,
+        "process": process,
+        "notes": notes,
+    }
+
     try:
         task = extract_geometry_task.delay(
             upload_result["public_url"],
             upload_result["original_filename"],
             analysis.analysis_id,
+            setup_inputs,
         )
     except (CeleryError, OSError, TimeoutError) as exc:
         _raise_backend_unhealthy(

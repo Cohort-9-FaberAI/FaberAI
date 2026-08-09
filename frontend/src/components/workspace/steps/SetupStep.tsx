@@ -14,9 +14,12 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const quantity = useStore((s) => s.quantity)
   const material = useStore((s) => s.material)
+  const process = useStore((s) => s.process)
+  const printingProcess = useStore((s) => s.printingProcess)
   const tolerance = useStore((s) => s.tolerance)
   const setQuantity = useStore((s) => s.setQuantity)
   const setMaterial = useStore((s) => s.setMaterial)
+  const setPrintingProcess = useStore((s) => s.setPrintingProcess)
   const setTolerance = useStore((s) => s.setTolerance)
 
   const analysis = asAnalysisResult(analysisResult)
@@ -66,12 +69,32 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
           <label htmlFor="material">Material</label>
           <select id="material" value={material} onChange={(e) => setMaterial(e.target.value)}>
             <option value="">Select material</option>
-            <option value="pla">PLA</option>
             <option value="abs">ABS</option>
-            <option value="petg">PETG</option>
-            <option value="nylon">Nylon</option>
+            <option value="pp">Polypropylene (PP)</option>
+            <option value="pc">Polycarbonate (PC)</option>
+            <option value="pa66">Nylon PA66</option>
+            <option value="pom">POM / Acetal</option>
+            <option value="ps">Polystyrene (PS)</option>
+            <option value="pbt">PBT</option>
           </select>
         </div>
+
+        {process === 'printing' && (
+          <div className="form-group">
+            <label htmlFor="printing_process">Printing process</label>
+            <select
+              id="printing_process"
+              value={printingProcess || ''}
+              onChange={(e) => setPrintingProcess(e.target.value)}
+            >
+              <option value="">Select process</option>
+              <option value="fdm">FDM</option>
+              <option value="sla">SLA / resin</option>
+              <option value="sls">SLS</option>
+              <option value="mjf">MJF</option>
+            </select>
+          </div>
+        )}
 
         <div className="form-group">
           <label htmlFor="tolerance">Tolerance</label>

@@ -186,6 +186,13 @@ class TestEndToEndVerdicts:
         assert rib.findings[0].measured == pytest.approx(0.8)
         assert rib.findings[0].threshold == 0.6
 
+    def test_findings_messages_include_rule_id(self, step_geometry_with_features):
+        step_geometry_with_features["ribs"][0]["thickness"] = 2.4
+        report = run_dfm_analysis(step_geometry_with_features, DFMInputs(material="ABS"))
+        rib = report.rule("M5")
+        assert rib.findings
+        assert any(f.message.startswith("M5:") for f in rib.findings)
+
     def test_score_impact_is_attributed_per_finding(self, stl_geometry):
         report = run_dfm_analysis(stl_geometry, DFMInputs(process=ProcessType.printing))
         printing = report.process_report(ProcessType.printing)

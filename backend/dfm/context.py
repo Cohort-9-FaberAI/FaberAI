@@ -360,6 +360,7 @@ class EvaluationContext:
         report so the AI layer can explain which values a verdict rests on."""
         return {
             "process": self.inputs.process.value if self.inputs.process else None,
+            "quantity": self.inputs.quantity,
             "material": self.inputs.material,
             "material_resolved": self.material.key if self.material else None,
             "material_class": self.material.material_class if self.material else None,
