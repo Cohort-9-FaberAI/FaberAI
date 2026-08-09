@@ -27,6 +27,13 @@ import requests
 
 setup_langtrace()
 logger = logging.getLogger(__name__)
+
+# Python's root logger defaults to WARNING with no handler beyond the
+# last-resort one, so plain logger.info(...) calls anywhere in the app
+# (including the AI-answer and retrieval timing breakdowns) would otherwise
+# never reach the console. This makes INFO-level logs from every module
+# visible without each one configuring logging itself.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _STEP_EXTENSIONS = {".step", ".stp"}
 
 
@@ -165,6 +172,21 @@ async def lifespan(app: FastAPI):
         config.version,
         config.scoring_version,
     )
+
+    # Best-effort: pull the ~440MB BGE embedding model into memory now rather
+    # than on the first /ai/ask or /dfm/knowledge/ask call. Without this, the
+    # very first question after every restart pays the full load time on top
+    # of the answer itself. Never fails startup — environments without the
+    # knowledge-base extras (or with no ASME data ingested yet) still boot
+    # fine and just retrieve nothing until it's installed.
+    try:
+        from app.services.dfm_knowledge.embeddings import embed_query
+
+        embed_query("warm up")
+        logger.info("ASME embedding model preloaded.")
+    except Exception as exc:  # noqa: BLE001 - startup must not fail on this
+        logger.warning("Embedding model preload skipped: %s", exc)
+
     yield
 
 
