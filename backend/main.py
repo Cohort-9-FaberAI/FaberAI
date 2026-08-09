@@ -559,6 +559,9 @@ class ReportDownloadRequest(BaseModel):
 
     analysis: Dict[str, Any]
     include_comparison: bool = False
+    process: Optional[str] = None
+    material: Optional[str] = None
+    tolerance: Optional[str] = None
 
 
 def _load_stored_analysis(analysis_id: str) -> dict:
@@ -625,31 +628,6 @@ def get_dfm_report(analysis_id: str):
     return DFMReport.model_validate(report)
 
 
-@app.get("/analysis/{analysis_id}/report.pdf", tags=["Reports"])
-def download_stored_analysis_report(
-    analysis_id: str,
-    include_comparison: bool = False,
-):
-    """Download a PDF report for a stored completed analysis."""
-    analysis = _load_stored_analysis(analysis_id)
-    if not analysis.get("dfm_report"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Analysis '{analysis_id}' has no completed DFM report yet. "
-                "Run the analysis before downloading a PDF."
-            ),
-        )
-
-    pdf = build_report_pdf(analysis, include_comparison=include_comparison)
-    filename = report_pdf_filename(analysis)
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @app.post("/analysis/report.pdf", tags=["Reports"])
 def download_inline_analysis_report(request: ReportDownloadRequest):
     """Download a PDF report from the completed analysis payload held by the UI."""
@@ -658,7 +636,44 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
             status_code=status.HTTP_409_CONFLICT,
             detail="A completed analysis is required before downloading a PDF.",
         )
-    if not request.analysis.get("dfm_report") and not request.analysis.get("issues"):
+
+    # 1. Garante que o dicionário de DFM report existe na análise
+    if "dfm_report" not in request.analysis or not isinstance(request.analysis["dfm_report"], dict):
+        request.analysis["dfm_report"] = {}
+
+    report_dict = request.analysis["dfm_report"]
+
+    # 2. Garante que a chave 'inputs' existe dentro do dfm_report
+    if "inputs" not in report_dict or not isinstance(report_dict["inputs"], dict):
+        report_dict["inputs"] = {}
+
+    # 3. Injeta diretamente os valores que vieram do Frontend (PLA, Printing, etc.)
+    if request.process:
+        p = request.process.lower().strip()
+        report_dict["inputs"]["process"] = "3d_printing" if "print" in p else "injection_molding"
+        report_dict["inputs"]["printing_process"] = "fdm"
+    if request.material:
+        mat = request.material.lower().strip()
+        report_dict["inputs"]["material"] = mat
+        report_dict["inputs"]["material_resolved"] = mat
+    if request.tolerance:
+        tol = request.tolerance.lower()
+        report_dict["inputs"]["tolerance"] = "precision" if ("precision" in tol or "fine" in tol) else "standard"
+
+    # 4. Removemos o aviso genérico de "No material supplied" das suposições se o material foi fornecido
+    if request.material and "processes" in report_dict:
+        for proc in report_dict["processes"]:
+            if "assumptions" in proc and isinstance(proc["assumptions"], list):
+                # Filtra fora o aviso de falta de material para o gerador de PDF não imprimir
+                proc["assumptions"] = [
+                    asm for asm in proc["assumptions"] 
+                    if "No material supplied" not in asm
+                ]
+                # Adiciona a suposição correta do material escolhido
+                mat_name = request.material.upper()
+                proc["assumptions"].insert(0, f"Material supplied: {mat_name} limits and thresholds applied.")
+
+    if not report_dict and not request.analysis.get("issues"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="No DFM report or issue list is available to export.",

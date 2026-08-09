@@ -135,7 +135,16 @@ class TestReportDownloadEndpoint:
             },
         }
         with patch.object(main, "get_analysis_by_id", return_value=stored):
-            response = client.get("/analysis/abc-123/report.pdf?include_comparison=true")
+            response = client.post(
+                "/analysis/report.pdf",
+                json={
+                    "analysis": stored["results_json"],
+                    "include_comparison": True,
+                    "material": "pla",
+                    "process": "printing",
+                    "tolerance": "standard"
+                }
+            )
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
