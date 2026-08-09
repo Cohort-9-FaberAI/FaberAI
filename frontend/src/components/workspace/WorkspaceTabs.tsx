@@ -59,8 +59,11 @@ export default function WorkspaceTabs() {
                 }
               }}
             >
-              <span className="browser-tab-label" title={file.name}>
-                {file.name}
+              <span
+                className="browser-tab-label"
+                title={file.projectName ? `${file.name} (${file.projectName})` : file.name}
+              >
+                {file.projectName ? `${file.name} (${file.projectName})` : file.name}
               </span>
               {isProcessing && (
                 <span className="browser-tab-icon" style={{ marginLeft: '6px' }}>

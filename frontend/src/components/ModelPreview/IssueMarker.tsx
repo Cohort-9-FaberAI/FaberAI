@@ -32,6 +32,7 @@ export default function IssueMarker({
   const [hovered, setHovered] = useState(false)
   const setHighlightedIssue = useStore((s) => s.setHighlightedIssue)
   const highlightedIssue = useStore((s) => s.highlightedIssue)
+  const setFocusedIssue = useStore((s) => s.setFocusedIssue)
 
   useFrame(({ camera }) => {
     if (type == 'POINT' && !renderAsSphere) meshRef.current?.lookAt(camera.position)
@@ -52,6 +53,10 @@ export default function IssueMarker({
         setHovered(true)
       }}
       onPointerOut={() => setHovered(false)}
+      onClick={(e) => {
+        e.stopPropagation()
+        setFocusedIssue(issue.issue_id)
+      }}
       scale={hovered || issue.issue_id === highlightedIssue ? 1.2 : 1}
     >
       {renderAsSphere ? (

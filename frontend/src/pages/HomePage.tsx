@@ -13,14 +13,20 @@ function FilePoller({
 }) {
   const updateFile = useStore((s) => s.updateFile)
   const setAnalysisResult = useStore((s) => s.setAnalysisResult)
+  const syncProjectFile = useStore((s) => s.syncProjectFile)
 
   useTaskPolling(
     file.status === 'processing' && file.taskId ? file.taskId : null,
     file.analysisId,
     (data) => {
       const status = typeof data?.status === 'string' ? data.status : null
+      const result = data?.result as Record<string, unknown> | undefined
       if (status === 'SUCCESS') {
-        updateFile(file.id, { status: 'completed' })
+        updateFile(file.id, { status: 'completed', analysisResult: result ?? null })
+        if (result) {
+          setAnalysisResult(file.id, result)
+        }
+        syncProjectFile(file.id)
       }
       if (status === 'FAILED' || status === 'FAILURE') {
         const errorMsg =
@@ -30,10 +36,7 @@ function FilePoller({
               ? data.message
               : 'DFM inspection failed during background processing.'
         updateFile(file.id, { status: 'failed', errorMessage: errorMsg })
-      }
-      const result = data?.result as Record<string, unknown> | undefined
-      if (result) {
-        setAnalysisResult(file.id, result)
+        syncProjectFile(file.id)
       }
     },
     () => {
@@ -41,6 +44,7 @@ function FilePoller({
         status: 'failed',
         errorMessage: 'Network timeout or server connection error while checking task status.',
       })
+      syncProjectFile(file.id)
     },
   )
   return null
@@ -50,12 +54,13 @@ export default function HomePage() {
   const navigate = useNavigate()
   const files = useStore((s) => s.files)
   const clearFiles = useStore((s) => s.clearFiles)
+  const closeTab = useStore((s) => s.closeTab)
 
-  const uploadedFiles = files.filter((f) => f.taskId !== 'dev-manual')
+  const sessionFiles = files.filter((f) => f.taskId !== 'dev-manual' && !f.projectName)
   const hasProcessing = files.some(
     (f) => f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending'),
   )
-  const canContinue = uploadedFiles.length > 0
+  const canContinue = sessionFiles.length > 0
   const nextHint = canContinue
     ? null
     : hasProcessing
@@ -64,7 +69,7 @@ export default function HomePage() {
 
   return (
     <AppShell>
-      {files.map((f) =>
+      {sessionFiles.map((f) =>
         f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending') ? (
           <FilePoller key={f.id} file={f} />
         ) : null,
@@ -77,22 +82,23 @@ export default function HomePage() {
             <p>Upload CAD files to get started.</p>
           </section>
 
-          {files.length > 0 && (
+          {sessionFiles.length > 0 && (
             <div className="file-list-container">
               <div className="file-list-header">
-                <h3>Uploaded Files ({files.length})</h3>
+                <h3>Uploaded Files ({sessionFiles.length})</h3>
                 <button type="button" className="clear-files-btn" onClick={() => clearFiles()}>
                   Clear all
                 </button>
               </div>
               <div className="file-list">
-                {files.map((f) => (
+                {sessionFiles.map((f) => (
                   <FileCard
                     key={f.id}
                     name={f.name}
                     status={f.status}
                     taskId={f.taskId}
                     errorMessage={f.errorMessage}
+                    onRemove={() => closeTab(f.id)}
                   />
                 ))}
               </div>

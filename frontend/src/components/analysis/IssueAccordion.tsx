@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../../store'
 interface Issue {
   issue_id?: string
@@ -22,9 +22,43 @@ export default function IssueAccordion({
   emptyLabel,
 }: IssueAccordionProps) {
   const [open, setOpen] = useState(false)
+  const [flashId, setFlashId] = useState<string | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
   const preview = items[0]?.message ?? emptyLabel ?? 'No findings in this category yet.'
   const highlightedIssue = useStore((s) => s.highlightedIssue)
   const setHighlightedIssue = useStore((s) => s.setHighlightedIssue)
+  const focusedIssueId = useStore((s) => s.focusedIssueId)
+  const focusNonce = useStore((s) => s.focusNonce)
+
+  const itemIdsKey = items
+    .map((i) => i.issue_id)
+    .filter(Boolean)
+    .join('|')
+
+  const hasFocusedIssue = !!focusedIssueId && itemIdsKey.split('|').includes(focusedIssueId)
+
+  useEffect(() => {
+    if (!hasFocusedIssue) return
+
+    const raf = requestAnimationFrame(() => {
+      setOpen(true)
+      setFlashId(focusedIssueId)
+    })
+
+    const timer = window.setTimeout(() => setFlashId(null), 1600)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(timer)
+    }
+  }, [hasFocusedIssue, focusedIssueId, focusNonce])
+
+  useEffect(() => {
+    if (!open || !focusedIssueId) return
+    const el = listRef.current?.querySelector(
+      `[data-issue-id="${CSS.escape(focusedIssueId)}"]`,
+    ) as HTMLElement | null
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [open, focusedIssueId, focusNonce])
 
   return (
     <div className={`issue-accordion${open ? ' is-open' : ''}`}>
@@ -41,7 +75,7 @@ export default function IssueAccordion({
       </button>
       {!open && <p className="issue-accordion-preview">{preview}</p>}
       {open && (
-        <ul className="issue-accordion-list">
+        <ul ref={listRef} className="issue-accordion-list">
           {items.length === 0 && emptyLabel && (
             <li className="issue-accordion-item issue-accordion-empty">
               <p>{emptyLabel}</p>
@@ -50,7 +84,8 @@ export default function IssueAccordion({
           {items.map((item, i) => (
             <li
               key={i}
-              className="issue-accordion-item"
+              data-issue-id={item.issue_id ?? undefined}
+              className={`issue-accordion-item${flashId === item.issue_id ? ' is-flashing' : ''}`}
               onMouseOver={() => item.issue_id && setHighlightedIssue(item.issue_id)}
               onMouseLeave={() => setHighlightedIssue(null)}
             >
