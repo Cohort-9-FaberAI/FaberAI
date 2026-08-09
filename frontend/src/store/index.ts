@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 export type FileStatus = 'stored' | 'pending' | 'processing' | 'completed' | 'failed'
 
@@ -54,6 +54,7 @@ interface ProjectSlice {
   addProjectFiles: (projectId: string, files: ProjectFile[]) => void
   removeProjectFile: (projectId: string, fileId: string) => void
   updateProjectFile: (projectId: string, fileId: string, patch: Partial<ProjectFile>) => void
+  syncProjectFile: (fileId: string) => void
 }
 
 export interface UploadedFile {
@@ -67,18 +68,25 @@ export interface UploadedFile {
   status: FileStatus
   errorMessage?: string | null
   analysisResult: Record<string, unknown> | null
+  projectName?: string | null
 }
+
+export type WorkspaceStepKey = 'setup' | 'inspection' | 'verdict' | 'export'
 
 interface FileSlice {
   files: UploadedFile[]
   activeFileId: string | null
   openTabIds: string[]
+  requestedStep: { fileId: string; step: WorkspaceStepKey } | null
   addFile: (f: UploadedFile) => void
   updateFile: (id: string, patch: Partial<UploadedFile>) => void
   clearFiles: () => void
   setActiveFileId: (id: string | null) => void
   openTab: (id: string) => void
   closeTab: (id: string) => void
+  setRequestedStep: (req: { fileId: string; step: WorkspaceStepKey } | null) => void
+  stepByFile: Record<string, WorkspaceStepKey>
+  setStepByFile: (fileId: string, step: WorkspaceStepKey) => void
 }
 
 interface AnalysisSlice {
@@ -122,6 +130,9 @@ interface ThemeSlice {
 interface SelectedIssueSlice {
   highlightedIssue: string | null
   setHighlightedIssue: (issue: string | null) => void
+  focusedIssueId: string | null
+  focusNonce: number
+  setFocusedIssue: (issue: string | null) => void
 }
 
 type StoreState = ProjectSettingsSlice &
@@ -135,6 +146,55 @@ type StoreState = ProjectSettingsSlice &
   SelectedIssueSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
+
+/**
+ * Storage wrapper that never throws on write failures (e.g. quota exceeded).
+ * The app keeps working in-memory even if persistence silently drops updates.
+ */
+const safeStorage: Storage = {
+  get length() {
+    try {
+      return localStorage.length
+    } catch {
+      return 0
+    }
+  },
+  clear() {
+    try {
+      localStorage.clear()
+    } catch {
+      // ignore
+    }
+  },
+  getItem(key) {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  key(index) {
+    try {
+      return localStorage.key(index)
+    } catch {
+      return null
+    }
+  },
+  removeItem(key) {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      // ignore
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value)
+    } catch {
+      // Quota exceeded or storage unavailable – keep running.
+    }
+  },
+}
 
 export const useStore = create<StoreState>()(
   persist(
@@ -175,12 +235,17 @@ export const useStore = create<StoreState>()(
       files: [],
       activeFileId: null,
       openTabIds: [],
+      requestedStep: null,
       addFile: (f) =>
         set((s) => ({
           files: [...s.files, f],
           activeFileId: f.id,
           openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
         })),
+      setRequestedStep: (req) => set({ requestedStep: req }),
+      stepByFile: {},
+      setStepByFile: (fileId, step) =>
+        set((s) => ({ stepByFile: { ...s.stepByFile, [fileId]: step } })),
       updateFile: (id, patch) =>
         set((s) => ({
           files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
@@ -209,9 +274,20 @@ export const useStore = create<StoreState>()(
                 ? filtered[filtered.length - 1]
                 : null
               : s.activeFileId
+          const analysisResults = { ...s.analysisResults }
+          delete analysisResults[id]
+          const fileBuffers = { ...s.fileBuffers }
+          delete fileBuffers[id]
           return {
+            files: s.files.filter((f) => f.id !== id),
             openTabIds: filtered,
             activeFileId: nextActive,
+            analysisResults,
+            fileBuffers,
+            currentFileBuffer:
+              s.currentFileBuffer && s.files.find((f) => f.id === id)
+                ? s.currentFileBuffer
+                : s.currentFileBuffer,
           }
         }),
 
@@ -268,6 +344,32 @@ export const useStore = create<StoreState>()(
               : p,
           ),
         })),
+      syncProjectFile: (fileId) =>
+        set((s) => {
+          const wf = s.files.find((f) => f.id === fileId)
+          if (!wf || !wf.projectName) return {}
+          return {
+            projects: s.projects.map((p) =>
+              p.name === wf.projectName
+                ? {
+                    ...p,
+                    files: p.files.map((f) =>
+                      f.id === fileId
+                        ? {
+                            ...f,
+                            status: wf.status,
+                            taskId: wf.taskId,
+                            analysisId: wf.analysisId,
+                            errorMessage: wf.errorMessage ?? null,
+                            analysisResult: wf.analysisResult,
+                          }
+                        : f,
+                    ),
+                  }
+                : p,
+            ),
+          }
+        }),
 
       // Model slice
       currentFileBuffer: null,
@@ -294,18 +396,37 @@ export const useStore = create<StoreState>()(
       // SelectedIssue Slice
       highlightedIssue: null,
       setHighlightedIssue: (issue) => set({ highlightedIssue: issue }),
+      focusedIssueId: null,
+      focusNonce: 0,
+      setFocusedIssue: (issue) =>
+        set((s) => ({
+          focusedIssueId: issue,
+          focusNonce: issue ? s.focusNonce + 1 : s.focusNonce,
+        })),
     }),
     {
       name: 'faberai-store',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (state) => ({
         ...state,
         currentFileBuffer: null,
         fileBuffers: {},
+        requestedStep: null,
+        // Transient UI state – never persists
+        highlightedIssue: null,
+        focusedIssueId: null,
+        focusNonce: 0,
+        isOpen: false,
+        // Persist analysis JSON in one canonical place (analysisResults) only.
         projects: state.projects.map((p) => ({
           ...p,
           files: p.files.map((f) => ({ ...f, file: null })),
         })),
-        files: state.files.map((f) => ({ ...f, file: null })),
+        files: state.files.map((f) => ({
+          ...f,
+          file: null,
+          analysisResult: undefined,
+        })),
       }),
     },
   ),

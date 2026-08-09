@@ -44,8 +44,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
     activeTab === 'molding'
       ? getProcessIssues(analysis, 'injection_molding')
       : getProcessIssues(analysis, 'printing')
-  const loading =
-    !isDevManual && activeFile?.status === 'processing' && taskId !== null && !analysis
+  const loading = !isDevManual && activeFile?.status === 'processing' && !analysis
   const error =
     activeFile?.status === 'failed' && !isDevManual
       ? activeFile.errorMessage ||

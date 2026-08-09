@@ -26,9 +26,12 @@ export default function ProjectDetailPage() {
   const addProjectFiles = useStore((s) => s.addProjectFiles)
   const removeProjectFile = useStore((s) => s.removeProjectFile)
   const addFile = useStore((s) => s.addFile)
+  const files = useStore((s) => s.files)
+  const openTab = useStore((s) => s.openTab)
   const setFileBuffer = useStore((s) => s.setFileBuffer)
   const setCurrentFileBuffer = useStore((s) => s.setCurrentFileBuffer)
   const setAnalysisResult = useStore((s) => s.setAnalysisResult)
+  const setRequestedStep = useStore((s) => s.setRequestedStep)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
   if (!project) {
@@ -60,19 +63,26 @@ export default function ProjectDetailPage() {
   }
 
   const analyze = (pf: ProjectFile) => {
+    const existing = files.find((f) => f.id === pf.id)
     const fileSourceFormat = detectSourceFormat(pf.name)
-    const uploaded: UploadedFile = {
-      id: pf.id,
-      name: pf.name,
-      file: pf.file,
-      taskId: null,
-      analysisId: null,
-      fileUrl: null,
-      sourceFormat: fileSourceFormat,
-      status: 'pending',
-      analysisResult: null,
+
+    if (existing) {
+      openTab(pf.id)
+    } else {
+      const uploaded: UploadedFile = {
+        id: pf.id,
+        name: pf.name,
+        file: pf.file,
+        taskId: null,
+        analysisId: null,
+        fileUrl: null,
+        sourceFormat: fileSourceFormat,
+        status: 'pending',
+        analysisResult: null,
+        projectName: project.name,
+      }
+      addFile(uploaded)
     }
-    addFile(uploaded)
 
     if (pf.file) {
       pf.file
@@ -92,21 +102,29 @@ export default function ProjectDetailPage() {
   }
 
   const viewResults = (pf: ProjectFile) => {
-    const uploaded: UploadedFile = {
-      id: pf.id,
-      name: pf.name,
-      file: null,
-      taskId: pf.taskId,
-      analysisId: pf.analysisId,
-      fileUrl: null,
-      sourceFormat: detectSourceFormat(pf.name),
-      status: pf.analysisResult ? 'completed' : 'stored',
-      analysisResult: pf.analysisResult,
+    const existing = files.find((f) => f.id === pf.id)
+
+    if (!existing) {
+      const uploaded: UploadedFile = {
+        id: pf.id,
+        name: pf.name,
+        file: null,
+        taskId: pf.taskId,
+        analysisId: pf.analysisId,
+        fileUrl: null,
+        sourceFormat: detectSourceFormat(pf.name),
+        status: pf.analysisResult ? 'completed' : 'stored',
+        analysisResult: pf.analysisResult,
+        projectName: project.name,
+      }
+      addFile(uploaded)
+    } else {
+      openTab(pf.id)
     }
-    addFile(uploaded)
     if (pf.analysisResult) {
       setAnalysisResult(pf.id, pf.analysisResult)
     }
+    setRequestedStep({ fileId: pf.id, step: 'inspection' })
     navigate('/analysis')
   }
 
@@ -115,7 +133,7 @@ export default function ProjectDetailPage() {
       return (
         <>
           <button type="button" className="project-file-analyze" onClick={() => viewResults(pf)}>
-            View Results
+            View Analysis
           </button>
           <button type="button" className="project-file-analyze" onClick={() => analyze(pf)}>
             Re-analyze
