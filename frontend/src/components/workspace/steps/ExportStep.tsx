@@ -15,7 +15,7 @@ interface ExportStepProps {
 }
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
-  const process = useStore((s) => s.process)
+  // const process = useStore((s) => s.process)
   const material = useStore((s) => s.material)
   const tolerance = useStore((s) => s.tolerance)
 
