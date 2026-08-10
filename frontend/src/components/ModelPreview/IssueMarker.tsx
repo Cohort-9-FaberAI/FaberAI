@@ -40,12 +40,6 @@ export default function IssueMarker({
     if (type == 'POINT' && !renderAsSphere) meshRef.current?.lookAt(camera.position)
   })
 
-  // //set this as the selected issue when hovered
-  // useEffect(() => {
-  //   if (hovered) setHighlightedIssue(issue.issue_id)
-  //   else setHighlightedIssue(null)
-  // }, [hovered, issue.issue_id, setHighlightedIssue])
-
   return (
     <mesh
       ref={meshRef}
