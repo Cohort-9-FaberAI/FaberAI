@@ -149,6 +149,9 @@ export const askAI = askFaberAI as unknown as (payload: AIAskRequest) => Promise
 export async function downloadAnalysisReportPdf(
   analysis: Record<string, unknown>,
   includeComparison: boolean,
+  process?: string | null,
+  material?: string | null,
+  tolerance?: string | null,
 ) {
   const res = await fetch(`${API_BASE}/analysis/report.pdf`, {
     method: 'POST',
@@ -156,6 +159,9 @@ export async function downloadAnalysisReportPdf(
     body: JSON.stringify({
       analysis,
       include_comparison: includeComparison,
+      process,
+      material,
+      tolerance,
     }),
   })
 
