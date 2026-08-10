@@ -1,9 +1,10 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Box3, Mesh, Vector3 } from 'three'
 import type { ManufacturabilityIssue } from '../../types/analysis'
 import { Color } from 'three'
-import { useStore } from '../../store'
+import { useStore } from '../../store/responsiveStore'
+import { useCursor } from '@react-three/drei'
 
 const POINT_MARKER_RADIUS = 1
 
@@ -31,18 +32,13 @@ export default function IssueMarker({
   const meshRef = useRef<Mesh>(null)
   const [hovered, setHovered] = useState(false)
   const setHighlightedIssue = useStore((s) => s.setHighlightedIssue)
-  const highlightedIssue = useStore((s) => s.highlightedIssue)
+  const highlightedIssue = useStore((s) => s.highlightedIssue === issue.issue_id)
   const setFocusedIssue = useStore((s) => s.setFocusedIssue)
 
+  useCursor(hovered)
   useFrame(({ camera }) => {
     if (type == 'POINT' && !renderAsSphere) meshRef.current?.lookAt(camera.position)
   })
-
-  //set this as the selected issue when hovered
-  useEffect(() => {
-    if (hovered) setHighlightedIssue(issue.issue_id)
-    else setHighlightedIssue(null)
-  }, [hovered, issue.issue_id, setHighlightedIssue])
 
   return (
     <mesh
@@ -50,14 +46,18 @@ export default function IssueMarker({
       position={type == 'POINT' ? position : boundingBox?.getCenter(new Vector3())}
       onPointerOver={(e) => {
         e.stopPropagation()
+        setHighlightedIssue(issue.issue_id)
         setHovered(true)
       }}
-      onPointerOut={() => setHovered(false)}
+      onPointerOut={() => {
+        setHighlightedIssue(null)
+        setHovered(false)
+      }}
       onClick={(e) => {
         e.stopPropagation()
         setFocusedIssue(issue.issue_id)
       }}
-      scale={hovered || issue.issue_id === highlightedIssue ? 1.2 : 1}
+      scale={hovered || highlightedIssue ? 1.2 : 1}
     >
       {renderAsSphere ? (
         <sphereGeometry args={[radius ?? 0.22, 24, 24]} />
@@ -69,7 +69,7 @@ export default function IssueMarker({
 
       <meshBasicMaterial
         color={
-          hovered || issue.issue_id === highlightedIssue
+          highlightedIssue
             ? new Color(overrideColor ?? color).offsetHSL(0, 0.1, 0.05)
             : (overrideColor ?? color)
         }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStore } from '../../store'
+import { useStore } from '../../store/responsiveStore'
 interface Issue {
   issue_id?: string
   message: string
