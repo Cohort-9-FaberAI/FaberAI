@@ -12,23 +12,14 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
   const activeId = activeFile?.id ?? ''
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
-  const quantity = useStore((s) => (activeId ? (s.quantityByFile[activeId] ?? 1) : s.quantity))
-  const material = useStore((s) => (activeId ? (s.materialByFile[activeId] ?? '') : s.material))
-  const process = useStore((s) => (activeId ? (s.processByFile[activeId] ?? null) : s.process))
-  const printingProcess = useStore((s) =>
-    activeId ? (s.printingProcessByFile[activeId] ?? '') : s.printingProcess,
-  )
-  const tolerance = useStore((s) => (activeId ? (s.toleranceByFile[activeId] ?? '') : s.tolerance))
-  const setFileQuantity = useStore((s) => s.setFileQuantity)
-  const setFileMaterial = useStore((s) => s.setFileMaterial)
-  const setFilePrintingProcess = useStore((s) => s.setFilePrintingProcess)
-  const setFileTolerance = useStore((s) => s.setFileTolerance)
+  const quantity = useStore((s) => s.quantity)
+  const material = useStore((s) => s.material)
+  const tolerance = useStore((s) => s.tolerance)
+  const setQuantity = useStore((s) => s.setQuantity)
+  const setMaterial = useStore((s) => s.setMaterial)
+  const setTolerance = useStore((s) => s.setTolerance)
 
   const analysis = asAnalysisResult(analysisResult)
-  const analysisStarted =
-    activeFile?.status === 'processing' ||
-    activeFile?.status === 'completed' ||
-    Boolean(activeFile?.taskId)
   const activeFileIsStl =
     activeFile?.sourceFormat === 'stl' ||
     (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
@@ -54,13 +45,10 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
       previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
     >
-      <form
-        className={`extra-info-form${analysisStarted ? ' is-locked' : ''}`}
-        onSubmit={(e) => e.preventDefault()}
-      >
+      <form className="extra-info-form" onSubmit={(e) => e.preventDefault()}>
         <div className="form-group">
           <label>Process</label>
-          <ProcessToggle disabled={analysisStarted} fileId={activeId} />
+          <ProcessToggle />
         </div>
 
         <div className="form-group">
@@ -70,56 +58,24 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
             type="number"
             min={1}
             value={quantity}
-            disabled={analysisStarted}
-            onChange={(e) => setFileQuantity(activeId, Number(e.target.value))}
+            onChange={(e) => setQuantity(Number(e.target.value))}
           />
         </div>
 
         <div className="form-group">
           <label htmlFor="material">Material</label>
-          <select
-            id="material"
-            value={material}
-            disabled={analysisStarted}
-            onChange={(e) => setFileMaterial(activeId, e.target.value)}
-          >
+          <select id="material" value={material} onChange={(e) => setMaterial(e.target.value)}>
             <option value="">Select material</option>
+            <option value="pla">PLA</option>
             <option value="abs">ABS</option>
-            <option value="pp">Polypropylene (PP)</option>
-            <option value="pc">Polycarbonate (PC)</option>
-            <option value="pa66">Nylon PA66</option>
-            <option value="pom">POM / Acetal</option>
-            <option value="ps">Polystyrene (PS)</option>
-            <option value="pbt">PBT</option>
+            <option value="petg">PETG</option>
+            <option value="nylon">Nylon</option>
           </select>
         </div>
 
-        {process === 'printing' && (
-          <div className="form-group">
-            <label htmlFor="printing_process">Printing process</label>
-            <select
-              id="printing_process"
-              value={printingProcess || ''}
-              disabled={analysisStarted}
-              onChange={(e) => setFilePrintingProcess(activeId, e.target.value)}
-            >
-              <option value="">Select process</option>
-              <option value="fdm">FDM</option>
-              <option value="sla">SLA / resin</option>
-              <option value="sls">SLS</option>
-              <option value="mjf">MJF</option>
-            </select>
-          </div>
-        )}
-
         <div className="form-group">
           <label htmlFor="tolerance">Tolerance</label>
-          <select
-            id="tolerance"
-            value={tolerance}
-            disabled={analysisStarted}
-            onChange={(e) => setFileTolerance(activeId, e.target.value)}
-          >
+          <select id="tolerance" value={tolerance} onChange={(e) => setTolerance(e.target.value)}>
             <option value="">Select tolerance</option>
             <option value="standard">Standard (&plusmn;0.5mm)</option>
             <option value="tight">Tight (&plusmn;0.2mm)</option>

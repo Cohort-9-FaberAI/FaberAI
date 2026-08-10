@@ -30,37 +30,9 @@ export interface UploadResponse {
   status: string
 }
 
-export interface UploadMetadata {
-  quantity?: number | null
-  material?: string | null
-  printing_process?: string | null
-  tolerance?: string | null
-  process?: string | null
-  notes?: string | null
-}
-
-export async function uploadFile(file: File, metadata?: UploadMetadata): Promise<UploadResponse> {
+export async function uploadFile(file: File): Promise<UploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
-
-  if (metadata?.quantity != null) {
-    formData.append('quantity', String(metadata.quantity))
-  }
-  if (metadata?.material) {
-    formData.append('material', metadata.material)
-  }
-  if (metadata?.tolerance) {
-    formData.append('tolerance', metadata.tolerance)
-  }
-  if (metadata?.process) {
-    formData.append('process', metadata.process)
-  }
-  if (metadata?.printing_process) {
-    formData.append('printing_process', metadata.printing_process)
-  }
-  if (metadata?.notes) {
-    formData.append('notes', metadata.notes)
-  }
 
   const res = await fetch(`${API_BASE}/upload/`, {
     method: 'POST',
