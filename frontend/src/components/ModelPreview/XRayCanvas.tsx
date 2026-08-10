@@ -6,7 +6,6 @@ import { ModelContext, type ModelTransform } from './ModelContext'
 import { GhostModel } from './GhostModel'
 import IssueMarker from './IssueMarker'
 import type { ManufacturabilityIssue, Vector3 } from '../../types/analysis'
-import { isVisibleIssueSeverity } from '../../lib/analysisView'
 
 function toPoint(value?: [number, number, number] | Vector3): [number, number, number] | null {
   if (Array.isArray(value) && value.length === 3) {
@@ -98,10 +97,6 @@ function markerColor(issue: ManufacturabilityIssue) {
   return 'yellow'
 }
 
-function shouldShowMarker(issue: ManufacturabilityIssue) {
-  return isVisibleIssueSeverity(issue.severity)
-}
-
 export default function XRayCanvas() {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
@@ -110,7 +105,6 @@ export default function XRayCanvas() {
   // Pipeline: raw centroid → geometry-local space → snap to nearest vertex → scale to world space
   const issueMarkers =
     context?.analysis?.issues
-      .filter(shouldShowMarker)
       .map((issue) => ({ issue, position: markerPoint(issue) }))
       .filter(
         (marker): marker is { issue: ManufacturabilityIssue; position: [number, number, number] } =>

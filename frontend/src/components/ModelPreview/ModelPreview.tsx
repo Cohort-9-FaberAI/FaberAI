@@ -13,7 +13,6 @@ import { Model } from './Model'
 import IssueMarker from './IssueMarker'
 import { PCFShadowMap, type BufferGeometry } from 'three'
 import { useStore } from '../../store'
-import { isVisibleIssueSeverity } from '../../lib/analysisView'
 import Toolbar from './Toolbar'
 import XRayCanvas from './XRayCanvas'
 import { LuBox, LuLayers } from 'react-icons/lu'
@@ -105,10 +104,6 @@ function markerColor(issue: ManufacturabilityIssue) {
   return 'yellow'
 }
 
-function shouldShowMarker(issue: ManufacturabilityIssue) {
-  return isVisibleIssueSeverity(issue.severity)
-}
-
 function isStepUrl(value?: string | null) {
   return Boolean(
     value
@@ -135,7 +130,6 @@ function ModelCanvas() {
   const isLoginLogo = context?.modelUrl === '/logo.stl' || context?.modelUrl?.endsWith('logo.stl')
   const issueMarkers =
     context?.analysis?.issues
-      .filter(shouldShowMarker)
       .map((issue) => ({ issue, position: markerPoint(issue) }))
       .filter(
         (marker): marker is { issue: ManufacturabilityIssue; position: [number, number, number] } =>
@@ -257,8 +251,7 @@ export default function ModelPreview({
 
   const isLoginLogo = modelUrl === '/logo.stl' || Boolean(modelUrl?.endsWith('logo.stl'))
   const hasIssues = Boolean(
-    analysis?.issues &&
-    analysis.issues.filter((issue) => isVisibleIssueSeverity(issue.severity)).length > 0,
+    analysis?.issues && analysis.issues.some((issue) => markerPoint(issue) !== null),
   )
   const shouldDisplayXRay = hasIssues && !isLoginLogo && showXRay
 
