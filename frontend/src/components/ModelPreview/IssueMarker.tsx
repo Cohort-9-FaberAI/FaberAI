@@ -32,7 +32,7 @@ export default function IssueMarker({
   const meshRef = useRef<Mesh>(null)
   const [hovered, setHovered] = useState(false)
   const setHighlightedIssue = useStore((s) => s.setHighlightedIssue)
-  const highlightedIssue = useStore((s) => s.highlightedIssue)
+  const highlightedIssue = useStore((s) => s.highlightedIssue === issue.issue_id)
   const setFocusedIssue = useStore((s) => s.setFocusedIssue)
 
   useCursor(hovered)
@@ -57,7 +57,7 @@ export default function IssueMarker({
         e.stopPropagation()
         setFocusedIssue(issue.issue_id)
       }}
-      scale={hovered || issue.issue_id === highlightedIssue ? 1.2 : 1}
+      scale={hovered || highlightedIssue ? 1.2 : 1}
     >
       {renderAsSphere ? (
         <sphereGeometry args={[radius ?? 0.22, 24, 24]} />
@@ -69,7 +69,7 @@ export default function IssueMarker({
 
       <meshBasicMaterial
         color={
-          issue.issue_id === highlightedIssue
+          highlightedIssue
             ? new Color(overrideColor ?? color).offsetHSL(0, 0.1, 0.05)
             : (overrideColor ?? color)
         }
