@@ -10,8 +10,8 @@ from app.schemas import (
     Vector3,
 )
 from app.services.geometry_engine_adapter import run_geometry_engine
-from dfm import run_dfm_analysis
-from dfm.models import Finding
+from dfm import DFMInputs, ToleranceRequest, run_dfm_analysis
+from dfm.models import Finding, ProcessType
 from geometry.loaders import StepSupportUnavailableError
 import tempfile
 import os
@@ -108,6 +108,52 @@ def _upload_preview_stl_for_step(step_path: str) -> str | None:
             os.remove(preview_path)
 
 
+def _build_dfm_inputs(setup_inputs: dict | None) -> DFMInputs | None:
+    """Translate UI setup values into the DFM engine input model."""
+    if not setup_inputs:
+        return None
+
+    process_value = (setup_inputs.get("process") or "").strip().lower()
+    process = None
+    if process_value == "molding":
+        process = ProcessType.injection_molding
+    elif process_value == "printing":
+        process = ProcessType.printing
+    elif process_value in {ProcessType.injection_molding.value, ProcessType.printing.value}:
+        process = ProcessType(process_value)
+
+    tolerance_value = (setup_inputs.get("tolerance") or "").strip().lower()
+    tolerance_mm = {
+        "standard": 0.5,
+        "tight": 0.2,
+        "precision": 0.1,
+    }.get(tolerance_value)
+    tolerances: list[ToleranceRequest] = []
+    if tolerance_mm is not None:
+        tolerances.append(
+            ToleranceRequest(
+                label="overall part tolerance",
+                feature_size_mm=10.0,
+                requested_tolerance_mm=tolerance_mm,
+            )
+        )
+
+    quantity = setup_inputs.get("quantity")
+    try:
+        quantity_value = int(quantity) if quantity is not None else None
+    except (TypeError, ValueError):
+        quantity_value = None
+
+    material = (setup_inputs.get("material") or "").strip() or None
+
+    return DFMInputs(
+        process=process,
+        material=material,
+        tolerances=tolerances,
+        quantity=quantity_value,
+    )
+
+
 def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
     """Flatten a single DFM finding into an ``AnalysisResult`` issue.
 
@@ -178,7 +224,13 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
     retry_backoff_max=60,     #cap backoff at 60 seconds
     retry_jitter=True,       
 )
-def extract_geometry_task(self, file_url: str, original_filename: str, analysis_id: str):
+def extract_geometry_task(
+    self,
+    file_url: str,
+    original_filename: str,
+    analysis_id: str,
+    setup_inputs: dict | None = None,
+):
     """
     Full lifecycle Celery task for CAD file analysis:
     1. Sets status to processing in Supabase
@@ -230,7 +282,12 @@ def extract_geometry_task(self, file_url: str, original_filename: str, analysis_
         issues = []
         score = result.get("mock_score")
         try:
-            report = run_dfm_analysis(result, analysis_id=analysis_id)
+            dfm_inputs = _build_dfm_inputs(setup_inputs)
+            report = run_dfm_analysis(
+                result,
+                inputs=dfm_inputs,
+                analysis_id=analysis_id,
+            )
             dfm_report = report.model_dump(mode="json")
             score = report.manufacturability_score
             # Flatten DFM findings into AnalysisResult.issues, translating

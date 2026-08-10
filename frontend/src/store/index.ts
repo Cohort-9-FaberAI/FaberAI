@@ -27,11 +27,13 @@ export type WizardSource = 'quick' | 'project' | 'view'
 interface ProjectSettingsSlice {
   isProject: boolean
   process: 'molding' | 'printing' | null
+  printingProcess: string
   quantity: number
   material: string
   tolerance: string
   setProject: (v: boolean) => void
   setProcess: (v: 'molding' | 'printing' | null) => void
+  setPrintingProcess: (v: string) => void
   setQuantity: (v: number) => void
   setMaterial: (v: string) => void
   setTolerance: (v: string) => void
@@ -73,11 +75,26 @@ export interface UploadedFile {
 
 export type WorkspaceStepKey = 'setup' | 'inspection' | 'verdict' | 'export'
 
+export type ProcessChoice = 'molding' | 'printing' | null
+
+export interface FileSetup {
+  process: ProcessChoice
+  printingProcess: string
+  quantity: number
+  material: string
+  tolerance: string
+}
+
 interface FileSlice {
   files: UploadedFile[]
   activeFileId: string | null
   openTabIds: string[]
   requestedStep: { fileId: string; step: WorkspaceStepKey } | null
+  processByFile: Record<string, ProcessChoice>
+  printingProcessByFile: Record<string, string>
+  quantityByFile: Record<string, number>
+  materialByFile: Record<string, string>
+  toleranceByFile: Record<string, string>
   addFile: (f: UploadedFile) => void
   updateFile: (id: string, patch: Partial<UploadedFile>) => void
   clearFiles: () => void
@@ -87,6 +104,11 @@ interface FileSlice {
   setRequestedStep: (req: { fileId: string; step: WorkspaceStepKey } | null) => void
   stepByFile: Record<string, WorkspaceStepKey>
   setStepByFile: (fileId: string, step: WorkspaceStepKey) => void
+  setFileProcess: (fileId: string, v: ProcessChoice) => void
+  setFilePrintingProcess: (fileId: string, v: string) => void
+  setFileQuantity: (fileId: string, v: number) => void
+  setFileMaterial: (fileId: string, v: string) => void
+  setFileTolerance: (fileId: string, v: string) => void
 }
 
 interface AnalysisSlice {
@@ -208,11 +230,13 @@ export const useStore = create<StoreState>()(
       // Project settings slice
       isProject: false,
       process: null,
+      printingProcess: '',
       quantity: 1,
       material: '',
       tolerance: '',
       setProject: (v) => set({ isProject: v }),
       setProcess: (v) => set({ process: v }),
+      setPrintingProcess: (v) => set({ printingProcess: v }),
       setQuantity: (v) => set({ quantity: v }),
       setMaterial: (v) => set({ material: v }),
       setTolerance: (v) => set({ tolerance: v }),
@@ -227,12 +251,29 @@ export const useStore = create<StoreState>()(
       activeFileId: null,
       openTabIds: [],
       requestedStep: null,
+      processByFile: {},
+      printingProcessByFile: {},
+      quantityByFile: {},
+      materialByFile: {},
+      toleranceByFile: {},
       addFile: (f) =>
         set((s) => ({
           files: [...s.files, f],
           activeFileId: f.id,
           openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
         })),
+      setFileProcess: (fileId, v) =>
+        set((s) => ({ processByFile: { ...s.processByFile, [fileId]: v } })),
+      setFilePrintingProcess: (fileId, v) =>
+        set((s) => ({
+          printingProcessByFile: { ...s.printingProcessByFile, [fileId]: v },
+        })),
+      setFileQuantity: (fileId, v) =>
+        set((s) => ({ quantityByFile: { ...s.quantityByFile, [fileId]: v } })),
+      setFileMaterial: (fileId, v) =>
+        set((s) => ({ materialByFile: { ...s.materialByFile, [fileId]: v } })),
+      setFileTolerance: (fileId, v) =>
+        set((s) => ({ toleranceByFile: { ...s.toleranceByFile, [fileId]: v } })),
       setRequestedStep: (req) => set({ requestedStep: req }),
       stepByFile: {},
       setStepByFile: (fileId, step) =>
@@ -249,6 +290,11 @@ export const useStore = create<StoreState>()(
           analysisResults: {},
           currentFileBuffer: null,
           fileBuffers: {},
+          processByFile: {},
+          printingProcessByFile: {},
+          quantityByFile: {},
+          materialByFile: {},
+          toleranceByFile: {},
         }),
       setActiveFileId: (id) => set({ activeFileId: id }),
       openTab: (id) =>
@@ -269,12 +315,27 @@ export const useStore = create<StoreState>()(
           delete analysisResults[id]
           const fileBuffers = { ...s.fileBuffers }
           delete fileBuffers[id]
+          const processByFile = { ...s.processByFile }
+          delete processByFile[id]
+          const printingProcessByFile = { ...s.printingProcessByFile }
+          delete printingProcessByFile[id]
+          const quantityByFile = { ...s.quantityByFile }
+          delete quantityByFile[id]
+          const materialByFile = { ...s.materialByFile }
+          delete materialByFile[id]
+          const toleranceByFile = { ...s.toleranceByFile }
+          delete toleranceByFile[id]
           return {
             files: s.files.filter((f) => f.id !== id),
             openTabIds: filtered,
             activeFileId: nextActive,
             analysisResults,
             fileBuffers,
+            processByFile,
+            printingProcessByFile,
+            quantityByFile,
+            materialByFile,
+            toleranceByFile,
             currentFileBuffer:
               s.currentFileBuffer && s.files.find((f) => f.id === id)
                 ? s.currentFileBuffer

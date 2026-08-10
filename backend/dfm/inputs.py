@@ -36,6 +36,10 @@ class DFMInputs(BaseModel):
     # Which check-set to run. None -> run every process and recommend one.
     process: Optional[ProcessType] = None
 
+    # Estimated production quantity; surfaced in the report context for
+    # downstream rules or cost-sensitive downstream workflows.
+    quantity: Optional[int] = None
+
     # --- Injection molding context ---------------------------------------
     material: Optional[str] = None
     # polished | semi_gloss | light_texture | heavy_texture

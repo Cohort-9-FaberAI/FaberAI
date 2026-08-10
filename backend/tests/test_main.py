@@ -142,6 +142,37 @@ class TestUpload:
         assert body["file_url"] == self.STORAGE_RESULT["public_url"]
         assert body["source_file_url"] == self.STORAGE_RESULT["public_url"]
 
+    def test_upload_forwards_setup_inputs_to_celery_task(self, client):
+        with patch.object(
+            main, "upload_cad_file_to_storage", return_value=self.STORAGE_RESULT
+        ), patch.object(
+            main, "insert_analysis_result"
+        ), patch.object(
+            main.extract_geometry_task,
+            "delay",
+            return_value=SimpleNamespace(id="task-123"),
+        ) as mock_delay:
+            response = client.post(
+                "/upload/",
+                files={"file": ("bracket.stl", b"solid mock-geometry", "application/octet-stream")},
+                data={
+                    "quantity": "12",
+                    "material": "ABS",
+                    "tolerance": "tight",
+                    "process": "printing",
+                    "notes": "Test notes",
+                },
+            )
+
+        assert response.status_code == 202
+        assert mock_delay.call_args.args[3] == {
+            "quantity": 12,
+            "material": "ABS",
+            "tolerance": "tight",
+            "process": "printing",
+            "notes": "Test notes",
+        }
+
     def test_missing_file_returns_422(self, client):
         response = client.post("/upload/")
         assert response.status_code == 422

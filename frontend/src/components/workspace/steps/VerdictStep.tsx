@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import RadialScore from '../../conclusion/RadialScore'
-import SeverityLegend from '../../analysis/SeverityLegend'
 import { useStore } from '../../../store'
 import {
   asAnalysisResult,
@@ -19,15 +18,9 @@ interface VerdictStepProps {
   activeFile: UploadedFile | null
 }
 
-const conclusionLegendItems = [
-  { label: 'Severe', color: '#ef5350' },
-  { label: 'Problematic', color: '#ffb74d' },
-  { label: 'Minor', color: '#ffd54f' },
-]
-
 export default function VerdictStep({ activeFile }: VerdictStepProps) {
-  const process = useStore((s) => s.process)
   const activeId = activeFile?.id ?? ''
+  const process = useStore((s) => (activeId ? (s.processByFile[activeId] ?? null) : null))
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [activeTab, setActiveTab] = useState<'reasons' | 'improvements'>('reasons')
@@ -103,10 +96,6 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
               <span>/100 overall</span>
             </div>
           )}
-        </div>
-
-        <div className="conclusion-score-legend">
-          <SeverityLegend items={conclusionLegendItems} />
         </div>
 
         {score !== null && (
