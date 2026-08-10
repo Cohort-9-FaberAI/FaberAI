@@ -8,7 +8,6 @@ import { useStore } from '../../../store'
 import {
   asAnalysisResult,
   getAnalysisScore,
-  getMarkerIssuesForProcess,
   getMoldingScore,
   getPrintingScore,
   getProcessIssues,
@@ -25,7 +24,6 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const activeId = activeFile?.id ?? ''
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
-  const fileProcess = useStore((s) => (activeId ? (s.processByFile[activeId] ?? null) : null))
   const [activeTab, setActiveTab] = useState<'molding' | 'printing'>('molding')
 
   const analysis = asAnalysisResult(analysisResult)
@@ -37,32 +35,15 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
   const livePreviewFilename = activeFile?.name ?? null
 
-  // When a specific process was chosen in Setup, that process is the only
-  // one being analyzed, so the Molding/Printing toggle is not applicable.
-  const lockedProcess = fileProcess === 'molding' || fileProcess === 'printing' ? fileProcess : null
-  const effectiveTab = lockedProcess ?? activeTab
-
   const overallScore = getAnalysisScore(analysis)
   const score =
-    effectiveTab === 'molding'
+    activeTab === 'molding'
       ? (getMoldingScore(analysis) ?? overallScore)
       : (getPrintingScore(analysis) ?? overallScore)
   const issues =
-    effectiveTab === 'molding'
+    activeTab === 'molding'
       ? getProcessIssues(analysis, 'injection_molding')
       : getProcessIssues(analysis, 'printing')
-
-  // The 3D viewer renders markers from analysis.issues, so scope those to the
-  // tab currently being inspected so markers match the listed findings.
-  const viewerAnalysis = analysis
-    ? {
-        ...analysis,
-        issues: getMarkerIssuesForProcess(
-          analysis,
-          effectiveTab === 'molding' ? 'injection_molding' : 'printing',
-        ),
-      }
-    : null
   const loading = !isDevManual && activeFile?.status === 'processing' && !analysis
   const error =
     activeFile?.status === 'failed' && !isDevManual
@@ -129,7 +110,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
                 ? 'The DEV loader is only a local model preview. Use the drop zone to run DFM analysis.'
                 : 'The backend report will appear here as soon as processing completes.'
           }
-          analysis={viewerAnalysis}
+          analysis={analysis}
           previewFileUrl={livePreviewUrl}
           previewBuffer={fileBuffer}
           previewSourceFormat={activeFile?.sourceFormat ?? null}
@@ -145,17 +126,15 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
           <div className="analysis-tabs">
             <button
               type="button"
-              className={`analysis-tab${effectiveTab === 'molding' ? ' active' : ''}`}
+              className={`analysis-tab${activeTab === 'molding' ? ' active' : ''}`}
               onClick={() => setActiveTab('molding')}
-              style={lockedProcess ? { display: 'none' } : undefined}
             >
               Molding
             </button>
             <button
               type="button"
-              className={`analysis-tab${effectiveTab === 'printing' ? ' active' : ''}`}
+              className={`analysis-tab${activeTab === 'printing' ? ' active' : ''}`}
               onClick={() => setActiveTab('printing')}
-              style={lockedProcess ? { display: 'none' } : undefined}
             >
               Printing
             </button>

@@ -208,15 +208,11 @@ class RuleEvaluator(ABC):
         unit: Optional[str] = None,
         geometry_ref: Optional[GeometryRef] = None,
     ) -> Finding:
-        message_text = str(message or "").strip()
-        if message_text and not message_text.startswith((f"{self.rule_id}:", f"[{self.rule_id}]")):
-            message_text = f"{self.rule_id}: {message_text}"
-
         return Finding(
             finding_id=f"{self.rule_id.lower()}_{index:03d}",
             rule_id=self.rule_id,
             severity=severity,
-            message=message_text,
+            message=message,
             recommendation=recommendation,
             measured=measured,
             threshold=threshold,

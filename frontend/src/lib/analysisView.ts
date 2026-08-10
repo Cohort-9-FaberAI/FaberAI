@@ -164,50 +164,6 @@ export function getPrintingScore(analysis: AnalysisResult | null): number | null
   return null
 }
 
-/**
- * Returns the raw issues belonging to one process, for 3D marker rendering.
- * The report's process blocks declare their rule ids, and every flattened
- * issue carries its rule id in `type`. Falls back to the M#/P# rule-id prefix
- * when no structured report is available, and includes type-less issues so a
- * legacy report never loses markers.
- */
-export function getMarkerIssuesForProcess(
-  analysis: AnalysisResult | null,
-  processType: 'injection_molding' | 'printing',
-): ManufacturabilityIssue[] {
-  if (!analysis) return []
-  const issues = Array.isArray(analysis.issues) ? analysis.issues : []
-  if (issues.length === 0) return issues
-
-  const report = getRecord(analysis.dfm_report)
-  const processes = Array.isArray(report?.processes) ? report.processes : []
-  const ruleIds = new Set<string>()
-  for (const proc of processes) {
-    const pRec = getRecord(proc)
-    if (!pRec?.process) continue
-    const matches =
-      processType === 'injection_molding'
-        ? pRec.process === 'injection_molding' || pRec.process === 'molding'
-        : pRec.process === 'printing' || pRec.process === '3d_printing'
-    if (!matches) continue
-    const rules = Array.isArray(pRec.rule_results) ? pRec.rule_results : []
-    for (const rule of rules) {
-      const rRec = getRecord(rule)
-      const id = getString(rRec?.rule_id)
-      if (id) ruleIds.add(id)
-    }
-  }
-
-  if (ruleIds.size > 0) {
-    return issues.filter((issue) => !issue.type || ruleIds.has(issue.type))
-  }
-
-  const prefix = processType === 'injection_molding' ? 'M' : 'P'
-  return issues.filter(
-    (issue) => !issue.type || String(issue.type).toUpperCase().startsWith(prefix),
-  )
-}
-
 export function getProcessIssues(
   analysis: AnalysisResult | null,
   processType: 'injection_molding' | 'printing',

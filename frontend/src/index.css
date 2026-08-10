@@ -835,16 +835,6 @@ a {
   color: #fff;
 }
 
-.extra-info-form.is-locked .form-group {
-  opacity: 0.55;
-  pointer-events: none;
-}
-
-.process-toggle.is-disabled {
-  opacity: 0.55;
-  pointer-events: none;
-}
-
 .token-estimate {
   font-size: 13px;
   color: var(--text-muted);
