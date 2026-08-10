@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import Dict, List, Optional
+from app.services.ai.mcp_moldsim import MoldSimMCP
 
 import anthropic
 
@@ -151,6 +152,70 @@ class LLMClient:
                 f"LLM returned no text content (stop_reason={response.stop_reason!r})."
             )
         return text
+
+    async def complete_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        tools: List[Dict],
+        moldsim: "MoldSimMCP",
+    ) -> str:
+        if not self.is_configured:
+            raise LLMNotConfigured("No LLM provider configured.")
+
+        system = "\n\n".join(
+            str(m.get("content", "")) for m in messages if m.get("role") == "system"
+        )
+        turns = [
+            {"role": m["role"], "content": m["content"]}
+            for m in messages if m.get("role") != "system"
+        ]
+        if not turns:
+            raise LLMRequestError("No user message to send.")
+
+        claude_tools = [
+            {"name": t["name"], "description": t["description"], "input_schema": t["input_schema"]}
+            for t in tools
+        ]
+
+        for _ in range(5):  # hard cap on tool-call rounds — same "no retries at cost" spirit as complete()
+            try:
+                response = self._sdk().messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    system=system or anthropic.NOT_GIVEN,
+                    messages=turns,
+                    tools=claude_tools,
+                    output_config={"effort": self.effort},
+                )
+            except anthropic.APIError as exc:
+                raise LLMRequestError(f"LLM request failed: {exc}") from exc
+
+            if response.stop_reason == "refusal":
+                raise LLMRequestError("The model declined to answer this request.")
+
+            if response.stop_reason != "tool_use":
+                text = "\n".join(
+                    b.text for b in response.content if getattr(b, "type", None) == "text"
+                ).strip()
+                if not text:
+                    raise LLMRequestError(f"LLM returned no text (stop_reason={response.stop_reason!r}).")
+                return text
+
+            turns.append({"role": "assistant", "content": response.content})
+            tool_results = []
+            for block in response.content:
+                if getattr(block, "type", None) == "tool_use":
+                    try:
+                        result = await moldsim.session.call_tool(block.name, block.input)
+                        content = result.content
+                    except Exception as exc:
+                        content = [{"type": "text", "text": f"Tool error: {exc}"}]
+                    tool_results.append({
+                        "type": "tool_result", "tool_use_id": block.id, "content": content,
+                    })
+            turns.append({"role": "user", "content": tool_results})
+
+        raise LLMRequestError("Exceeded tool-call round limit.")
 
 
 _default_client: Optional[LLMClient] = None

@@ -17,12 +17,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task, _upload_preview_stl_for_step
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
-from app.services.ai import AIAnswer, answer_dfm_question
+from app.services.ai import AIAnswer, answer_dfm_question_async
 from app.services.report_pdf import build_report_pdf, report_pdf_filename
 from app.services.storage import upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
 from app.observability import setup_langtrace
+from app.services.ai.mcp_moldsim import init_moldsim, shutdown_moldsim
 import requests
 
 setup_langtrace()
@@ -187,7 +188,11 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # noqa: BLE001 - startup must not fail on this
         logger.warning("Embedding model preload skipped: %s", exc)
 
+    await init_moldsim()
+
     yield
+
+    await shutdown_moldsim()
 
 
 app = FastAPI(
@@ -718,7 +723,7 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
 # ---------------------------------------------------------------------------
 
 @app.post("/ai/ask", response_model=AIAnswer, tags=["AI"])
-def ask_faber_ai(request: AIAskRequest):
+async def ask_faber_ai(request: AIAskRequest):
     """Answer a question about a manufacturability report.
 
     Strictly downstream: this endpoint reads a report that already exists. It
@@ -757,7 +762,7 @@ def ask_faber_ai(request: AIAskRequest):
             detail=f"The supplied report is not a valid DFM report: {exc}",
         ) from exc
 
-    return answer_dfm_question(
+    return await answer_dfm_question_async(
         report=report,
         question=request.question,
         geometry=geometry if isinstance(geometry, dict) else None,
