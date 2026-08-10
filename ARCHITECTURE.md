@@ -2,14 +2,14 @@
 
 ## What it is
 
-FaberAI is an AI-powered Design for Manufacturability (DFM) review platform for CAD parts. Engineers upload STEP or STL parts, the backend analyzes their geometry and DFM rules, and the UI displays a manufacturability score, issues, and 3D highlights.
+FaberAI is an AI-assisted Design for Manufacturability (DFM) review platform for CAD parts. Engineers upload STEP or STL files, the backend analyzes geometry and DFM rules, and the web UI displays manufacturability scores, issues, and 3D highlights.
 
 The project ships three user-facing interfaces:
 
 | Interface | Stack | Directory |
 |---|---|---|
-| Web app (primary) | React 19 + TypeScript + Vite + Three.js/R3F + Zustand | `frontend/` |
-| Streamlit app (alternative) | Streamlit + trimesh + plotly | `streamlit-app/` |
+| Web app (primary) | React 19 + TypeScript + Vite + Three.js / R3F + Zustand | `frontend/` |
+| Streamlit app (development/test) | Streamlit + trimesh + Plotly | `streamlit-app/` |
 | API + pipeline | FastAPI + Celery + Redis + Supabase | `backend/` |
 
 ---
@@ -23,9 +23,14 @@ FaberAI/
 ├── README.md
 ├── PRODUCT.md
 ├── docker-compose.yml
-├── package-lock.json
-├── .github/
-│   └── workflows/
+├── frontend/
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── src/
+│   ├── public/
+│   ├── docs/
+│   └── ...(React app)
 ├── backend/
 │   ├── main.py
 │   ├── requirements.txt
@@ -42,38 +47,36 @@ FaberAI/
 │   │   │   ├── geometry_engine_adapter.py
 │   │   │   ├── report_pdf.py
 │   │   │   ├── pdf_mesh_renderer.py
-│   │   │   └── ai/
+│   │   │   ├── ai/
+│   │   │   │   ├── client.py
+│   │   │   │   ├── context_builder.py
+│   │   │   │   ├── deterministic.py
+│   │   │   │   ├── prompts.py
+│   │   │   │   ├── service.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── dfm_knowledge/
+│   │   │   │   ├── agent.py
+│   │   │   │   ├── chunker.py
+│   │   │   │   ├── embeddings.py
+│   │   │   │   ├── ingest.py
+│   │   │   │   ├── retrieval.py
+│   │   │   │   ├── docling_parser.py
+│   │   │   │   └── __init__.py
 │   ├── core/
 │   │   └── workers.py
 │   ├── database/
-│   │   └── migrations/01_create_analysis_jobs.sql
+│   │   └── migrations/
 │   ├── datasets/
 │   ├── dfm/
 │   ├── geometry/
 │   ├── notebooks/
 │   └── tests/
-├── frontend/
-│   ├── .gitignore
-│   ├── .prettierignore
-│   ├── .prettierrc.json
-│   ├── eslint.config.js
-│   ├── index.html
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── README.md
-│   ├── tsconfig.app.json
-│   ├── tsconfig.json
-│   ├── tsconfig.node.json
-│   ├── vite.config.ts
-│   ├── docs/
-│   ├── public/
-│   └── src/
 ├── streamlit-app/
 │   ├── app.py
-│   ├── README.md
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── README.md
 └── ref/
-    └── ... (reference snapshot of the same project structure)
+    └── ...(reference snapshot of the same project structure)
 ```
 
 ---
@@ -86,228 +89,156 @@ FaberAI/
 | 3D rendering | Three.js + @react-three/fiber + @react-three/drei |
 | State | Zustand |
 | Routing | React Router DOM v7 |
+| API client | Fetch + Supabase JS |
 | Backend | FastAPI |
-| Task queue | Celery |
+| Async pipeline | Celery |
 | Broker / result backend | Redis |
 | Database / storage | Supabase (PostgreSQL + Storage) |
 | Validation | Pydantic v2 |
-| STEP geometry | pythonOCC / OpenCASCADE (optional, Conda) |
-| STL geometry | trimesh |
-| DFM rules | Custom `backend/dfm/` rule engine |
-| AI assistant | Deterministic assistant wrapper + optional LLM client |
-| PDF export | FPDF + custom renderer |
+| Geometry | trimesh + optional pythonOCC / OpenCASCADE + build123d |
+| DFM rules | Custom backend rule engine in `backend/dfm/` |
+| AI assistant | deterministic fallback + optional Anthropic Claude LLM |
+| PDF export | FPDF2 + custom renderer |
+| Embeddings | sentence-transformers + local BGE model |
 | Linting | Ruff / ESLint / Prettier |
 | Testing | pytest |
-| CI | GitHub Actions |
-| Python | 3.13 (backend CI), 3.11 (optional Conda DS env) |
+| Python | 3.13 |
 | Node | 20 |
 
 ---
 
-## Components
+## Core Architecture
 
-### 1. API — `backend/main.py`
+### 1. Web API — `backend/main.py`
 
-The FastAPI application is the main HTTP entry point. It:
-- loads DFM config once at startup
+This FastAPI app is the main HTTP entry point for uploads, status polling, analysis persistence, DFM evaluation, PDF export, and AI Q&A.
+
+It:
+- loads DFM config and scoring thresholds on startup
 - configures CORS for development
 - wraps errors into a standardized JSON envelope
-- routes uploads, polling, mock analysis, report export, and AI Q&A
+- validates and routes upload requests
+- exposes report and task status endpoints
+- supports inline PDF generation and stored-report downloads
+- serves a mock analysis for frontend development
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/` | GET | Health check |
-| `/health/dependencies` | GET | Verify Celery/Redis availability |
-| `/upload/` | POST | Upload a CAD file, save to Supabase, create pending analysis, dispatch Celery task |
-| `/tasks/{task_id}` | GET | Poll background task status; optional `analysis_id` query uses DB record for terminal state |
-| `/analyze-mock` | POST | Return a hardcoded mock analysis for frontend development |
-| `/analysis/` | POST | Persist a validated `AnalysisResult` payload in Supabase |
-| `/dfm/evaluate` | POST | Run the DFM rule engine on supplied geometry |
-| `/analysis/{analysis_id}/dfm` | GET | Fetch stored DFM report for a completed analysis |
-| `/analysis/{analysis_id}/report.pdf` | GET | Download a PDF report for stored analysis |
-| `/analysis/report.pdf` | POST | Download a PDF from an inline completed analysis payload |
-| `/ai/ask` | POST | Answer a question from an existing DFM report or supplied report payload |
-| `/mock-file` | GET | Serve a local mock STL file for development |
+### 2. Backend App Layer — `backend/app/`
 
-The API also includes STEP preview backfill logic for older stored analyses.
+`backend/app/` contains the HTTP contract and service orchestration code.
 
----
-
-### 2. Web Layer — `backend/app/`
-
-**`schemas.py`** defines the API contract:
-- `AnalysisResult` stores analysis metadata, scores, issue list, geometry payload, DFM report, and preview URLs
-- `Issue`, `ThreeJSHighlight`, `PartMetadata`, `BoundingBox`, `Vector3` support analysis and highlight geometry
-- `AnalysisDBRecord` serializes Supabase rows
-- `AnalysisStatus`, `IssueSeverity` enums
-
-**`crud.py`** handles Supabase operations for `analysis_jobs`.
-
-**`database.py`** initializes the Supabase client from env vars.
-
-**`services/storage.py`** uploads CAD files to the `cad-uploads` bucket, validates formats and size limits, and returns public URLs.
-
-**`services/geometry_engine_adapter.py`** converts raw geometry output into a JSON-friendly response contract.
-
-**`services/ai/`** provides report-based question answering without rerunning geometry.
-
-**`services/report_pdf.py`** generates PDF reports from completed analyses and DFM results.
-
----
+- `schemas.py`: Pydantic models for API payloads, issues, 3D highlights, and database records.
+- `crud.py`: Supabase CRUD operations for analysis jobs.
+- `database.py`: Supabase client initialization.
+- `observability.py`: logging, error translation, and telemetry helpers.
+- `services/storage.py`: CAD upload and storage management.
+- `services/geometry_engine_adapter.py`: converts raw geometry output into API-friendly JSON.
+- `services/report_pdf.py`: PDF generation for completed analyses.
+- `services/ai/`: report-question answering.
+- `services/dfm_knowledge/`: standards-based retrieval and knowledge answering.
 
 ### 3. Celery Worker — `backend/core/workers.py`
 
-The worker manages the asynchronous CAD analysis lifecycle:
-- Redis broker/backend from `REDIS_URL` (default `redis://localhost:6379/0`)
-- `extract_geometry_task` with retries on network errors and exponential backoff
+The worker manages asynchronous CAD analysis and persistency.
 
 Task flow:
-1. update status to `processing`
-2. download CAD from Supabase Storage
-3. save a temp file
-4. run `run_geometry_engine()`
-5. generate STEP preview STL for STEP uploads
-6. run the DFM rule engine
-7. flatten findings into issues
-8. persist `results_json` and status in Supabase
-9. set `completed` or `failed`
-
-STEP dependency errors are treated as terminal failures instead of retried.
-
----
+1. download the uploaded file from Supabase Storage
+2. save it locally
+3. run the geometry engine
+4. generate a STEP preview STL when needed
+5. execute the DFM rule engine
+6. map findings into issues and report payloads
+7. persist results to Supabase
+8. mark the analysis as completed or failed
 
 ### 4. Geometry Engine — `backend/geometry/`
 
-A standalone pure-Python geometry analysis package.
+This package handles CAD ingestion and feature extraction.
 
-**Loaders** (`geometry/loaders/`):
-- STEP via pythonOCC/OpenCASCADE (primary)
-- STEP fallback path with build123d
-- STL via trimesh
+- loaders: STEP and STL ingestion
+- measurements: bbox, volume, surface area, wall thickness, orientations, mesh quality
+- features: hole detection, boss detection, cavity detection, topology analysis
+- models: internal geometry schema
 
-**Measurements** (`geometry/measurements/`):
-- bbox, volume, surface area, centroid, inertia
-- face extraction and graph building
-- wall thickness sampling
-- print orientations
-- mesh reliability / repair
-- surface classification
-
-**Features** (`geometry/features/`):
-- cylindrical hole detection
-- boss detection
-- cavity detection
-
-**Models** (`geometry/models/`) define the internal geometry data shape.
-
-Key points:
-- STEP uses exact topology and surface classification for richer feature detection
-- STL is mesh-based, with repair and mesh quality checks
-- the geometry package is reusable without web dependencies
-
----
+It is intentionally separate from the web API so it can be reused by workers and tests.
 
 ### 5. DFM Rule Engine — `backend/dfm/`
 
-The DFM package provides deterministic manufacturability scoring and findings.
-- `engine.py`
-- `inputs.py`
-- `models.py`
-- `rules/`
-- `scoring.py`
-- `config/`
+This package encapsulates manufacturability checks, thresholds, and scoring.
 
-It is used by `/dfm/evaluate`, post-geometry scoring, and AI answer generation.
+- `config/`: YAML-driven thresholds and scoring configuration
+- `engine.py`: rule execution and report construction
+- `inputs.py`: normalized manufacturing inputs
+- `models.py`: DFM report and finding schema
+- `rules/`: individual rule implementations
+- `scoring.py`: severity weights and verdict aggregation
 
----
+The DFM engine is deterministic and shared by the worker pipeline and AI services.
 
 ### 6. Database — `backend/database/`
 
-The Supabase migration creates the `analysis_jobs` table:
-- `analysis_id TEXT PRIMARY KEY`
-- `filename TEXT NOT NULL`
-- `status TEXT NOT NULL`
-- `manufacturability_score FLOAT`
-- `results_json JSONB`
+Supabase stores analysis jobs and report payloads.
 
-RLS is enabled with a permissive dev policy.
+The migrations create tables like `analysis_jobs` and enable vector-search support for `dfm_reference_docs`.
 
 ---
 
-### 7. Frontend — `frontend/`
+## `backend/app/services/ai` Architecture
 
-A React + TypeScript + Vite single-page application.
+This layer answers questions about an already-computed DFM report.
 
-Routes in `src/App.tsx`:
-- `/landing`
-- `/login`
-- `/home`
-- `/upload`
-- `/analysis`
-- `/projects`
-- `/projects/:id`
-- `/library`
-- `/history`
-- `/debug`
-- `/extra-info`, `/conclusion`, `/download` redirect to `/analysis`
+Responsibilities:
+- accept only completed report data, never rerun geometry or DFM evaluation
+- compute a deterministic answer from the report as a fallback
+- optionally call an LLM when provider credentials are configured
+- ground answers with referenced rule IDs and optional standards excerpts
 
-Key client modules:
-- `src/lib/api.ts` — backend API wrappers
-- `src/lib/useTaskPolling.ts` — task polling hook
-- `src/lib/supabase.ts` — Supabase client init
-- `src/store/index.ts` — Zustand state
-- `src/components/ModelPreview/ModelPreview.tsx` — 3D viewer
+Key modules:
+- `client.py`: Anthropic Claude Messages API client wrapper and provider detection.
+- `context_builder.py`: constructs report and geometry context for prompt building.
+- `deterministic.py`: templates deterministic answers from report facts.
+- `prompts.py`: builds system/user messages for the LLM.
+- `service.py`: orchestrates deterministic fallback, LLM calls, and final response assembly.
 
-Build tooling:
-- Vite
-- ESLint + Prettier
-- Husky + lint-staged
-- TypeScript strict mode
+Process flow:
+1. `answer_dfm_question()` receives a finished `DFMReport` and question.
+2. a deterministic answer is generated immediately.
+3. if the LLM client is configured, optional standards excerpts are retrieved.
+4. the model is called with report context and grounding.
+5. failures or empty responses degrade gracefully to the deterministic answer.
+
+This service always returns factual, report-based responses even when the LLM path is unavailable.
 
 ---
 
-### 8. Streamlit App — `streamlit-app/`
+## `backend/app/services/dfm_knowledge` Architecture
 
-Alternative local frontend for experimentation.
-- `app.py` uploads STEP/STL files
-- previews STL with trimesh + plotly
-- polls backend task status
-- downloads JSON results
+This module provides retrieval-augmented answers from reference standards.
 
----
+Responsibilities:
+- ingest Docling-exported standards into Supabase
+- chunk documents by clause and table for accurate citation
+- embed content with a local sentence-transformer model
+- perform vector retrieval over `dfm_reference_docs`
+- answer questions from retrieved excerpts with citations
+- degrade to deterministic excerpt responses when no LLM is configured
 
-### 9. CI/CD — `.github/workflows/`
+Key modules:
+- `chunker.py`: turns parsed Docling docs into clause-aware chunks.
+- `docling_parser.py`: parses the Docling export structure.
+- `embeddings.py`: local embedding wrapper for passages and queries.
+- `ingest.py`: one-off CLI ingestion workflow.
+- `retrieval.py`: query embedding and Supabase vector-search RPC.
+- `agent.py`: answer questions from retrieved chunks.
 
-| Workflow | Trigger | Jobs |
-|---|---|---|
-| `ci.yml` | backend changes / PRs | Python lint + pytest |
-| `frontend-ci.yml` | frontend changes / PRs | npm lint + format check + build |
+Process flow:
+1. ingestion parses a Docling JSON export into chunk rows.
+2. chunk text is embedded and stored in Supabase.
+3. retrieval embeds the user query and calls the `match_dfm_reference_docs` RPC.
+4. the best-matching chunks are returned as source excerpts.
+5. the agent either summarizes them with the LLM or returns them directly.
 
-No deployment pipeline is configured yet.
-
----
-
-## End-to-End Request Flow
-
-```
-Client (React / Streamlit)
-  │
-  │ POST /upload/
-  ▼
-FastAPI (`backend/main.py`)
-  ├─ storage.py ──────────► Supabase Storage (`cad-uploads`)
-  ├─ crud.py ─────────────► Supabase DB (`analysis_jobs`, status=pending)
-  └─ workers.py ─ ─ ─ ─ ─► Redis (Celery broker/backend)
-                                  │
-                                  │ extract_geometry_task
-                                  │
-                                  ├─ download CAD file from Supabase Storage
-                                  ├─ run_geometry_engine(tmp_path)
-                                  │     └─ geometry/loaders/dispatcher.py
-                                  │           ├─ STEP path: pythonOCC + build123d preview
-                                  │           └─ STL path: trimesh + repair/reliability checks
-                                  ├─ run_dfm_analysis()
-                                  ├─ flatten findings into issues
-                                  └─ crud.py ─ ─ ─ ─ ─ ─► Supabase DB (completed, results_json)
-Client polls `/tasks/{task_id}` for status and final result
-```
+This service is intentionally separate from `services/ai`: it is a standards reference layer, while `services/ai` is a report-specific Q&A layer.
+'''
+with open('/tmp/ARCHITECTURE_update.md', 'w', encoding='utf-8') as f:
+    f.write(content)
+PY
