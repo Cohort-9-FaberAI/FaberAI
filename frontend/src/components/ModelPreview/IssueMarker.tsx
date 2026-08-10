@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { Box3, Mesh, Vector3 } from 'three'
 import type { ManufacturabilityIssue } from '../../types/analysis'
 import { Color } from 'three'
-import { useStore } from '../../store'
+import { useStore } from '../../store/responsiveStore'
 import { useCursor } from '@react-three/drei'
 
 const POINT_MARKER_RADIUS = 1
