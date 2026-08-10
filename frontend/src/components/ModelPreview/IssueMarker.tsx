@@ -1,9 +1,10 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Box3, Mesh, Vector3 } from 'three'
 import type { ManufacturabilityIssue } from '../../types/analysis'
 import { Color } from 'three'
 import { useStore } from '../../store'
+import { useCursor } from '@react-three/drei'
 
 const POINT_MARKER_RADIUS = 1
 
@@ -34,15 +35,16 @@ export default function IssueMarker({
   const highlightedIssue = useStore((s) => s.highlightedIssue)
   const setFocusedIssue = useStore((s) => s.setFocusedIssue)
 
+  useCursor(hovered)
   useFrame(({ camera }) => {
     if (type == 'POINT' && !renderAsSphere) meshRef.current?.lookAt(camera.position)
   })
 
-  //set this as the selected issue when hovered
-  useEffect(() => {
-    if (hovered) setHighlightedIssue(issue.issue_id)
-    else setHighlightedIssue(null)
-  }, [hovered, issue.issue_id, setHighlightedIssue])
+  // //set this as the selected issue when hovered
+  // useEffect(() => {
+  //   if (hovered) setHighlightedIssue(issue.issue_id)
+  //   else setHighlightedIssue(null)
+  // }, [hovered, issue.issue_id, setHighlightedIssue])
 
   return (
     <mesh
@@ -50,9 +52,13 @@ export default function IssueMarker({
       position={type == 'POINT' ? position : boundingBox?.getCenter(new Vector3())}
       onPointerOver={(e) => {
         e.stopPropagation()
+        setHighlightedIssue(issue.issue_id)
         setHovered(true)
       }}
-      onPointerOut={() => setHovered(false)}
+      onPointerOut={() => {
+        setHighlightedIssue(null)
+        setHovered(false)
+      }}
       onClick={(e) => {
         e.stopPropagation()
         setFocusedIssue(issue.issue_id)
@@ -69,7 +75,7 @@ export default function IssueMarker({
 
       <meshBasicMaterial
         color={
-          hovered || issue.issue_id === highlightedIssue
+          issue.issue_id === highlightedIssue
             ? new Color(overrideColor ?? color).offsetHSL(0, 0.1, 0.05)
             : (overrideColor ?? color)
         }
