@@ -15,8 +15,8 @@ interface ExportStepProps {
 }
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
-  const process = useStore((s) => s.process)
   const activeId = activeFile?.id ?? ''
+  const process = useStore((s) => (activeId ? (s.processByFile[activeId] ?? null) : null))
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [comparison, setComparison] = useState(false)

@@ -27,13 +27,13 @@ export async function analyzeFile(fileId: string): Promise<void> {
 
   try {
     const state = useStore.getState()
+    const fileProcess = state.processByFile[fileId] ?? null
     const res = await uploadFile(file.file, {
-      quantity: state.quantity,
-      material: state.material,
-      tolerance: state.tolerance,
-      process: state.process ?? undefined,
-      printing_process: (state as Record<string, unknown>).printingProcess as string | undefined,
-      notes: (state as Record<string, unknown>).notes as string | undefined,
+      quantity: state.quantityByFile[fileId] ?? state.quantity,
+      material: state.materialByFile[fileId] ?? state.material,
+      tolerance: state.toleranceByFile[fileId] ?? state.tolerance,
+      process: fileProcess ?? undefined,
+      printing_process: state.printingProcessByFile[fileId] || undefined,
     })
     updateFile(fileId, {
       taskId: res.task_id,
