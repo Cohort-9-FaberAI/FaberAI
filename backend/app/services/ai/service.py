@@ -35,6 +35,7 @@ from .client import LLMClient, LLMNotConfigured, LLMRequestError, get_llm_client
 from .context_builder import build_ai_context
 from .deterministic import answer_from_report, classify_intent
 from .prompts import build_messages
+from .mcp_moldsim import get_moldsim
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,77 @@ def answer_dfm_question(
     )
 
 
+async def answer_dfm_question_async(
+    report: DFMReport,
+    question: str,
+    geometry: Optional[Dict[str, Any]] = None,
+    client: Optional[LLMClient] = None,
+    analysis_id: Optional[str] = None,
+) -> AIAnswer:
+    if not question or not question.strip():
+        raise AIServiceError("A question is required.")
+
+    fallback_answer, referenced_rules = answer_from_report(report, question)
+    client = client or get_llm_client()
+    if not client.is_configured:
+        return AIAnswer(
+            question=question,
+            answer=fallback_answer,
+            mode=AnswerMode.deterministic,
+            referenced_rules=referenced_rules,
+            analysis_id=analysis_id or report.analysis_id,
+        )
+
+    context = build_ai_context(report, geometry)
+    excerpts = _retrieve_standards_excerpts(question, report)
+    messages = build_messages(question, context, excerpts)
+
+    moldsim = get_moldsim()
+    logger.info("moldsim available: %s", bool(moldsim and moldsim.is_available))
+
+    try:
+        if moldsim and moldsim.is_available:
+            text = await client.complete_with_tools(messages, moldsim.tools, moldsim)
+        else:
+            text = client.complete(messages)
+    except (LLMNotConfigured, LLMRequestError) as exc:
+        return AIAnswer(
+            question=question,
+            answer=fallback_answer,
+            mode=AnswerMode.deterministic,
+            referenced_rules=referenced_rules,
+            analysis_id=analysis_id or report.analysis_id,
+            degraded_reason=str(exc),
+        )
+
+    if not text:
+        return AIAnswer(
+            question=question,
+            answer=fallback_answer,
+            mode=AnswerMode.deterministic,
+            referenced_rules=referenced_rules,
+            analysis_id=analysis_id or report.analysis_id,
+            degraded_reason="The model returned an empty response.",
+        )
+
+    return AIAnswer(
+        question=question,
+        answer=text,
+        mode=AnswerMode.llm,
+        model=client.model,
+        referenced_rules=_rules_mentioned(text, report) or referenced_rules,
+        analysis_id=analysis_id or report.analysis_id,
+        standards_considered=[
+            StandardExcerpt(
+                source=c["source"],
+                section_ref=c.get("section_ref"),
+                page_no=c.get("page_no"),
+                similarity=c["similarity"],
+            )
+            for c in excerpts
+        ],
+    )
+
 def _retrieve_standards_excerpts(
     question: str, report: DFMReport
 ) -> List[Dict[str, Any]]:
@@ -251,5 +323,6 @@ __all__ = [
     "AnswerMode",
     "StandardExcerpt",
     "answer_dfm_question",
+    "answer_dfm_question_async",
     "classify_intent",
 ]

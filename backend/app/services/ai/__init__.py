@@ -20,6 +20,7 @@ from .service import (
     AnswerMode,
     StandardExcerpt,
     answer_dfm_question,
+    answer_dfm_question_async
 )
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "QuestionIntent",
     "StandardExcerpt",
     "answer_dfm_question",
+    "answer_dfm_question_async",
     "answer_from_report",
     "build_ai_context",
     "build_messages",
