@@ -12,6 +12,7 @@ import {
   getPrintingScore,
   getScoreColor,
   hasCompletedReport,
+  SEVERITY_COLORS,
 } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
 
@@ -20,9 +21,9 @@ interface VerdictStepProps {
 }
 
 const conclusionLegendItems = [
-  { label: 'Severe', color: '#ef5350' },
-  { label: 'Problematic', color: '#ffb74d' },
-  { label: 'Minor', color: '#ffd54f' },
+  { label: 'Severe', color: SEVERITY_COLORS.severe },
+  { label: 'Problematic', color: SEVERITY_COLORS.problematic },
+  { label: 'Minor', color: SEVERITY_COLORS.minor },
 ]
 
 export default function VerdictStep({ activeFile }: VerdictStepProps) {

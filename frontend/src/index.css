@@ -796,6 +796,12 @@ a {
   margin-top: 24px;
 }
 
+.extra-info-form input:disabled,
+.extra-info-form select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -833,6 +839,12 @@ a {
 .process-toggle-btn.active {
   background: var(--primary);
   color: #fff;
+}
+
+.process-toggle-btn:disabled,
+.process-toggle-btn.active:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .token-estimate {

@@ -1,7 +1,7 @@
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import ProcessToggle from '../../extra-info/ProcessToggle'
 import { useStore, DEFAULT_SETTINGS } from '../../../store'
-import { asAnalysisResult } from '../../../lib/analysisView'
+import { asAnalysisResult, hasCompletedReport } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
 
 interface SetupStepProps {
@@ -17,6 +17,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
   const { quantity, material, tolerance, process, printingProcess, surfaceFinish } = settings
 
   const analysis = asAnalysisResult(analysisResult)
+  const isLocked = hasCompletedReport(analysis)
   const activeFileIsStl =
     activeFile?.sourceFormat === 'stl' ||
     (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
@@ -45,7 +46,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
       <form className="extra-info-form" onSubmit={(e) => e.preventDefault()}>
         <div className="form-group">
           <label>Process</label>
-          <ProcessToggle fileId={activeId} />
+          <ProcessToggle fileId={activeId} disabled={isLocked} />
         </div>
 
         <div className="form-group">
@@ -55,6 +56,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
             type="number"
             min={1}
             value={quantity}
+            disabled={isLocked}
             onChange={(e) => setSettings(activeId, { quantity: Number(e.target.value) })}
           />
         </div>
@@ -64,6 +66,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
           <select
             id="material"
             value={material}
+            disabled={isLocked}
             onChange={(e) => setSettings(activeId, { material: e.target.value })}
           >
             <option value="">Select material</option>
@@ -83,6 +86,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
             <select
               id="surface-finish"
               value={surfaceFinish}
+              disabled={isLocked}
               onChange={(e) => setSettings(activeId, { surfaceFinish: e.target.value })}
             >
               <option value="">Auto (recommended)</option>
@@ -99,6 +103,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
           <select
             id="tolerance"
             value={tolerance}
+            disabled={isLocked}
             onChange={(e) => setSettings(activeId, { tolerance: e.target.value })}
           >
             <option value="">Select tolerance</option>
@@ -114,6 +119,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
             <select
               id="printing-process"
               value={printingProcess}
+              disabled={isLocked}
               onChange={(e) => setSettings(activeId, { printingProcess: e.target.value })}
             >
               <option value="">Auto (recommended)</option>

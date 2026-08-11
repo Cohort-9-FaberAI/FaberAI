@@ -14,6 +14,7 @@ import {
   getProcessIssues,
   getScoreColor,
   hasCompletedReport,
+  SEVERITY_COLORS,
 } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
 
@@ -26,6 +27,16 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [activeTab, setActiveTab] = useState<'molding' | 'printing'>('molding')
+  const process = useStore((s) => s.settingsByFile[activeId]?.process ?? null)
+  const isNotSure = process === null
+  const processType: 'injection_molding' | 'printing' =
+    process === null
+      ? activeTab === 'molding'
+        ? 'injection_molding'
+        : 'printing'
+      : process === 'molding'
+        ? 'injection_molding'
+        : 'printing'
 
   const analysis = asAnalysisResult(analysisResult)
   const taskId = activeFile?.taskId ?? null
@@ -38,23 +49,17 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
 
   const overallScore = getAnalysisScore(analysis)
   const score =
-    activeTab === 'molding'
+    processType === 'injection_molding'
       ? (getMoldingScore(analysis) ?? overallScore)
       : (getPrintingScore(analysis) ?? overallScore)
-  const issues =
-    activeTab === 'molding'
-      ? getProcessIssues(analysis, 'injection_molding')
-      : getProcessIssues(analysis, 'printing')
+  const issues = getProcessIssues(analysis, processType)
 
-  // Scope the issues the 3D viewer draws markers for to the active tab so the
-  // markers match the findings listed in the accordions below.
+  // Scope the issues the 3D viewer draws markers for to the process being
+  // inspected so the markers match the findings listed in the accordions below.
   const viewerAnalysis = analysis
     ? {
         ...analysis,
-        issues: getMarkerIssuesForProcess(
-          analysis,
-          activeTab === 'molding' ? 'injection_molding' : 'printing',
-        ),
+        issues: getMarkerIssuesForProcess(analysis, processType),
       }
     : null
 
@@ -137,22 +142,24 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
             ) : null
           }
         >
-          <div className="analysis-tabs">
-            <button
-              type="button"
-              className={`analysis-tab${activeTab === 'molding' ? ' active' : ''}`}
-              onClick={() => setActiveTab('molding')}
-            >
-              Molding
-            </button>
-            <button
-              type="button"
-              className={`analysis-tab${activeTab === 'printing' ? ' active' : ''}`}
-              onClick={() => setActiveTab('printing')}
-            >
-              Printing
-            </button>
-          </div>
+          {isNotSure && (
+            <div className="analysis-tabs">
+              <button
+                type="button"
+                className={`analysis-tab${activeTab === 'molding' ? ' active' : ''}`}
+                onClick={() => setActiveTab('molding')}
+              >
+                Molding
+              </button>
+              <button
+                type="button"
+                className={`analysis-tab${activeTab === 'printing' ? ' active' : ''}`}
+                onClick={() => setActiveTab('printing')}
+              >
+                Printing
+              </button>
+            </div>
+          )}
 
           <motion.div
             className="analysis-right-panel"
@@ -182,7 +189,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
               <IssueAccordion
                 title="Minor"
                 count={minor.length}
-                color="var(--severity-low)"
+                color={SEVERITY_COLORS.minor}
                 items={minor}
                 emptyLabel={
                   analysis
@@ -193,13 +200,13 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
               <IssueAccordion
                 title="Problematic"
                 count={problematic.length}
-                color="var(--severity-medium)"
+                color={SEVERITY_COLORS.problematic}
                 items={problematic}
               />
               <IssueAccordion
                 title="Severe"
                 count={severe.length}
-                color="var(--severity-high)"
+                color={SEVERITY_COLORS.severe}
                 items={severe}
               />
             </div>
