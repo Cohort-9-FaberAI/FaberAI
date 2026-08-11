@@ -619,6 +619,7 @@ class ReportDownloadRequest(BaseModel):
     tolerance: Optional[str] = None
     printing_process: Optional[str] = None
     surface_finish: Optional[str] = None
+    inline: bool = False
 
 
 def _load_stored_analysis(analysis_id: str) -> dict:
@@ -746,10 +747,11 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
         include_comparison=request.include_comparison,
     )
     filename = report_pdf_filename(request.analysis)
+    disposition = "inline" if request.inline else "attachment"
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
     )
 
 

@@ -1,13 +1,9 @@
 import { useState } from 'react'
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import { useStore } from '../../../store'
-import {
-  asAnalysisResult,
-  getAnalysisScore,
-  getScoreColor,
-  hasCompletedReport,
-} from '../../../lib/analysisView'
+import { asAnalysisResult, hasCompletedReport } from '../../../lib/analysisView'
 import { downloadAnalysisReportPdf } from '../../../lib/api'
+import ReportPdfPreview from '../../export/ReportPdfPreview'
 import type { UploadedFile } from '../../../store'
 import { DEFAULT_SETTINGS } from '../../../store'
 
@@ -28,7 +24,6 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
 
   const showComparison = process === null
   const analysis = asAnalysisResult(analysisResult)
-  const score = getAnalysisScore(analysis)
   const canDownload = hasCompletedReport(analysis)
 
   const activeFileIsStl =
@@ -85,12 +80,17 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       previewBuffer={fileBuffer}
       previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
-      viewerMeta={
-        score !== null ? (
-          <span className="viewer-score">
-            <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
-          </span>
-        ) : null
+
+      viewerOverride={
+        <ReportPdfPreview
+          analysis={analysisResult}
+          comparison={comparison}
+          process={process}
+          printingProcess={printingProcess}
+          material={material}
+          tolerance={tolerance}
+          surfaceFinish={surfaceFinish}
+        />
       }
     >
       {showComparison && (

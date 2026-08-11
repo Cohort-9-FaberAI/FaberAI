@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import RadialScore from '../../conclusion/RadialScore'
-import SeverityLegend from '../../analysis/SeverityLegend'
 import { useStore } from '../../../store'
 import {
   asAnalysisResult,
@@ -12,19 +11,12 @@ import {
   getPrintingScore,
   getScoreColor,
   hasCompletedReport,
-  SEVERITY_COLORS,
 } from '../../../lib/analysisView'
 import type { UploadedFile } from '../../../store'
 
 interface VerdictStepProps {
   activeFile: UploadedFile | null
 }
-
-const conclusionLegendItems = [
-  { label: 'Severe', color: SEVERITY_COLORS.severe },
-  { label: 'Problematic', color: SEVERITY_COLORS.problematic },
-  { label: 'Minor', color: SEVERITY_COLORS.minor },
-]
 
 export default function VerdictStep({ activeFile }: VerdictStepProps) {
   const activeId = activeFile?.id ?? ''
@@ -104,10 +96,6 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
               <span>/100 overall</span>
             </div>
           )}
-        </div>
-
-        <div className="conclusion-score-legend">
-          <SeverityLegend items={conclusionLegendItems} />
         </div>
 
         {score !== null && (

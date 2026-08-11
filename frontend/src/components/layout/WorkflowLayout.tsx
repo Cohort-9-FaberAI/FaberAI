@@ -13,6 +13,7 @@ interface WorkflowLayoutProps {
   previewFilename?: string | null
   viewerLabel?: string
   viewerMeta?: ReactNode
+  viewerOverride?: ReactNode
   children: ReactNode
 }
 
@@ -25,8 +26,8 @@ export default function WorkflowLayout({
   previewBuffer,
   previewSourceFormat = null,
   previewFilename = null,
-  viewerLabel = 'Live inspection',
   viewerMeta,
+  viewerOverride,
   children,
 }: WorkflowLayoutProps) {
   return (
@@ -38,21 +39,22 @@ export default function WorkflowLayout({
         {children}
       </section>
 
-      <aside className="viewer-panel" aria-label={viewerLabel}>
+      <aside className="viewer-panel">
         <div className="viewer-panel-header">
           <div>
-            <span>{viewerLabel}</span>
             <strong>{analysis?.filename ?? previewFilename ?? 'No completed report'}</strong>
           </div>
           {viewerMeta}
         </div>
         <div style={{ position: 'relative' }}>
-          <ModelPreview
-            analysis={analysis}
-            previewFileUrl={previewFileUrl}
-            previewBuffer={previewBuffer}
-            previewSourceFormat={previewSourceFormat}
-          />
+          {viewerOverride ?? (
+            <ModelPreview
+              analysis={analysis}
+              previewFileUrl={previewFileUrl}
+              previewBuffer={previewBuffer}
+              previewSourceFormat={previewSourceFormat}
+            />
+          )}
         </div>
       </aside>
     </div>

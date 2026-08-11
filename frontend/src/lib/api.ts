@@ -140,6 +140,7 @@ export async function downloadAnalysisReportPdf(
   tolerance?: string | null,
   printingProcess?: string | null,
   surfaceFinish?: string | null,
+  inline?: boolean,
 ) {
   const res = await fetch(`${API_BASE}/analysis/report.pdf`, {
     method: 'POST',
@@ -152,6 +153,7 @@ export async function downloadAnalysisReportPdf(
       tolerance,
       printing_process: printingProcess,
       surface_finish: surfaceFinish,
+      inline,
     }),
   })
 
