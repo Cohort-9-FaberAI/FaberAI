@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AppShell from '../components/layout/AppShell'
 import WizardNav from '../components/layout/WizardNav'
 import WorkspaceTabs from '../components/workspace/WorkspaceTabs'
 import FileSubNav, { type WorkspaceStep } from '../components/workspace/FileSubNav'
@@ -81,41 +80,31 @@ export default function AnalysisPage() {
 
   if (uploadedFiles.length === 0) {
     return (
-      <AppShell>
-        <div className="workspace-empty-state">
-          <svg
-            width="56"
-            height="56"
-            viewBox="0 0 56 56"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              x="12"
-              y="14"
-              width="32"
-              height="32"
-              rx="4"
-              stroke="currentColor"
-              strokeWidth="2"
-            />
-            <path
-              d="M28 22V34M22 28H34"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-          <h2>No CAD Files In Workspace</h2>
-          <p>
-            Upload one or more 3D CAD geometries (STEP or STL) to launch automated DFM rule
-            inspection and supplier scoring.
-          </p>
-          <button type="button" className="workspace-empty-btn" onClick={() => navigate('/home')}>
-            Go to Upload
-          </button>
-        </div>
-      </AppShell>
+      <div className="workspace-empty-state">
+        <svg
+          width="56"
+          height="56"
+          viewBox="0 0 56 56"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect x="12" y="14" width="32" height="32" rx="4" stroke="currentColor" strokeWidth="2" />
+          <path
+            d="M28 22V34M22 28H34"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+        <h2>No CAD Files In Workspace</h2>
+        <p>
+          Upload one or more 3D CAD geometries (STEP or STL) to launch automated DFM rule inspection
+          and supplier scoring.
+        </p>
+        <button type="button" className="workspace-empty-btn" onClick={() => navigate('/home')}>
+          Go to Upload
+        </button>
+      </div>
     )
   }
 
@@ -155,7 +144,7 @@ export default function AnalysisPage() {
       : null
 
   return (
-    <AppShell>
+    <>
       {files.map((f) =>
         f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending') ? (
           <FilePoller key={f.id} file={f} />
@@ -192,6 +181,6 @@ export default function AnalysisPage() {
           />
         </div>
       </div>
-    </AppShell>
+    </>
   )
 }

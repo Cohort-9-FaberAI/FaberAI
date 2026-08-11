@@ -11,6 +11,7 @@ import LibraryPage from './pages/LibraryPage'
 import HistoryPage from './pages/HistoryPage'
 import DebugApiPage from './pages/DebugApiPage'
 import LandingPage from './pages/LandingPage'
+import AppShell from './components/layout/AppShell'
 
 function App() {
   const theme = useStore((s) => s.theme)
@@ -23,17 +24,19 @@ function App() {
     <Routes>
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/home" element={<HomePage />} />
-      <Route path="/upload" element={<UploadPage />} />
-      <Route path="/extra-info" element={<Navigate to="/analysis" replace />} />
-      <Route path="/analysis" element={<AnalysisPage />} />
-      <Route path="/conclusion" element={<Navigate to="/analysis" replace />} />
-      <Route path="/download" element={<Navigate to="/analysis" replace />} />
-      <Route path="/projects" element={<ProjectsPage />} />
-      <Route path="/projects/:id" element={<ProjectDetailPage />} />
-      <Route path="/library" element={<LibraryPage />} />
-      <Route path="/history" element={<HistoryPage />} />
-      <Route path="/debug" element={<DebugApiPage />} />
+      <Route element={<AppShell />}>
+        <Route path="/home" element={<HomePage />} />
+        <Route path="/upload" element={<UploadPage />} />
+        <Route path="/extra-info" element={<Navigate to="/analysis" replace />} />
+        <Route path="/analysis" element={<AnalysisPage />} />
+        <Route path="/conclusion" element={<Navigate to="/analysis" replace />} />
+        <Route path="/download" element={<Navigate to="/analysis" replace />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage />} />
+        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/debug" element={<DebugApiPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/landing" replace />} />
     </Routes>
   )

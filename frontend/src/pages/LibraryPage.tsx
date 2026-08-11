@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AppShell from '../components/layout/AppShell'
 import SearchBar from '../components/common/SearchBar'
 import ListRow from '../components/common/ListRow'
 import Modal from '../components/common/Modal'
@@ -28,7 +27,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <h1>Library</h1>
 
       <div className="list-header">
@@ -86,6 +85,6 @@ export default function LibraryPage() {
         })}
         {filtered.length === 0 && <p className="list-empty">No library items found.</p>}
       </div>
-    </AppShell>
+    </>
   )
 }

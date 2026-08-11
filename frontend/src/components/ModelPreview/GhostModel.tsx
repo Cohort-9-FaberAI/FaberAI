@@ -3,10 +3,10 @@ import { Box3, DoubleSide, Object3D, Vector3 } from 'three'
 import { ModelContext } from './ModelContext'
 import { useThree } from '@react-three/fiber'
 
-export function GhostModel() {
+export function GhostModel({ fitToViewport = false }: { fitToViewport?: boolean }) {
   const context = useContext(ModelContext)
   const geometry = context?.sharedGeometry
-  const { camera } = useThree()
+  const { camera, size: viewportSize } = useThree()
   const objectRef = useRef<Object3D>(null)
 
   // Gives the camera an initial position along the bounding box of the mesh
@@ -16,10 +16,17 @@ export function GhostModel() {
       const center = box.getCenter(new Vector3())
       const size = box.getSize(new Vector3())
       const distance = Math.max(size.x, size.y, size.z)
-      camera.position.set(center.x + distance, center.y + distance, center.z + distance)
+      const aspect = viewportSize.width / Math.max(viewportSize.height, 1)
+      const portraitFit = fitToViewport && aspect < 1 ? Math.min(1 / aspect, 1.85) : 1
+      const fittedDistance = distance * portraitFit
+      camera.position.set(
+        center.x + fittedDistance,
+        center.y + fittedDistance,
+        center.z + fittedDistance,
+      )
       camera.lookAt(center)
     }
-  }, [geometry, camera])
+  }, [geometry, camera, fitToViewport, viewportSize.height, viewportSize.width])
 
   if (!geometry) return null
 

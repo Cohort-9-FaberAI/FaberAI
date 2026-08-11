@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import AppShell from '../components/layout/AppShell'
 import StepIndicator from '../components/layout/StepIndicator'
 import UploadDropzone from '../components/home/UploadDropzone'
 import FileCard from '../components/home/FileCard'
@@ -20,7 +19,7 @@ export default function UploadPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <StepIndicator currentStep={1} />
 
       <section className="home-header">
@@ -48,6 +47,6 @@ export default function UploadPage() {
       <button className="next-btn" type="button" disabled={!readyFile} onClick={startAnalysis}>
         Next
       </button>
-    </AppShell>
+    </>
   )
 }

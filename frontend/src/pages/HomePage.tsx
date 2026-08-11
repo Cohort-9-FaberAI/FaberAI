@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import AppShell from '../components/layout/AppShell'
 import UploadDropzone from '../components/home/UploadDropzone'
 import FileCard from '../components/home/FileCard'
 import WizardNav from '../components/layout/WizardNav'
@@ -76,7 +75,7 @@ export default function HomePage() {
   }
 
   return (
-    <AppShell>
+    <>
       {files.map((f) =>
         f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending') ? (
           <FilePoller key={f.id} file={f} />
@@ -205,6 +204,6 @@ export default function HomePage() {
           title: nextHint ?? undefined,
         }}
       />
-    </AppShell>
+    </>
   )
 }

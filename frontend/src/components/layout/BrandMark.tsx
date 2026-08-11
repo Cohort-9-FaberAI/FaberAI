@@ -1,16 +1,31 @@
+import { useStore } from '../../store'
+
 export default function BrandMark({
   size = 30,
   variant = 'default',
   className = '',
 }: {
   size?: number
-  variant?: 'default' | 'white' | 'full'
+  variant?: 'default' | 'white' | 'full' | 'full-white'
   className?: string
 }) {
-  const src =
-    variant === 'white' ? '/logo-white.svg' : variant === 'full' ? '/logo-full.svg' : '/logo.svg'
+  const theme = useStore((s) => s.theme)
+  const isDark = theme === 'dark'
 
-  const width = variant === 'full' ? Math.round(size * 1.78) : size
+  const src =
+    variant === 'white'
+      ? '/logo-white.svg'
+      : variant === 'full-white'
+        ? '/logo-full-white.svg'
+        : variant === 'full'
+          ? isDark
+            ? '/logo-full-white.svg'
+            : '/logo-full.svg'
+          : isDark
+            ? '/logo-white.svg'
+            : '/logo.svg'
+
+  const width = variant === 'full' || variant === 'full-white' ? Math.round(size * 1.78) : size
 
   return (
     <img

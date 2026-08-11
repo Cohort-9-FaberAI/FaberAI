@@ -102,7 +102,13 @@ function shouldShowMarker(issue: ManufacturabilityIssue) {
   return isVisibleIssueSeverity(issue.severity)
 }
 
-export default function XRayCanvas() {
+export default function XRayCanvas({
+  autoRotate = false,
+  fitToViewport = false,
+}: {
+  autoRotate?: boolean
+  fitToViewport?: boolean
+}) {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
   const sharedGeometry = context?.sharedGeometry
@@ -136,7 +142,7 @@ export default function XRayCanvas() {
       <directionalLight position={[4, 6, 3]} intensity={4} />
       <directionalLight position={[-3, 1, -4]} intensity={0.5} />
 
-      <GhostModel />
+      <GhostModel fitToViewport={fitToViewport} />
 
       {issueMarkers.map(({ issue, worldPos }) => (
         <IssueMarker
@@ -150,7 +156,7 @@ export default function XRayCanvas() {
         />
       ))}
 
-      <OrbitControls autoRotate={false} />
+      <OrbitControls autoRotate={autoRotate} autoRotateSpeed={1.15} />
       <GizmoHelper alignment="top-left" margin={[80, 80]}>
         <GizmoViewport />
       </GizmoHelper>

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import AppShell from '../components/layout/AppShell'
 import SearchBar from '../components/common/SearchBar'
 import ListRow from '../components/common/ListRow'
 import { useStore } from '../store'
@@ -15,7 +14,7 @@ export default function HistoryPage() {
   )
 
   return (
-    <AppShell>
+    <>
       <section className="history-header">
         <h1>History</h1>
         <p className="page-note">
@@ -39,6 +38,6 @@ export default function HistoryPage() {
         ))}
         {filtered.length === 0 && <p className="list-empty">No history entries found.</p>}
       </div>
-    </AppShell>
+    </>
   )
 }

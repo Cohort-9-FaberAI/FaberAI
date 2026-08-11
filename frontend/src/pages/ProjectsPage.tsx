@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AppShell from '../components/layout/AppShell'
 import SearchBar from '../components/common/SearchBar'
 import ProjectForm from '../components/projects/ProjectForm'
 import { useStore } from '../store'
@@ -58,7 +57,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <h1>Projects</h1>
       <p className="page-note">Organize CAD files into projects and analyze them on demand.</p>
 
@@ -136,6 +135,6 @@ export default function ProjectsPage() {
             ))}
           </div>
         ))}
-    </AppShell>
+    </>
   )
 }

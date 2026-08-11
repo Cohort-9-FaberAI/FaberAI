@@ -23,6 +23,9 @@ type ModelPreviewProps = {
   previewBuffer?: ArrayBuffer | null
   onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
   height?: number | string
+  autoRotate?: boolean
+  markerRadius?: number
+  fitToViewport?: boolean
 }
 
 function toPoint(value?: [number, number, number] | Vector3): [number, number, number] | null {
@@ -127,7 +130,15 @@ function getPreviewUrl(analysis: AnalysisResult | null, previewFileUrl: string |
   return null
 }
 
-function ModelCanvas() {
+function ModelCanvas({
+  autoRotate = false,
+  markerRadius = 0.5,
+  fitToViewport = false,
+}: {
+  autoRotate?: boolean
+  markerRadius?: number
+  fitToViewport?: boolean
+}) {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
   const sharedGeometry = context?.sharedGeometry
@@ -159,10 +170,10 @@ function ModelCanvas() {
 
       {isLoginLogo ? (
         <Float speed={2.2} rotationIntensity={0.6} floatIntensity={1.8}>
-          <Model />
+          <Model fitToViewport={fitToViewport} />
         </Float>
       ) : (
-        <Model />
+        <Model fitToViewport={fitToViewport} />
       )}
 
       {issueMarkers.map(({ issue, worldPos }) => (
@@ -170,14 +181,14 @@ function ModelCanvas() {
           key={`${issue.issue_id}:${worldPos.join(':')}`}
           position={worldPos}
           color={markerColor(issue)}
-          radius={0.5}
+          radius={markerRadius}
           renderAsSphere={true}
           issue={issue}
           type="POINT"
         />
       ))}
 
-      <OrbitControls autoRotate={Boolean(isLoginLogo)} autoRotateSpeed={1.5} />
+      <OrbitControls autoRotate={autoRotate || Boolean(isLoginLogo)} autoRotateSpeed={1.15} />
       {!isLoginLogo && (
         <GizmoHelper alignment="top-left" margin={[80, 80]}>
           <GizmoViewport />
@@ -193,6 +204,9 @@ export default function ModelPreview({
   previewBuffer,
   onIssueSelected,
   height,
+  autoRotate = false,
+  markerRadius = 0.5,
+  fitToViewport = false,
 }: ModelPreviewProps) {
   const [selectedIssue, setSelectedIssue] = useState<ManufacturabilityIssue | null>(null)
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
@@ -327,7 +341,15 @@ export default function ModelPreview({
             selectedIssueSetter: setSelectedIssue,
           }}
         >
-          {shouldDisplayXRay ? <XRayCanvas /> : <ModelCanvas />}
+          {shouldDisplayXRay ? (
+            <XRayCanvas autoRotate={autoRotate} fitToViewport={fitToViewport} />
+          ) : (
+            <ModelCanvas
+              autoRotate={autoRotate}
+              markerRadius={markerRadius}
+              fitToViewport={fitToViewport}
+            />
+          )}
         </ModelContext.Provider>
       </div>
     </div>
