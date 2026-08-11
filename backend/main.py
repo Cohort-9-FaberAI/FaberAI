@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from celery.result import AsyncResult
 from celery.exceptions import CeleryError
-from fastapi import FastAPI, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -287,7 +287,14 @@ def dependency_health_check():
     }
 
 @app.post("/upload/", status_code=status.HTTP_202_ACCEPTED, tags=["Upload"])
-async def upload_cad_file(file: UploadFile):
+async def upload_cad_file(
+    file: UploadFile = File(...),
+    process: Optional[str] = Form(default=None),
+    material: Optional[str] = Form(default=None),
+    surface_finish: Optional[str] = Form(default=None),
+    printing_process: Optional[str] = Form(default=None),
+    tolerance: Optional[str] = Form(default=None),
+):
     """
     Accepts a CAD file (STEP or STL), uploads it to Supabase Storage,
     creates a pending record in Supabase, and dispatches a background
@@ -313,12 +320,33 @@ async def upload_cad_file(file: UploadFile):
             cause=exc,
         )
 
+    # User-selected manufacturing context (Setup step) rides along so the DFM
+    # engine can resolve materials / printing process / surface finish instead
+    # of falling back to the config defaults.
+    inputs: Optional[Dict[str, Any]] = None
+    if process or material or surface_finish or printing_process:
+        inputs = {}
+        if process:
+            normalized = process.lower().strip()
+            if normalized in ("printing", "3d_printing"):
+                inputs["process"] = "printing"
+            elif normalized in ("molding", "injection_molding"):
+                inputs["process"] = "injection_molding"
+        if material:
+            inputs["material"] = material.lower().strip()
+        if surface_finish:
+            inputs["surface_finish"] = surface_finish.lower().strip().replace(" ", "_")
+        if printing_process:
+            inputs["printing_process"] = printing_process.lower().strip()
+
     # Pass analysis_id to the worker so it can update the record
     try:
         task = extract_geometry_task.delay(
             upload_result["public_url"],
             upload_result["original_filename"],
             analysis.analysis_id,
+            inputs,
+            tolerance or None,
         )
     except (CeleryError, OSError, TimeoutError) as exc:
         _raise_backend_unhealthy(
@@ -589,6 +617,9 @@ class ReportDownloadRequest(BaseModel):
     process: Optional[str] = None
     material: Optional[str] = None
     tolerance: Optional[str] = None
+    printing_process: Optional[str] = None
+    surface_finish: Optional[str] = None
+    inline: bool = False
 
 
 def _load_stored_analysis(analysis_id: str) -> dict:
@@ -678,7 +709,8 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
     if request.process:
         p = request.process.lower().strip()
         report_dict["inputs"]["process"] = "3d_printing" if "print" in p else "injection_molding"
-        report_dict["inputs"]["printing_process"] = "fdm"
+    if request.printing_process:
+        report_dict["inputs"]["printing_process"] = request.printing_process.lower().strip()
     if request.material:
         mat = request.material.lower().strip()
         report_dict["inputs"]["material"] = mat
@@ -686,6 +718,10 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
     if request.tolerance:
         tol = request.tolerance.lower()
         report_dict["inputs"]["tolerance"] = "precision" if ("precision" in tol or "fine" in tol) else "standard"
+    if request.surface_finish:
+        report_dict["inputs"]["surface_finish"] = (
+            request.surface_finish.lower().strip().replace(" ", "_")
+        )
 
     # 4. Removemos o aviso genérico de "No material supplied" das suposições se o material foi fornecido
     if request.material and "processes" in report_dict:
@@ -711,10 +747,11 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
         include_comparison=request.include_comparison,
     )
     filename = report_pdf_filename(request.analysis)
+    disposition = "inline" if request.inline else "attachment"
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
     )
 
 

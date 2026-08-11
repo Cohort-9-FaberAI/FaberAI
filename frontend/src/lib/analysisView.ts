@@ -63,35 +63,54 @@ export function isVisibleIssueSeverity(severity: unknown): boolean {
   )
 }
 
-function fromRuleResult(rule: Record<string, unknown>): DisplayIssue | null {
+function fromRuleResult(rule: Record<string, unknown>): DisplayIssue[] {
   const status = getString(rule.status)?.toLowerCase()
-  const findings = Array.isArray(rule.findings) ? rule.findings : []
-  const failedLike = status === 'failed' || status === 'warning'
+  const failedLike =
+    status === 'failed' || status === 'fail' || status === 'warning' || status === 'warn'
 
-  if (!failedLike) return null
+  if (!failedLike) return []
 
-  const firstFinding = getRecord(findings[0])
   const ruleId = getString(rule.rule_id)
   const ruleName = getString(rule.rule_name) ?? ruleId ?? 'DFM rule'
   const measured = getNumber(rule.measured)
   const unit = getString(rule.unit)
   const impact = getNumber(rule.score_impact)
-  const findingMessage = getString(firstFinding?.message)
-  const findingRecommendation = getString(firstFinding?.recommendation)
-  const message =
-    findingMessage ??
-    `${ruleName}${measured !== null ? ` measured ${measured}${unit ?? ''}` : ' needs review'}.`
+  const ruleRecommendation = getString(rule.recommendation)
 
-  return {
-    severity: normalizeSeverity(rule.severity),
-    message,
-    recommendation:
-      findingRecommendation ??
-      getString(rule.recommendation) ??
-      (impact !== null
-        ? `This rule affected the score by ${impact.toFixed(1)} points. Review the threshold details in the DFM report.`
-        : 'Review the threshold details in the DFM report.'),
+  const findings = Array.isArray(rule.findings) ? rule.findings : []
+  const resolvedFindings =
+    findings.length > 0
+      ? findings
+      : [
+          {
+            severity: rule.severity,
+            message: null,
+            recommendation: ruleRecommendation,
+            finding_id: ruleId,
+          },
+        ]
+
+  const resolved: DisplayIssue[] = []
+  for (const finding of resolvedFindings) {
+    const fRec = getRecord(finding)
+    if (!fRec) continue
+    const findingMessage = getString(fRec.message)
+    const findingRecommendation = getString(fRec.recommendation)
+    resolved.push({
+      issue_id: getString(fRec.finding_id) ?? ruleId ?? undefined,
+      severity: normalizeSeverity(fRec.severity ?? rule.severity),
+      message:
+        findingMessage ??
+        `${ruleName}${measured !== null ? ` measured ${measured}${unit ?? ''}` : ' needs review'}.`,
+      recommendation:
+        findingRecommendation ??
+        ruleRecommendation ??
+        (impact !== null
+          ? `This rule affected the score by ${impact.toFixed(1)} points. Review the threshold details in the DFM report.`
+          : 'Review the threshold details in the DFM report.'),
+    })
   }
+  return resolved
 }
 
 export function asAnalysisResult(value: Record<string, unknown> | null): AnalysisResult | null {
@@ -117,19 +136,15 @@ export function getDisplayIssues(analysis: AnalysisResult | null): DisplayIssue[
   const reportIssues = processes.flatMap((process) => {
     const processRecord = getRecord(process)
     const rules = Array.isArray(processRecord?.rule_results) ? processRecord.rule_results : []
-    return rules
-      .map((rule) => {
-        const ruleRecord = getRecord(rule)
-        return ruleRecord ? fromRuleResult(ruleRecord) : null
-      })
-      .filter((issue): issue is DisplayIssue => issue !== null)
+    return rules.flatMap((rule) => {
+      const ruleRecord = getRecord(rule)
+      return ruleRecord ? fromRuleResult(ruleRecord) : []
+    })
   })
 
   if (reportIssues.length > 0) return reportIssues
 
-  return Array.isArray(analysis.issues)
-    ? analysis.issues.filter((issue) => isVisibleIssueSeverity(issue.severity)).map(fromLegacyIssue)
-    : []
+  return Array.isArray(analysis.issues) ? analysis.issues.map(fromLegacyIssue) : []
 }
 
 export function getMoldingScore(analysis: AnalysisResult | null): number | null {
@@ -184,16 +199,56 @@ export function getProcessIssues(
   const reportIssues = matchingProcesses.flatMap((proc) => {
     const processRecord = getRecord(proc)
     const rules = Array.isArray(processRecord?.rule_results) ? processRecord.rule_results : []
-    return rules
-      .map((rule) => {
-        const ruleRecord = getRecord(rule)
-        return ruleRecord ? fromRuleResult(ruleRecord) : null
-      })
-      .filter((issue): issue is DisplayIssue => issue !== null)
+    return rules.flatMap((rule) => {
+      const ruleRecord = getRecord(rule)
+      return ruleRecord ? fromRuleResult(ruleRecord) : []
+    })
   })
 
   if (reportIssues.length > 0) return reportIssues
   return getDisplayIssues(analysis)
+}
+
+/**
+ * Scope the 3D-viewport marker issues to a single process so markers match the
+ * findings listed in the active tab. Falls back to the legacy report's
+ * `analysis.issues` rule-id prefixes when the DFM report has no rule results.
+ */
+export function getMarkerIssuesForProcess(
+  analysis: AnalysisResult | null,
+  processType: 'injection_molding' | 'printing',
+): ManufacturabilityIssue[] {
+  if (!analysis) return []
+  const issues = Array.isArray(analysis.issues) ? analysis.issues : []
+  if (issues.length === 0) return issues
+
+  const report = getRecord(analysis.dfm_report)
+  const processes = Array.isArray(report?.processes) ? report.processes : []
+  const ruleIds = new Set<string>()
+  for (const proc of processes) {
+    const pRec = getRecord(proc)
+    if (!pRec?.process) continue
+    const matches =
+      processType === 'injection_molding'
+        ? pRec.process === 'injection_molding' || pRec.process === 'molding'
+        : pRec.process === 'printing' || pRec.process === '3d_printing'
+    if (!matches) continue
+    const rules = Array.isArray(pRec.rule_results) ? pRec.rule_results : []
+    for (const rule of rules) {
+      const rRec = getRecord(rule)
+      const id = getString(rRec?.rule_id)
+      if (id) ruleIds.add(id)
+    }
+  }
+
+  if (ruleIds.size > 0) {
+    return issues.filter((issue) => !issue.type || ruleIds.has(issue.type))
+  }
+
+  const prefix = processType === 'injection_molding' ? 'M' : 'P'
+  return issues.filter(
+    (issue) => !issue.type || String(issue.type).toUpperCase().startsWith(prefix),
+  )
 }
 
 export function getScoreColor(score: number | null | undefined): string {
@@ -201,4 +256,21 @@ export function getScoreColor(score: number | null | undefined): string {
   if (score >= 50) return '#66bb6a' // Green / Pro
   if (score >= 30) return '#ffb74d' // Amber / Neutral
   return '#ef5350' // Red / Fail
+}
+
+/**
+ * Severity colours shared by the DFM analysis legend and the 3D issue
+ * markers so both always render the same colours. Values mirror the CSS
+ * custom properties `--severity-high/medium/low` in index.css.
+ */
+export const SEVERITY_COLORS = {
+  severe: '#ef5350',
+  problematic: '#ff7b00',
+  minor: '#1aff00',
+} as const
+
+export function severityColor(severity: IssueSeverity | null | undefined): string {
+  if (severity === 'blocker' || severity === 'high') return SEVERITY_COLORS.severe
+  if (severity === 'major' || severity === 'medium') return SEVERITY_COLORS.problematic
+  return SEVERITY_COLORS.minor
 }

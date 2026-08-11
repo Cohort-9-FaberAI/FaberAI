@@ -8,7 +8,7 @@ import SetupStep from '../components/workspace/steps/SetupStep'
 import InspectionStep from '../components/workspace/steps/InspectionStep'
 import VerdictStep from '../components/workspace/steps/VerdictStep'
 import ExportStep from '../components/workspace/steps/ExportStep'
-import { useStore } from '../store'
+import { useStore, DEFAULT_SETTINGS } from '../store'
 import { useTaskPolling } from '../lib/useTaskPolling'
 import { analyzeFile } from '../lib/useSequentialFileProcessor'
 import { asAnalysisResult, hasCompletedReport } from '../lib/analysisView'
@@ -76,9 +76,8 @@ export default function AnalysisPage() {
   const setRequestedStep = useStore((s) => s.setRequestedStep)
   const storedStepByFile = useStore((s) => s.stepByFile)
   const setStoredStepByFile = useStore((s) => s.setStepByFile)
-  const process = useStore((s) => s.process)
-  const material = useStore((s) => s.material)
-  const tolerance = useStore((s) => s.tolerance)
+  const settings = useStore((s) => s.settingsByFile[activeId] ?? DEFAULT_SETTINGS)
+  const { process, material, tolerance } = settings
 
   // Jump to a requested workspace step (e.g. "inspection" from a project's View Analysis)
   useEffect(() => {

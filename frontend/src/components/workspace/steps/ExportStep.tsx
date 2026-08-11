@@ -1,25 +1,21 @@
 import { useState } from 'react'
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import { useStore } from '../../../store'
-import {
-  asAnalysisResult,
-  getAnalysisScore,
-  getScoreColor,
-  hasCompletedReport,
-} from '../../../lib/analysisView'
+import { asAnalysisResult, hasCompletedReport } from '../../../lib/analysisView'
 import { downloadAnalysisReportPdf } from '../../../lib/api'
+import ReportPdfPreview from '../../export/ReportPdfPreview'
 import type { UploadedFile } from '../../../store'
+import { DEFAULT_SETTINGS } from '../../../store'
 
 interface ExportStepProps {
   activeFile: UploadedFile | null
 }
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
-  const process = useStore((s) => s.process)
-  const material = useStore((s) => s.material)
-  const tolerance = useStore((s) => s.tolerance)
-
   const activeId = activeFile?.id ?? ''
+  const settings = useStore((s) => s.settingsByFile[activeId] ?? DEFAULT_SETTINGS)
+  const { process, printingProcess, material, tolerance, surfaceFinish } = settings
+
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [comparison, setComparison] = useState(false)
@@ -28,7 +24,6 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
 
   const showComparison = process === null
   const analysis = asAnalysisResult(analysisResult)
-  const score = getAnalysisScore(analysis)
   const canDownload = hasCompletedReport(analysis)
 
   const activeFileIsStl =
@@ -57,6 +52,8 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
         process,
         material,
         tolerance,
+        printingProcess,
+        surfaceFinish,
       )
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -83,12 +80,17 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       previewBuffer={fileBuffer}
       previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
-      viewerMeta={
-        score !== null ? (
-          <span className="viewer-score">
-            <span style={{ color: getScoreColor(score) }}>{Math.round(score)}</span>/100
-          </span>
-        ) : null
+
+      viewerOverride={
+        <ReportPdfPreview
+          analysis={analysisResult}
+          comparison={comparison}
+          process={process}
+          printingProcess={printingProcess}
+          material={material}
+          tolerance={tolerance}
+          surfaceFinish={surfaceFinish}
+        />
       }
     >
       {showComparison && (

@@ -30,9 +30,23 @@ export interface UploadResponse {
   status: string
 }
 
-export async function uploadFile(file: File): Promise<UploadResponse> {
+export interface UploadInputs {
+  process?: string | null
+  material?: string | null
+  surface_finish?: string | null
+  printing_process?: string | null
+  tolerance?: string | null
+}
+
+export async function uploadFile(file: File, inputs?: UploadInputs): Promise<UploadResponse> {
   const formData = new FormData()
   formData.append('file', file)
+
+  for (const [key, value] of Object.entries(inputs ?? {})) {
+    if (value !== undefined && value !== null && value !== '') {
+      formData.append(key, String(value))
+    }
+  }
 
   const res = await fetch(`${API_BASE}/upload/`, {
     method: 'POST',
@@ -124,6 +138,9 @@ export async function downloadAnalysisReportPdf(
   process?: string | null,
   material?: string | null,
   tolerance?: string | null,
+  printingProcess?: string | null,
+  surfaceFinish?: string | null,
+  inline?: boolean,
 ) {
   const res = await fetch(`${API_BASE}/analysis/report.pdf`, {
     method: 'POST',
@@ -134,6 +151,9 @@ export async function downloadAnalysisReportPdf(
       process,
       material,
       tolerance,
+      printing_process: printingProcess,
+      surface_finish: surfaceFinish,
+      inline,
     }),
   })
 

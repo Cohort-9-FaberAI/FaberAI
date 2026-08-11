@@ -13,8 +13,8 @@ import { Model } from './Model'
 import IssueMarker from './IssueMarker'
 import { PCFShadowMap, type BufferGeometry, Vector3 as ThreeVector3 } from 'three'
 import { useStore } from '../../store'
-import { isVisibleIssueSeverity } from '../../lib/analysisView'
 import Toolbar from './Toolbar'
+import { severityColor } from '../../lib/analysisView'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
@@ -97,14 +97,7 @@ function getClosestSurfacePoint(
 }
 
 function markerColor(issue: ManufacturabilityIssue) {
-  if (issue.three_js_highlight?.color) return issue.three_js_highlight.color
-  if (issue.severity === 'blocker' || issue.severity === 'high') return 'red'
-  if (issue.severity === 'major' || issue.severity === 'medium') return 'orange'
-  return 'yellow'
-}
-
-function shouldShowMarker(issue: ManufacturabilityIssue) {
-  return isVisibleIssueSeverity(issue.severity)
+  return severityColor(issue.severity)
 }
 
 function isStepUrl(value?: string | null) {
@@ -137,7 +130,6 @@ function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
   const isLoginLogo = context?.modelUrl === '/logo.stl' || context?.modelUrl?.endsWith('logo.stl')
   const issueMarkers =
     context?.analysis?.issues
-      .filter(shouldShowMarker)
       .map((issue) => ({ issue, position: markerPoint(issue) }))
       .filter(
         (marker): marker is { issue: ManufacturabilityIssue; position: [number, number, number] } =>
@@ -157,7 +149,7 @@ function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
   const [markerSize, setMarkerSize] = useState(0.5)
 
   function scaleMarketSizeToGeometry(size: ThreeVector3) {
-    setMarkerSize(((size.x + size.y + size.z) / 3) * 0.04)
+    setMarkerSize(((size.x + size.y + size.z) / 3) * 0.01)
   }
 
   return (
@@ -264,6 +256,7 @@ export default function ModelPreview({
   const isLoadingModel = Boolean(modelSource && loadedSource !== modelSource && !activeLoadError)
 
   const isLoginLogo = modelUrl === '/logo.stl' || Boolean(modelUrl?.endsWith('logo.stl'))
+
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullScreen, setFullScreen] = useState<boolean>(false)
 
@@ -311,7 +304,6 @@ export default function ModelPreview({
           }}
         >
           <ModelCanvas xRayEnabled={showXRay} />
-          {/* {shouldDisplayXRay ? <XRayCanvas /> : <ModelCanvas />} */}
         </ModelContext.Provider>
       </div>
     </div>

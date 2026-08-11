@@ -59,6 +59,11 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
               <div className="modal-file-list">
                 {sessionFiles.map((file) => {
                   const isAlreadyOpen = openTabIds.includes(file.id)
+                  const statusLabel = isAlreadyOpen
+                    ? file.status === 'completed'
+                      ? 'COMPLETED'
+                      : 'PENDING'
+                    : file.status.toUpperCase()
                   return (
                     <button
                       key={file.id}
@@ -80,7 +85,7 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
                       <span
                         className={`modal-file-status ${isAlreadyOpen ? 'already-open' : file.status}`}
                       >
-                        {isAlreadyOpen ? 'ALREADY OPEN' : file.status.toUpperCase()}
+                        {statusLabel}
                       </span>
                     </button>
                   )
@@ -89,11 +94,6 @@ export default function AddTabModal({ isOpen, onClose }: AddTabModalProps) {
             ) : (
               <p className="modal-empty-text">No CAD files have been uploaded in this session.</p>
             )}
-          </section>
-
-          <section>
-            <span className="modal-section-title">Previous Uploads</span>
-            <p className="modal-empty-text">No previous files found in account history.</p>
           </section>
         </div>
 

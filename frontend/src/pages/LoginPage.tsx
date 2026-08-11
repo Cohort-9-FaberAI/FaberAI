@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import BrandMark from '../components/layout/BrandMark'
 import ModelPreview from '../components/ModelPreview/ModelPreview'
+import { useStore } from '../store'
 import type { AnalysisResult } from '../types/analysis'
 
 const demoAnalysis: AnalysisResult = {
@@ -37,11 +38,13 @@ const demoAnalysis: AnalysisResult = {
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const setEmail = useStore((s) => s.setEmail)
+  const [email, setEmailLocal] = useState('')
   const [password, setPassword] = useState('')
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setEmail(email.trim() || null)
     navigate('/projects')
   }
 
@@ -71,7 +74,12 @@ export default function LoginPage() {
         </p>
         <label className="login-field">
           <span>Username or email</span>
-          <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input
+            type="text"
+            value={email}
+            onChange={(e) => setEmailLocal(e.target.value)}
+            required
+          />
         </label>
         <label className="login-field">
           <span>Password</span>
