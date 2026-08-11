@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 export type FileStatus = 'stored' | 'pending' | 'processing' | 'completed' | 'failed'
 
@@ -30,13 +30,11 @@ interface ProjectSettingsSlice {
   quantity: number
   material: string
   tolerance: string
-  notes: string
   setProject: (v: boolean) => void
   setProcess: (v: 'molding' | 'printing' | null) => void
   setQuantity: (v: number) => void
   setMaterial: (v: string) => void
   setTolerance: (v: string) => void
-  setNotes: (v: string) => void
 }
 
 interface WizardSlice {
@@ -56,6 +54,7 @@ interface ProjectSlice {
   addProjectFiles: (projectId: string, files: ProjectFile[]) => void
   removeProjectFile: (projectId: string, fileId: string) => void
   updateProjectFile: (projectId: string, fileId: string, patch: Partial<ProjectFile>) => void
+  syncProjectFile: (fileId: string) => void
 }
 
 export interface UploadedFile {
@@ -69,18 +68,25 @@ export interface UploadedFile {
   status: FileStatus
   errorMessage?: string | null
   analysisResult: Record<string, unknown> | null
+  projectName?: string | null
 }
+
+export type WorkspaceStepKey = 'setup' | 'inspection' | 'verdict' | 'export'
 
 interface FileSlice {
   files: UploadedFile[]
   activeFileId: string | null
   openTabIds: string[]
+  requestedStep: { fileId: string; step: WorkspaceStepKey } | null
   addFile: (f: UploadedFile) => void
   updateFile: (id: string, patch: Partial<UploadedFile>) => void
   clearFiles: () => void
   setActiveFileId: (id: string | null) => void
   openTab: (id: string) => void
   closeTab: (id: string) => void
+  setRequestedStep: (req: { fileId: string; step: WorkspaceStepKey } | null) => void
+  stepByFile: Record<string, WorkspaceStepKey>
+  setStepByFile: (fileId: string, step: WorkspaceStepKey) => void
 }
 
 interface AnalysisSlice {
@@ -113,28 +119,6 @@ interface ModelSlice {
   setFileBuffer: (fileId: string, buf: ArrayBuffer | null) => void
 }
 
-interface LibraryRecord {
-  id: string
-  fileName: string
-  diagnosis: string
-  projectId?: string | null
-}
-
-interface HistoryRecord {
-  id: string
-  fileName: string
-  diagnosis: string
-  date: string
-}
-
-interface RecordsSlice {
-  libraryItems: LibraryRecord[]
-  historyEntries: HistoryRecord[]
-  deleteLibraryItem: (id: string) => void
-  addLibraryItem: (l: LibraryRecord) => void
-  linkLibraryItemToProject: (itemId: string, projectId: string) => void
-}
-
 export type ThemeMode = 'dark' | 'light'
 
 interface ThemeSlice {
@@ -150,10 +134,58 @@ type StoreState = ProjectSettingsSlice &
   AnalysisSlice &
   ChatSlice &
   ModelSlice &
-  RecordsSlice &
   ThemeSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
+
+/**
+ * Storage wrapper that never throws on write failures (e.g. quota exceeded).
+ * The app keeps working in-memory even if persistence silently drops updates.
+ */
+const safeStorage: Storage = {
+  get length() {
+    try {
+      return localStorage.length
+    } catch {
+      return 0
+    }
+  },
+  clear() {
+    try {
+      localStorage.clear()
+    } catch {
+      // ignore
+    }
+  },
+  getItem(key) {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  key(index) {
+    try {
+      return localStorage.key(index)
+    } catch {
+      return null
+    }
+  },
+  removeItem(key) {
+    try {
+      localStorage.removeItem(key)
+    } catch {
+      // ignore
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value)
+    } catch {
+      // Quota exceeded or storage unavailable – keep running.
+    }
+  },
+}
 
 export const useStore = create<StoreState>()(
   persist(
@@ -179,13 +211,11 @@ export const useStore = create<StoreState>()(
       quantity: 1,
       material: '',
       tolerance: '',
-      notes: '',
       setProject: (v) => set({ isProject: v }),
       setProcess: (v) => set({ process: v }),
       setQuantity: (v) => set({ quantity: v }),
       setMaterial: (v) => set({ material: v }),
       setTolerance: (v) => set({ tolerance: v }),
-      setNotes: (v) => set({ notes: v }),
 
       // Wizard slice
       ...EMPTY_WIZARD,
@@ -196,12 +226,17 @@ export const useStore = create<StoreState>()(
       files: [],
       activeFileId: null,
       openTabIds: [],
+      requestedStep: null,
       addFile: (f) =>
         set((s) => ({
           files: [...s.files, f],
           activeFileId: f.id,
           openTabIds: s.openTabIds.includes(f.id) ? s.openTabIds : [...s.openTabIds, f.id],
         })),
+      setRequestedStep: (req) => set({ requestedStep: req }),
+      stepByFile: {},
+      setStepByFile: (fileId, step) =>
+        set((s) => ({ stepByFile: { ...s.stepByFile, [fileId]: step } })),
       updateFile: (id, patch) =>
         set((s) => ({
           files: s.files.map((f) => (f.id === id ? { ...f, ...patch } : f)),
@@ -230,9 +265,20 @@ export const useStore = create<StoreState>()(
                 ? filtered[filtered.length - 1]
                 : null
               : s.activeFileId
+          const analysisResults = { ...s.analysisResults }
+          delete analysisResults[id]
+          const fileBuffers = { ...s.fileBuffers }
+          delete fileBuffers[id]
           return {
+            files: s.files.filter((f) => f.id !== id),
             openTabIds: filtered,
             activeFileId: nextActive,
+            analysisResults,
+            fileBuffers,
+            currentFileBuffer:
+              s.currentFileBuffer && s.files.find((f) => f.id === id)
+                ? s.currentFileBuffer
+                : s.currentFileBuffer,
           }
         }),
 
@@ -289,6 +335,32 @@ export const useStore = create<StoreState>()(
               : p,
           ),
         })),
+      syncProjectFile: (fileId) =>
+        set((s) => {
+          const wf = s.files.find((f) => f.id === fileId)
+          if (!wf || !wf.projectName) return {}
+          return {
+            projects: s.projects.map((p) =>
+              p.name === wf.projectName
+                ? {
+                    ...p,
+                    files: p.files.map((f) =>
+                      f.id === fileId
+                        ? {
+                            ...f,
+                            status: wf.status,
+                            taskId: wf.taskId,
+                            analysisId: wf.analysisId,
+                            errorMessage: wf.errorMessage ?? null,
+                            analysisResult: wf.analysisResult,
+                          }
+                        : f,
+                    ),
+                  }
+                : p,
+            ),
+          }
+        }),
 
       // Model slice
       currentFileBuffer: null,
@@ -311,29 +383,30 @@ export const useStore = create<StoreState>()(
       messages: [],
       addMessage: (m) => set((s) => ({ messages: [...s.messages, m] })),
       clearMessages: () => set({ messages: [] }),
-
-      // Records slice
-      libraryItems: [],
-      historyEntries: [],
-      deleteLibraryItem: (id) =>
-        set((s) => ({ libraryItems: s.libraryItems.filter((l) => l.id !== id) })),
-      addLibraryItem: (l) => set((s) => ({ libraryItems: [...s.libraryItems, l] })),
-      linkLibraryItemToProject: (itemId, projectId) =>
-        set((s) => ({
-          libraryItems: s.libraryItems.map((l) => (l.id === itemId ? { ...l, projectId } : l)),
-        })),
     }),
     {
       name: 'faberai-store',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (state) => ({
         ...state,
         currentFileBuffer: null,
         fileBuffers: {},
+        requestedStep: null,
+        // Transient UI state – never persists
+        highlightedIssue: null,
+        focusedIssueId: null,
+        focusNonce: 0,
+        isOpen: false,
+        // Persist analysis JSON in one canonical place (analysisResults) only.
         projects: state.projects.map((p) => ({
           ...p,
           files: p.files.map((f) => ({ ...f, file: null })),
         })),
-        files: state.files.map((f) => ({ ...f, file: null })),
+        files: state.files.map((f) => ({
+          ...f,
+          file: null,
+          analysisResult: undefined,
+        })),
       }),
     },
   ),

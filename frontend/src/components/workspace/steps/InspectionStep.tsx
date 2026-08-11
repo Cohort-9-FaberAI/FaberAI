@@ -44,8 +44,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
     activeTab === 'molding'
       ? getProcessIssues(analysis, 'injection_molding')
       : getProcessIssues(analysis, 'printing')
-  const loading =
-    !isDevManual && activeFile?.status === 'processing' && taskId !== null && !analysis
+  const loading = !isDevManual && activeFile?.status === 'processing' && !analysis
   const error =
     activeFile?.status === 'failed' && !isDevManual
       ? activeFile.errorMessage ||
@@ -54,8 +53,8 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
   const noAnalysisStarted = !activeFile && !analysis
   const canContinue = hasCompletedReport(analysis)
 
-  const cons = issues.filter((i) => i.severity === 'high' || i.severity === 'blocker')
-  const neutral = issues.filter((i) => i.severity === 'medium' || i.severity === 'major')
+  const severe = issues.filter((i) => i.severity === 'high' || i.severity === 'blocker')
+  const problematic = issues.filter((i) => i.severity === 'medium' || i.severity === 'major')
   const minor = issues.filter((i) => i.severity === 'low' || i.severity === 'minor')
 
   return (
@@ -114,6 +113,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
           analysis={analysis}
           previewFileUrl={livePreviewUrl}
           previewBuffer={fileBuffer}
+          previewSourceFormat={activeFile?.sourceFormat ?? null}
           previewFilename={livePreviewFilename}
           viewerMeta={
             canContinue && score !== null ? (
@@ -166,27 +166,27 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
             )}
             <div className="analysis-findings-scroll" aria-label="Analysis findings">
               <IssueAccordion
-                title="Pros"
+                title="Minor"
                 count={minor.length}
-                color="var(--severity-pro)"
+                color="var(--severity-low)"
                 items={minor}
                 emptyLabel={
                   analysis
-                    ? 'No minor positive notes are available for this report yet.'
+                    ? 'No minor findings are available for this report yet.'
                     : 'Findings will appear once analysis is complete.'
                 }
               />
               <IssueAccordion
-                title="Neutral"
-                count={neutral.length}
+                title="Problematic"
+                count={problematic.length}
                 color="var(--severity-medium)"
-                items={neutral}
+                items={problematic}
               />
               <IssueAccordion
-                title="Cons"
-                count={cons.length}
+                title="Severe"
+                count={severe.length}
                 color="var(--severity-high)"
-                items={cons}
+                items={severe}
               />
             </div>
           </motion.div>

@@ -14,9 +14,17 @@ from .client import (
 from .context_builder import build_ai_context, summarise_failures
 from .deterministic import QuestionIntent, answer_from_report, classify_intent
 from .prompts import SYSTEM_PROMPT, build_messages
-from .service import AIAnswer, AIServiceError, AnswerMode, answer_dfm_question
+from .service import (
+    AIAnswer,
+    AIServiceError,
+    AnswerMode,
+    StandardExcerpt,
+    answer_dfm_question,
+    answer_dfm_question_async
+)
 
 __all__ = [
+    "SYSTEM_PROMPT",
     "AIAnswer",
     "AIServiceError",
     "AnswerMode",
@@ -24,8 +32,9 @@ __all__ = [
     "LLMNotConfigured",
     "LLMRequestError",
     "QuestionIntent",
-    "SYSTEM_PROMPT",
+    "StandardExcerpt",
     "answer_dfm_question",
+    "answer_dfm_question_async",
     "answer_from_report",
     "build_ai_context",
     "build_messages",

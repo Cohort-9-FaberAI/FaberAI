@@ -119,10 +119,32 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
     ref = finding.geometry_ref
 
     def _vec3(v):
-        """Convert a dfm Vector3 (or None) to an app.schemas Vector3."""
+        """Convert a dfm Vector3-like object to an app.schemas Vector3."""
         if v is None:
-            return Vector3(x=0.0, y=0.0, z=0.0)
-        return Vector3(x=v.x, y=v.y, z=v.z)
+            return None
+        if isinstance(v, dict):
+            return Vector3(x=float(v["x"]), y=float(v["y"]), z=float(v["z"]))
+        if isinstance(v, (list, tuple)) and len(v) >= 3:
+            return Vector3(x=float(v[0]), y=float(v[1]), z=float(v[2]))
+        x = getattr(v, "x", None)
+        y = getattr(v, "y", None)
+        z = getattr(v, "z", None)
+        if x is None or y is None or z is None:
+            return None
+        return Vector3(x=float(x), y=float(y), z=float(z))
+
+    def _bbox_center(min_point: Vector3 | None, max_point: Vector3 | None) -> Vector3 | None:
+        if min_point is None or max_point is None:
+            return None
+        return Vector3(
+            x=(min_point.x + max_point.x) / 2.0,
+            y=(min_point.y + max_point.y) / 2.0,
+            z=(min_point.z + max_point.z) / 2.0,
+        )
+
+    bbox_min = _vec3(ref.bbox_min if ref else None) or Vector3(x=0.0, y=0.0, z=0.0)
+    bbox_max = _vec3(ref.bbox_max if ref else None) or Vector3(x=0.0, y=0.0, z=0.0)
+    centroid = _vec3(ref.centroid if ref else None) or _bbox_center(bbox_min, bbox_max) or Vector3(x=0.0, y=0.0, z=0.0)
 
     return Issue(
         issue_id=finding.finding_id,
@@ -133,9 +155,9 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
         three_js_highlight=ThreeJSHighlight(
             type="bounding_box",
             color=_LEGACY_SEVERITY_COLORS[legacy],
-            min=_vec3(ref.bbox_min if ref else None),
-            max=_vec3(ref.bbox_max if ref else None),
-            center=_vec3(ref.centroid if ref else None),
+            min=bbox_min,
+            max=bbox_max,
+            center=centroid,
         ),
     )
 

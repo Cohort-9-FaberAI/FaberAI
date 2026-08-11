@@ -1,5 +1,5 @@
 import styles from './ModelPreview.module.css'
-import { useState, useEffect, useContext, useCallback, useMemo, useRef } from 'react'
+import { useState, useContext, useCallback, useMemo, useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Float, GizmoHelper, GizmoViewport } from '@react-three/drei'
 
@@ -11,17 +11,15 @@ import {
 import { ModelContext, type ModelTransform } from './ModelContext'
 import { Model } from './Model'
 import IssueMarker from './IssueMarker'
-import { PCFShadowMap, type BufferGeometry } from 'three'
+import { PCFShadowMap, type BufferGeometry, Vector3 as ThreeVector3 } from 'three'
 import { useStore } from '../../store'
 import { isVisibleIssueSeverity } from '../../lib/analysisView'
 import Toolbar from './Toolbar'
-import XRayCanvas from './XRayCanvas'
-import { LuBox, LuLayers } from 'react-icons/lu'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
   previewBuffer?: ArrayBuffer | null
-  onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
+  previewSourceFormat?: 'stl' | 'step' | null
   height?: number | string
   autoRotate?: boolean
   markerRadius?: number
@@ -131,10 +129,12 @@ function getPreviewUrl(analysis: AnalysisResult | null, previewFileUrl: string |
 }
 
 function ModelCanvas({
+  xRayEnabled,
   autoRotate = false,
-  markerRadius = 0.5,
+  markerRadius,
   fitToViewport = false,
 }: {
+  xRayEnabled: boolean
   autoRotate?: boolean
   markerRadius?: number
   fitToViewport?: boolean
@@ -162,6 +162,12 @@ function ModelCanvas({
         return { issue, worldPos }
       }) ?? []
 
+  const [markerSize, setMarkerSize] = useState(0.5)
+
+  const scaleMarkerSizeToGeometry = useCallback((size: ThreeVector3) => {
+    setMarkerSize(((size.x + size.y + size.z) / 3) * 0.04)
+  }, [])
+
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
       <ambientLight intensity={2.4} />
@@ -170,10 +176,18 @@ function ModelCanvas({
 
       {isLoginLogo ? (
         <Float speed={2.2} rotationIntensity={0.6} floatIntensity={1.8}>
-          <Model fitToViewport={fitToViewport} />
+          <Model
+            doXRay={xRayEnabled}
+            fitToViewport={fitToViewport}
+            onSizeChanged={scaleMarkerSizeToGeometry}
+          />
         </Float>
       ) : (
-        <Model fitToViewport={fitToViewport} />
+        <Model
+          doXRay={xRayEnabled}
+          fitToViewport={fitToViewport}
+          onSizeChanged={scaleMarkerSizeToGeometry}
+        />
       )}
 
       {issueMarkers.map(({ issue, worldPos }) => (
@@ -181,7 +195,7 @@ function ModelCanvas({
           key={`${issue.issue_id}:${worldPos.join(':')}`}
           position={worldPos}
           color={markerColor(issue)}
-          radius={markerRadius}
+          radius={markerRadius ?? markerSize}
           renderAsSphere={true}
           issue={issue}
           type="POINT"
@@ -202,13 +216,12 @@ export default function ModelPreview({
   analysis = null,
   previewFileUrl = null,
   previewBuffer,
-  onIssueSelected,
+  previewSourceFormat = null,
   height,
   autoRotate = false,
-  markerRadius = 0.5,
+  markerRadius,
   fitToViewport = false,
 }: ModelPreviewProps) {
-  const [selectedIssue, setSelectedIssue] = useState<ManufacturabilityIssue | null>(null)
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
   const [loadedSource, setLoadedSource] = useState<string | null>(null)
   const [loadedTransform, setLoadedTransform] = useState<{
@@ -222,11 +235,13 @@ export default function ModelPreview({
   const [showXRay, setShowXRay] = useState<boolean>(false)
   const devFileBuffer = useStore((s) => s.currentFileBuffer)
   const fileBuffer = previewBuffer !== undefined ? previewBuffer : devFileBuffer
+  const bufferSourceFormat =
+    previewSourceFormat ?? (analysis?.geometry_data?.source_format === 'step' ? 'step' : null)
   const modelUrl = useMemo(
     () => getPreviewUrl(analysis, previewFileUrl),
     [analysis, previewFileUrl],
   )
-  const modelSource = modelUrl ?? (fileBuffer ? 'local-stl-buffer' : null)
+  const modelSource = modelUrl ?? (fileBuffer ? 'local-buffer' : null)
   const hasRawStepOnly = Boolean(
     analysis?.geometry_data?.source_format === 'step' &&
     !analysis?.geometry_data?.preview_url &&
@@ -268,25 +283,15 @@ export default function ModelPreview({
   const isLoadingModel = Boolean(modelSource && loadedSource !== modelSource && !activeLoadError)
 
   const isLoginLogo = modelUrl === '/logo.stl' || Boolean(modelUrl?.endsWith('logo.stl'))
-  const hasIssues = Boolean(
-    analysis?.issues &&
-    analysis.issues.filter((issue) => isVisibleIssueSeverity(issue.severity)).length > 0,
-  )
-  const shouldDisplayXRay = hasIssues && !isLoginLogo && showXRay
-
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullScreen, setFullScreen] = useState<boolean>(false)
-  //triggers onIssueSelected callback when the selected issue changes
-  useEffect(() => {
-    if (onIssueSelected) onIssueSelected(selectedIssue)
-  }, [onIssueSelected, selectedIssue])
 
   if (!canRenderModel) {
     return (
       <div className={styles.placeholder}>
         {hasRawStepOnly
           ? 'This STEP report completed, but no converted STL preview was attached.'
-          : 'Upload an STL file or wait for a completed analysis preview.'}
+          : 'Upload a CAD file or wait for a completed analysis preview.'}
       </div>
     )
   }
@@ -294,32 +299,15 @@ export default function ModelPreview({
   return (
     <div className={styles.wrapper} style={{ height }}>
       <div ref={containerRef} className={styles.canvasContainer}>
-        {hasIssues && !isLoginLogo && (
-          <div className={styles.viewModeSelector}>
-            <button
-              type="button"
-              className={`${styles.viewModeOption} ${!showXRay ? styles.activeOption : ''}`}
-              onClick={() => setShowXRay(false)}
-            >
-              <LuBox size={16} />
-              <span>Solid</span>
-            </button>
-            <button
-              type="button"
-              className={`${styles.viewModeOption} ${showXRay ? styles.activeOption : ''}`}
-              onClick={() => setShowXRay(true)}
-            >
-              <LuLayers size={16} />
-              <span>X-Ray</span>
-            </button>
-          </div>
-        )}
         {!isLoginLogo && (
           <Toolbar
             onFullScreenPressed={() => {
               if (isFullScreen) document.exitFullscreen()
               else containerRef.current?.requestFullscreen()
               setFullScreen(!isFullScreen)
+            }}
+            onXRayPressed={(val) => {
+              setShowXRay(val)
             }}
             isFullScreen={isFullScreen}
           />
@@ -330,6 +318,7 @@ export default function ModelPreview({
           value={{
             analysis,
             fileBuffer,
+            sourceFormat: bufferSourceFormat,
             modelUrl,
             modelTransform: activeTransform,
             previewFileUrl,
@@ -338,18 +327,14 @@ export default function ModelPreview({
             onModelLoaded: handleModelLoaded,
             onGeometryLoaded: handleGeometryLoaded,
             onModelTransform: handleModelTransform,
-            selectedIssueSetter: setSelectedIssue,
           }}
         >
-          {shouldDisplayXRay ? (
-            <XRayCanvas autoRotate={autoRotate} fitToViewport={fitToViewport} />
-          ) : (
-            <ModelCanvas
-              autoRotate={autoRotate}
-              markerRadius={markerRadius}
-              fitToViewport={fitToViewport}
-            />
-          )}
+          <ModelCanvas
+            xRayEnabled={showXRay}
+            autoRotate={autoRotate}
+            markerRadius={markerRadius}
+            fitToViewport={fitToViewport}
+          />
         </ModelContext.Provider>
       </div>
     </div>

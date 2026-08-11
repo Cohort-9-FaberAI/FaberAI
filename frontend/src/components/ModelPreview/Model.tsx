@@ -3,6 +3,7 @@ import { STLLoader } from 'three/examples/jsm/Addons.js'
 import { Box3, DoubleSide, Object3D, Vector3, type BufferGeometry } from 'three'
 import { ModelContext, type ModelTransform } from './ModelContext'
 import { useThree } from '@react-three/fiber'
+import { stepBufferToGeometry } from './api'
 
 function preparePreviewGeometry(source: BufferGeometry): {
   geometry: BufferGeometry
@@ -32,10 +33,17 @@ function preparePreviewGeometry(source: BufferGeometry): {
   }
 }
 
-export function Model({ fitToViewport = false }: { fitToViewport?: boolean }) {
+type ModelProps = {
+  onSizeChanged?: (size: Vector3) => void
+  doXRay?: boolean
+  fitToViewport?: boolean
+}
+
+export function Model({ onSizeChanged, doXRay = false, fitToViewport = false }: ModelProps) {
   const context = useContext(ModelContext)
   const modelUrl = context?.modelUrl
   const fileBuffer = context?.fileBuffer
+  const sourceFormat = context?.sourceFormat
   const onModelError = context?.onModelError
   const onModelLoaded = context?.onModelLoaded
   const onGeometryLoaded = context?.onGeometryLoaded
@@ -43,6 +51,13 @@ export function Model({ fitToViewport = false }: { fitToViewport?: boolean }) {
   const [geometry, setGeometry] = useState<BufferGeometry | undefined>(undefined)
   const { camera, size: viewportSize } = useThree()
   const objectRef = useRef<Object3D>(null)
+
+  useEffect(() => {
+    if (objectRef.current == null || !onSizeChanged) return
+    const box = new Box3().setFromObject(objectRef.current)
+    const size = box.getSize(new Vector3())
+    onSizeChanged(size)
+  }, [geometry, onSizeChanged])
 
   //loads the geometry from the URL on-load
   useEffect(() => {
@@ -69,9 +84,10 @@ export function Model({ fitToViewport = false }: { fitToViewport?: boolean }) {
 
       if (fileBuffer) {
         try {
-          const { geometry: geom, transform } = preparePreviewGeometry(
-            new STLLoader().parse(fileBuffer),
-          )
+          const { geometry: geom, transform } =
+            sourceFormat === 'step'
+              ? preparePreviewGeometry(await stepBufferToGeometry(fileBuffer))
+              : preparePreviewGeometry(new STLLoader().parse(fileBuffer))
           if (cancelled) return
           onModelTransform?.(transform)
           setGeometry(geom)
@@ -79,7 +95,11 @@ export function Model({ fitToViewport = false }: { fitToViewport?: boolean }) {
           onModelLoaded?.()
         } catch {
           if (cancelled) return
-          onModelError?.('The local STL preview could not be parsed.')
+          onModelError?.(
+            sourceFormat === 'step'
+              ? 'The local STEP preview could not be parsed.'
+              : 'The local STL preview could not be parsed.',
+          )
         }
       }
     }
@@ -88,7 +108,15 @@ export function Model({ fitToViewport = false }: { fitToViewport?: boolean }) {
     return () => {
       cancelled = true
     }
-  }, [modelUrl, fileBuffer, onModelError, onModelLoaded, onGeometryLoaded, onModelTransform])
+  }, [
+    modelUrl,
+    fileBuffer,
+    sourceFormat,
+    onModelError,
+    onModelLoaded,
+    onGeometryLoaded,
+    onModelTransform,
+  ])
 
   //Gives the camera an initial position along the bounding box of the mesh
   useEffect(() => {
@@ -116,6 +144,8 @@ export function Model({ fitToViewport = false }: { fitToViewport?: boolean }) {
         roughness={0.45}
         metalness={0.05}
         clearcoat={0.1}
+        transparent
+        opacity={doXRay ? 0.22 : 1}
         side={DoubleSide}
       />
     </mesh>

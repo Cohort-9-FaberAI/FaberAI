@@ -17,16 +17,24 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task, _upload_preview_stl_for_step
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
-from app.services.ai import AIAnswer, answer_dfm_question
+from app.services.ai import AIAnswer, answer_dfm_question_async
 from app.services.report_pdf import build_report_pdf, report_pdf_filename
 from app.services.storage import upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
 from app.observability import setup_langtrace
+from app.services.ai.mcp_moldsim import init_moldsim, shutdown_moldsim
 import requests
 
 setup_langtrace()
 logger = logging.getLogger(__name__)
+
+# Python's root logger defaults to WARNING with no handler beyond the
+# last-resort one, so plain logger.info(...) calls anywhere in the app
+# (including the AI-answer and retrieval timing breakdowns) would otherwise
+# never reach the console. This makes INFO-level logs from every module
+# visible without each one configuring logging itself.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 _STEP_EXTENSIONS = {".step", ".stp"}
 
 
@@ -165,7 +173,26 @@ async def lifespan(app: FastAPI):
         config.version,
         config.scoring_version,
     )
+
+    # Best-effort: pull the ~440MB BGE embedding model into memory now rather
+    # than on the first /ai/ask or /dfm/knowledge/ask call. Without this, the
+    # very first question after every restart pays the full load time on top
+    # of the answer itself. Never fails startup — environments without the
+    # knowledge-base extras (or with no ASME data ingested yet) still boot
+    # fine and just retrieve nothing until it's installed.
+    try:
+        from app.services.dfm_knowledge.embeddings import embed_query
+
+        embed_query("warm up")
+        logger.info("ASME embedding model preloaded.")
+    except Exception as exc:  # noqa: BLE001 - startup must not fail on this
+        logger.warning("Embedding model preload skipped: %s", exc)
+
+    await init_moldsim()
+
     yield
+
+    await shutdown_moldsim()
 
 
 app = FastAPI(
@@ -559,6 +586,9 @@ class ReportDownloadRequest(BaseModel):
 
     analysis: Dict[str, Any]
     include_comparison: bool = False
+    process: Optional[str] = None
+    material: Optional[str] = None
+    tolerance: Optional[str] = None
 
 
 def _load_stored_analysis(analysis_id: str) -> dict:
@@ -625,31 +655,6 @@ def get_dfm_report(analysis_id: str):
     return DFMReport.model_validate(report)
 
 
-@app.get("/analysis/{analysis_id}/report.pdf", tags=["Reports"])
-def download_stored_analysis_report(
-    analysis_id: str,
-    include_comparison: bool = False,
-):
-    """Download a PDF report for a stored completed analysis."""
-    analysis = _load_stored_analysis(analysis_id)
-    if not analysis.get("dfm_report"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Analysis '{analysis_id}' has no completed DFM report yet. "
-                "Run the analysis before downloading a PDF."
-            ),
-        )
-
-    pdf = build_report_pdf(analysis, include_comparison=include_comparison)
-    filename = report_pdf_filename(analysis)
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
 @app.post("/analysis/report.pdf", tags=["Reports"])
 def download_inline_analysis_report(request: ReportDownloadRequest):
     """Download a PDF report from the completed analysis payload held by the UI."""
@@ -658,7 +663,44 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
             status_code=status.HTTP_409_CONFLICT,
             detail="A completed analysis is required before downloading a PDF.",
         )
-    if not request.analysis.get("dfm_report") and not request.analysis.get("issues"):
+
+    # 1. Garante que o dicionário de DFM report existe na análise
+    if "dfm_report" not in request.analysis or not isinstance(request.analysis["dfm_report"], dict):
+        request.analysis["dfm_report"] = {}
+
+    report_dict = request.analysis["dfm_report"]
+
+    # 2. Garante que a chave 'inputs' existe dentro do dfm_report
+    if "inputs" not in report_dict or not isinstance(report_dict["inputs"], dict):
+        report_dict["inputs"] = {}
+
+    # 3. Injeta diretamente os valores que vieram do Frontend (PLA, Printing, etc.)
+    if request.process:
+        p = request.process.lower().strip()
+        report_dict["inputs"]["process"] = "3d_printing" if "print" in p else "injection_molding"
+        report_dict["inputs"]["printing_process"] = "fdm"
+    if request.material:
+        mat = request.material.lower().strip()
+        report_dict["inputs"]["material"] = mat
+        report_dict["inputs"]["material_resolved"] = mat
+    if request.tolerance:
+        tol = request.tolerance.lower()
+        report_dict["inputs"]["tolerance"] = "precision" if ("precision" in tol or "fine" in tol) else "standard"
+
+    # 4. Removemos o aviso genérico de "No material supplied" das suposições se o material foi fornecido
+    if request.material and "processes" in report_dict:
+        for proc in report_dict["processes"]:
+            if "assumptions" in proc and isinstance(proc["assumptions"], list):
+                # Filtra fora o aviso de falta de material para o gerador de PDF não imprimir
+                proc["assumptions"] = [
+                    asm for asm in proc["assumptions"]
+                    if "No material supplied" not in asm
+                ]
+                # Adiciona a suposição correta do material escolhido
+                mat_name = request.material.upper()
+                proc["assumptions"].insert(0, f"Material supplied: {mat_name} limits and thresholds applied.")
+
+    if not report_dict and not request.analysis.get("issues"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="No DFM report or issue list is available to export.",
@@ -681,7 +723,7 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
 # ---------------------------------------------------------------------------
 
 @app.post("/ai/ask", response_model=AIAnswer, tags=["AI"])
-def ask_faber_ai(request: AIAskRequest):
+async def ask_faber_ai(request: AIAskRequest):
     """Answer a question about a manufacturability report.
 
     Strictly downstream: this endpoint reads a report that already exists. It
@@ -720,7 +762,7 @@ def ask_faber_ai(request: AIAskRequest):
             detail=f"The supplied report is not a valid DFM report: {exc}",
         ) from exc
 
-    return answer_dfm_question(
+    return await answer_dfm_question_async(
         report=report,
         question=request.question,
         geometry=geometry if isinstance(geometry, dict) else None,

@@ -4,11 +4,8 @@ import { useStore } from './store'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import AnalysisPage from './pages/AnalysisPage'
-import UploadPage from './pages/UploadPage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
-import LibraryPage from './pages/LibraryPage'
-import HistoryPage from './pages/HistoryPage'
 import DebugApiPage from './pages/DebugApiPage'
 import LandingPage from './pages/LandingPage'
 import AppShell from './components/layout/AppShell'
@@ -26,15 +23,15 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<AppShell />}>
         <Route path="/home" element={<HomePage />} />
-        <Route path="/upload" element={<UploadPage />} />
+        <Route path="/upload" element={<Navigate to="/home" replace />} />
         <Route path="/extra-info" element={<Navigate to="/analysis" replace />} />
         <Route path="/analysis" element={<AnalysisPage />} />
         <Route path="/conclusion" element={<Navigate to="/analysis" replace />} />
         <Route path="/download" element={<Navigate to="/analysis" replace />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
-        <Route path="/library" element={<LibraryPage />} />
-        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/library" element={<Navigate to="/projects" replace />} />
+        <Route path="/history" element={<Navigate to="/projects" replace />} />
         <Route path="/debug" element={<DebugApiPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/landing" replace />} />

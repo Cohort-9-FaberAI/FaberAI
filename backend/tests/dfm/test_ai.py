@@ -191,12 +191,16 @@ class TestLLMPath:
     def test_unconfigured_client_answers_deterministically(self, blocked_report, monkeypatch):
         monkeypatch.delenv("FABERAI_AI_API_KEY", raising=False)
         monkeypatch.delenv("FABERAI_AI_BASE_URL", raising=False)
+        # The client also accepts the SDK-standard name; a developer .env that
+        # only sets ANTHROPIC_API_KEY must not leak into this test.
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         answer = answer_dfm_question(blocked_report, "Which rules failed?", client=LLMClient())
         assert answer.mode == AnswerMode.deterministic
         assert answer.degraded_reason is None
 
     def test_unconfigured_client_raises_on_direct_use(self, monkeypatch):
         monkeypatch.delenv("FABERAI_AI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         with pytest.raises(LLMNotConfigured):
             LLMClient(base_url="", api_key="").complete([])
 
@@ -204,6 +208,140 @@ class TestLLMPath:
         client = StubLLM(response="The blocking rule is P2; P4 also failed.")
         answer = answer_dfm_question(blocked_report, "Why?", client=client)
         assert set(answer.referenced_rules) == {"P2", "P4"}
+
+
+class TestStandardsGrounding:
+    """The report agent may cite ASME excerpts, but retrieval is best-effort:
+    it never blocks or breaks a report answer if it's unavailable."""
+
+    def test_missing_retrieval_dependencies_do_not_break_the_answer(self, blocked_report):
+        # No Supabase/embeddings configured in this test environment — the
+        # answer must still come back normally, just with no excerpts.
+        client = StubLLM(response="P2 blocks this part.")
+        answer = answer_dfm_question(blocked_report, "Why?", client=client)
+        assert answer.mode == AnswerMode.llm
+        assert answer.standards_considered == []
+
+    def test_excerpts_reach_the_prompt_when_retrieval_succeeds(
+        self, blocked_report, monkeypatch
+    ):
+        fake_chunks = [
+            {
+                "source": "ASME Y14.5-2018",
+                "section_ref": "5.2",
+                "page_no": 51,
+                "content": "A basic dimension is theoretically exact.",
+                "similarity": 0.81,
+            }
+        ]
+        monkeypatch.setattr(
+            "app.services.dfm_knowledge.retrieval.retrieve_relevant_chunks",
+            lambda *a, **k: fake_chunks,
+        )
+        client = StubLLM(response="Per ASME Y14.5-2018 Section 5.2, ...")
+        answer = answer_dfm_question(blocked_report, "Why?", client=client)
+
+        user_message = client.messages[1]["content"]
+        assert "RELEVANT ASME EXCERPTS" in user_message
+        assert "theoretically exact" in user_message
+        assert answer.standards_considered[0].section_ref == "5.2"
+        assert answer.standards_considered[0].similarity == 0.81
+
+    def test_bare_question_is_tried_before_blending_in_rule_names(
+        self, blocked_report, monkeypatch
+    ):
+        # Blending rule names into the query measurably hurt retrieval for
+        # questions that already have their own strong GD&T vocabulary (see
+        # the docstring on _retrieve_standards_excerpts) — the bare question
+        # must be tried first, and only padded with rule names as a fallback
+        # when it alone finds nothing.
+        seen_queries = []
+
+        def fake_retrieve(query, **kwargs):
+            seen_queries.append(query)
+            if query == "Does a basic dimension carry a tolerance?":
+                return [
+                    {
+                        "source": "ASME Y14.5-2018",
+                        "section_ref": "5.1.1",
+                        "page_no": 51,
+                        "content": "Tolerances are applied via feature control frames.",
+                        "similarity": 0.73,
+                    }
+                ]
+            return []
+
+        monkeypatch.setattr(
+            "app.services.dfm_knowledge.retrieval.retrieve_relevant_chunks",
+            fake_retrieve,
+        )
+        client = StubLLM(response="No, per ASME Y14.5-2018 Section 5.1.1.")
+        answer = answer_dfm_question(
+            blocked_report,
+            "Does a basic dimension carry a tolerance?",
+            client=client,
+        )
+        assert seen_queries == ["Does a basic dimension carry a tolerance?"]
+        assert answer.standards_considered[0].section_ref == "5.1.1"
+
+    def test_falls_back_to_rule_names_when_the_bare_question_finds_nothing(
+        self, blocked_report, monkeypatch
+    ):
+        seen_queries = []
+
+        def fake_retrieve(query, **kwargs):
+            seen_queries.append(query)
+            if "P2" in query:
+                return [
+                    {
+                        "source": "ASME Y14.5-2018",
+                        "section_ref": "9.4",
+                        "page_no": 88,
+                        "content": "Minimum wall thickness guidance.",
+                        "similarity": 0.5,
+                    }
+                ]
+            return []
+
+        monkeypatch.setattr(
+            "app.services.dfm_knowledge.retrieval.retrieve_relevant_chunks",
+            fake_retrieve,
+        )
+        client = StubLLM(response="Per ASME Y14.5-2018 Section 9.4.")
+        answer = answer_dfm_question(
+            blocked_report, "Why isn't this manufacturable?", client=client
+        )
+        # Bare question tried first, then the rule-name-blended fallback.
+        assert seen_queries[0] == "Why isn't this manufacturable?"
+        assert len(seen_queries) == 2
+        assert "P2" in seen_queries[1]
+        assert answer.standards_considered[0].section_ref == "9.4"
+
+    def test_a_broken_retrieval_call_degrades_to_no_excerpts_not_a_failure(
+        self, blocked_report, monkeypatch
+    ):
+        def boom(*a, **k):
+            raise RuntimeError("Supabase unreachable")
+
+        monkeypatch.setattr(
+            "app.services.dfm_knowledge.retrieval.retrieve_relevant_chunks", boom
+        )
+        client = StubLLM(response="P2 blocks this part.")
+        answer = answer_dfm_question(blocked_report, "Why?", client=client)
+        assert answer.mode == AnswerMode.llm
+        assert answer.standards_considered == []
+        assert "RELEVANT ASME EXCERPTS" not in client.messages[1]["content"]
+
+    def test_no_excerpts_means_no_standards_section_in_the_prompt(
+        self, blocked_report, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "app.services.dfm_knowledge.retrieval.retrieve_relevant_chunks",
+            lambda *a, **k: [],
+        )
+        client = StubLLM(response="P2 blocks this part.")
+        answer_dfm_question(blocked_report, "Why?", client=client)
+        assert "RELEVANT ASME EXCERPTS" not in client.messages[1]["content"]
 
 
 class TestContextBuilder:

@@ -16,6 +16,9 @@ interface ExportStepProps {
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
   const process = useStore((s) => s.process)
+  const material = useStore((s) => s.material)
+  const tolerance = useStore((s) => s.tolerance)
+
   const activeId = activeFile?.id ?? ''
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
@@ -45,7 +48,16 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
     setDownloadError(null)
 
     try {
-      const { blob, filename } = await downloadAnalysisReportPdf(analysisResult, comparison)
+      // Rastreador para provar se as variáveis estão chegando vivas ou mortas aqui
+      console.log('Rastreio do ExportStep ->', { process, material, tolerance })
+
+      const { blob, filename } = await downloadAnalysisReportPdf(
+        analysisResult,
+        comparison,
+        process,
+        material,
+        tolerance,
+      )
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -69,6 +81,7 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       analysis={cleanAnalysis}
       previewFileUrl={livePreviewUrl}
       previewBuffer={fileBuffer}
+      previewSourceFormat={activeFile?.sourceFormat ?? null}
       previewFilename={livePreviewFilename}
       viewerMeta={
         score !== null ? (
@@ -78,13 +91,13 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
         ) : null
       }
     >
-      <section className="download-options" aria-label="Report export options">
-        <div className="download-options-header">
-          <h2>Export options</h2>
-          <p>Choose the contents to include in the supplier-ready PDF document.</p>
-        </div>
+      {showComparison && (
+        <section className="download-options" aria-label="Report export options">
+          <div className="download-options-header">
+            <h2>Export options</h2>
+            <p>Choose the contents to include in the supplier-ready PDF document.</p>
+          </div>
 
-        {showComparison && (
           <div className="download-setting-row">
             <div>
               <span className="download-setting-label">Process comparison</span>
@@ -107,8 +120,8 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
               </button>
             </div>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       <button
         type="button"

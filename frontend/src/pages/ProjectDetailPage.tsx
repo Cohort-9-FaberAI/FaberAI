@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import FileDropzone from '../components/common/FileDropzone'
-import { useStore, type ProjectFile } from '../store'
+import { useStore, type ProjectFile, type UploadedFile } from '../store'
 
 const STATUS_LABELS: Record<string, string> = {
   stored: 'Ready',
@@ -11,13 +11,26 @@ const STATUS_LABELS: Record<string, string> = {
   failed: 'Failed',
 }
 
+function detectSourceFormat(name: string): 'stl' | 'step' | null {
+  const lowerName = name.toLowerCase()
+  if (lowerName.endsWith('.stl')) return 'stl'
+  if (lowerName.endsWith('.step') || lowerName.endsWith('.stp')) return 'step'
+  return null
+}
+
 export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const project = useStore((s) => s.projects.find((p) => p.id === id))
   const addProjectFiles = useStore((s) => s.addProjectFiles)
   const removeProjectFile = useStore((s) => s.removeProjectFile)
-  const setWizard = useStore((s) => s.setWizard)
+  const addFile = useStore((s) => s.addFile)
+  const files = useStore((s) => s.files)
+  const openTab = useStore((s) => s.openTab)
+  const setFileBuffer = useStore((s) => s.setFileBuffer)
+  const setCurrentFileBuffer = useStore((s) => s.setCurrentFileBuffer)
+  const setAnalysisResult = useStore((s) => s.setAnalysisResult)
+  const setRequestedStep = useStore((s) => s.setRequestedStep)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
   if (!project) {
@@ -49,13 +62,69 @@ export default function ProjectDetailPage() {
   }
 
   const analyze = (pf: ProjectFile) => {
-    setWizard({ source: 'project', projectId: project.id, fileId: pf.id, file: pf.file })
-    navigate('/extra-info')
+    const existing = files.find((f) => f.id === pf.id)
+    const fileSourceFormat = detectSourceFormat(pf.name)
+
+    if (existing) {
+      openTab(pf.id)
+    } else {
+      const uploaded: UploadedFile = {
+        id: pf.id,
+        name: pf.name,
+        file: pf.file,
+        taskId: null,
+        analysisId: null,
+        fileUrl: null,
+        sourceFormat: fileSourceFormat,
+        status: 'pending',
+        analysisResult: null,
+        projectName: project.name,
+      }
+      addFile(uploaded)
+    }
+
+    if (pf.file) {
+      pf.file
+        .arrayBuffer()
+        .then((buffer) => {
+          setFileBuffer(pf.id, buffer)
+          if (fileSourceFormat === 'stl') {
+            setCurrentFileBuffer(buffer)
+          }
+        })
+        .catch(() => {
+          // buffer read failed, preview won't work immediately but upload proceeds
+        })
+    }
+
+    navigate('/analysis')
   }
 
   const viewResults = (pf: ProjectFile) => {
-    setWizard({ source: 'view', projectId: project.id, fileId: pf.id, file: null })
-    navigate('/conclusion')
+    const existing = files.find((f) => f.id === pf.id)
+
+    if (!existing) {
+      const uploaded: UploadedFile = {
+        id: pf.id,
+        name: pf.name,
+        file: null,
+        taskId: pf.taskId,
+        analysisId: pf.analysisId,
+        fileUrl: null,
+        sourceFormat: detectSourceFormat(pf.name),
+        status: pf.analysisResult ? 'completed' : 'stored',
+        analysisResult: pf.analysisResult,
+        projectName: project.name,
+      }
+      addFile(uploaded)
+    } else {
+      openTab(pf.id)
+    }
+    if (pf.analysisResult) {
+      setAnalysisResult(pf.id, pf.analysisResult)
+    }
+    setRequestedStep({ fileId: pf.id, step: 'inspection' })
+    navigate('/analysis')
   }
 
   const renderActions = (pf: ProjectFile) => {
@@ -63,7 +132,7 @@ export default function ProjectDetailPage() {
       return (
         <>
           <button type="button" className="project-file-analyze" onClick={() => viewResults(pf)}>
-            View Results
+            View Analysis
           </button>
           <button type="button" className="project-file-analyze" onClick={() => analyze(pf)}>
             Re-analyze

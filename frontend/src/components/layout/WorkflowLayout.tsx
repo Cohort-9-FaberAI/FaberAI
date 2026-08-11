@@ -9,6 +9,7 @@ interface WorkflowLayoutProps {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
   previewBuffer?: ArrayBuffer | null
+  previewSourceFormat?: 'stl' | 'step' | null
   previewFilename?: string | null
   viewerLabel?: string
   viewerMeta?: ReactNode
@@ -22,6 +23,7 @@ export default function WorkflowLayout({
   analysis = null,
   previewFileUrl = null,
   previewBuffer,
+  previewSourceFormat = null,
   previewFilename = null,
   viewerLabel = 'Live inspection',
   viewerMeta,
@@ -49,6 +51,7 @@ export default function WorkflowLayout({
             analysis={analysis}
             previewFileUrl={previewFileUrl}
             previewBuffer={previewBuffer}
+            previewSourceFormat={previewSourceFormat}
           />
         </div>
       </aside>

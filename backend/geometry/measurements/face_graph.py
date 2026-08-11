@@ -1,16 +1,26 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import networkx as nx
-from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE, TopAbs_REVERSED
-from OCP.TopExp import TopExp
-from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
-from OCP.TopoDS import TopoDS
-from OCP.BRepAdaptor import BRepAdaptor_Curve
-from OCP.GeomAbs import (GeomAbs_Line, GeomAbs_Circle, GeomAbs_Ellipse,GeomAbs_BSplineCurve, GeomAbs_BezierCurve,)
-from OCP.gp import gp_Pnt, gp_Vec
 import numpy as np
+
 from .surface_classifier import classify_surface_occ
-from build123d import Edge
+
+if TYPE_CHECKING:  # annotation only — never imported at runtime
+  from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+
+# OCP (OpenCASCADE) and build123d are imported inside the functions that need
+# them rather than at module scope, matching the pattern already used in
+# _face_centroid below. Only the STEP path reaches the OCP-dependent branches,
+# and that path always has the optional CAD dependencies installed — deferring
+# the imports lets the pure-Python face-graph logic import and run without them.
+
 
 def compute_face_adjacency(shape_b123) -> TopTools_IndexedDataMapOfShapeListOfShape:
+  from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
+  from OCP.TopExp import TopExp
+  from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 
   topo_shape = shape_b123.wrapped if hasattr(shape_b123, "wrapped") else shape_b123
   edge_face_map = TopTools_IndexedDataMapOfShapeListOfShape()
@@ -28,6 +38,16 @@ def _match_face_index(topo_face, face_index):
 def _edge_endpoints_and_curve_type(edge) -> dict:
   """Extract start point, end point, and curve type from a TopoDS_Edge."""
   try:
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import (
+      GeomAbs_BezierCurve,
+      GeomAbs_BSplineCurve,
+      GeomAbs_Circle,
+      GeomAbs_Ellipse,
+      GeomAbs_Line,
+    )
+    from OCP.gp import gp_Pnt
+
     adaptor = BRepAdaptor_Curve(edge)
     t_first = adaptor.FirstParameter()
     t_last = adaptor.LastParameter()
@@ -56,6 +76,10 @@ def _edge_endpoints_and_curve_type(edge) -> dict:
 
 def _edge_convexity(edge, n1, n2) -> bool:
   try:
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.gp import gp_Pnt, gp_Vec
+    from OCP.TopAbs import TopAbs_REVERSED
+
     adaptor = BRepAdaptor_Curve(edge)
     t_mid = (adaptor.FirstParameter() + adaptor.LastParameter()) / 2.0
     pnt, tangent = gp_Pnt(), gp_Vec()
@@ -73,27 +97,109 @@ def _edge_convexity(edge, n1, n2) -> bool:
     return None
 
 
+def _make_point(x, y, z):
+  class _Point:
+    def __init__(self, x, y, z):
+      self.X = x
+      self.Y = y
+      self.Z = z
+  return _Point(x, y, z)
+
+
+def _face_centroid(face):
+  # Prefer the face's native center method when available.
+  if hasattr(face, "center"):
+    try:
+      return face.center()
+    except Exception:
+      pass
+
+  # Fall back to OCC's surface centroid if the native face center fails.
+  try:
+    from OCC.Core.GProp import GProp_GProps
+    from OCC.Core.BRepGProp import brepgprop
+    surface_properties = brepgprop.SurfaceProperties
+  except (ImportError, ModuleNotFoundError):
+    from OCP.GProp import GProp_GProps
+    from OCP.BRepGProp import BRepGProp
+    surface_properties = BRepGProp.SurfaceProperties_s
+
+  try:
+    props = GProp_GProps()
+    topo_face = face.wrapped if hasattr(face, "wrapped") else face
+    surface_properties(topo_face, props)
+    centroid = props.CentreOfMass()
+    return _make_point(centroid.X(), centroid.Y(), centroid.Z())
+  except Exception:
+    pass
+
+  # Finally, fall back to the face's bounding box center.
+  try:
+    from OCC.Core.Bnd import Bnd_Box
+    from OCC.Core.BRepBndLib import brepbndlib
+  except (ImportError, ModuleNotFoundError):
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
+    brepbndlib = BRepBndLib.Add_s
+  else:
+    brepbndlib = brepbndlib.Add
+
+  try:
+    box = Bnd_Box()
+    topo_face = face.wrapped if hasattr(face, "wrapped") else face
+    brepbndlib(topo_face, box)
+    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+    return _make_point((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0)
+  except Exception:
+    return None
+
+
+def _face_normal(face, centroid):
+  if centroid is None:
+    return _make_point(0.0, 0.0, 0.0)
+
+  try:
+    normal = face.normal_at(centroid)
+    return normal
+  except Exception:
+    return _make_point(0.0, 0.0, 0.0)
+
+
 def build_face_graph(faces, shape_b123=None) -> nx.Graph:
   graph = nx.Graph()
   face_index = {}
 
   for i, face in enumerate(faces):
-    surface_info = classify_surface_occ(face)
-    centroid = face.center()
-    normal = face.normal_at(centroid)
+    try:
+      surface_info = classify_surface_occ(face)
+    except Exception:
+      surface_info = {"type": "UNKNOWN"}
+
+    centroid = _face_centroid(face)
+    normal = _face_normal(face, centroid)
+
     graph.add_node(
         i,
         face=face,
-        surface_type=surface_info["type"],
+        surface_type=surface_info.get("type", "UNKNOWN"),
         surface=surface_info,
-        area=face.area,
-        centroid=(centroid.X, centroid.Y, centroid.Z),
-        normal=(normal.X, normal.Y, normal.Z),
+        area=getattr(face, "area", 0.0),
+        centroid=(centroid.X, centroid.Y, centroid.Z)
+        if centroid is not None
+        else (0.0, 0.0, 0.0),
+        normal=(normal.X, normal.Y, normal.Z)
+        if normal is not None
+        else (0.0, 0.0, 0.0),
     )
     face_index[i] = face
 
   if shape_b123 is None:
     return graph
+
+  # Past this point the STEP/OpenCASCADE path is in use, so the optional CAD
+  # dependencies are guaranteed present.
+  from build123d import Edge
+  from OCP.TopoDS import TopoDS
 
   edge_face_map = compute_face_adjacency(shape_b123)
 

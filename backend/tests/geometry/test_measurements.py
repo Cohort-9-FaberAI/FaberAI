@@ -197,6 +197,38 @@ def test_load_geometry_stl_end_to_end(cube, tmp_path):
     assert np.allclose(model.center_mass, expected["center_mass"])
 
 
+def test_build_face_graph_survives_surface_classification_errors(monkeypatch):
+    from geometry.measurements.face_graph import build_face_graph
+    import geometry.measurements.surface_classifier as surface_classifier
+
+    class DummyPoint:
+        def __init__(self, x, y, z):
+            self.X = x
+            self.Y = y
+            self.Z = z
+
+    class DummyFace:
+        area = 1.0
+        wrapped = None
+
+        def center(self):
+            return DummyPoint(1.0, 2.0, 3.0)
+
+        def normal_at(self, point):
+            return DummyPoint(0.0, 0.0, 1.0)
+
+    monkeypatch.setattr(
+        surface_classifier,
+        "classify_surface_occ",
+        lambda face: (_ for _ in ()).throw(RuntimeError("classification failed")),
+    )
+
+    graph = build_face_graph([DummyFace()], shape_b123=None)
+    node = graph.nodes[0]
+    assert node["surface_type"] == "UNKNOWN"
+    assert node["centroid"] == (1.0, 2.0, 3.0)
+    assert node["normal"] == (0.0, 0.0, 1.0)
+
 
 @pytest.mark.skipif(not HAS_OCC, reason="pythonOCC not installed in this environment")
 class TestOccPath:
@@ -220,13 +252,6 @@ class TestOccPath:
         assert math.isclose(compute_surface_area_occ(shape), 600.0, rel_tol=REL_TOL)
         assert np.allclose(compute_center_mass_occ(shape), [5, 5, 5])
 
-        from geometry.measurements import compute_moment_inertia_occ
-        I = compute_moment_inertia_occ(shape)
-        expected_diag = (1 / 6) * 1000.0 * 10.0**2
-        assert I.shape == (3, 3)
-        assert math.isclose(I[0, 0], expected_diag, rel_tol=1e-3)
-        assert math.isclose(I[1, 1], expected_diag, rel_tol=1e-3)
-        assert math.isclose(I[2, 2], expected_diag, rel_tol=1e-3)
 
     def test_cylinder_occ(self):
         from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakeCylinder

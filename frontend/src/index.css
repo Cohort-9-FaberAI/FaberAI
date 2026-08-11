@@ -3820,6 +3820,21 @@ select option {
   background: color-mix(in srgb, var(--graphite) 74%, black);
 }
 
+.analysis-findings-scroll .issue-accordion-item.is-flashing {
+  animation: issue-flash 1.6s ease-out;
+}
+
+@keyframes issue-flash {
+  0% {
+    background: color-mix(in srgb, #f5b942 55%, transparent);
+    border-color: #f5b942;
+  }
+  100% {
+    background: color-mix(in srgb, var(--graphite) 74%, black);
+    border-color: var(--line);
+  }
+}
+
 .analysis-findings-scroll .issue-accordion-item + .issue-accordion-item {
   margin-top: 8px;
 }
