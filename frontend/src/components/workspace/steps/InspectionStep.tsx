@@ -8,6 +8,7 @@ import { useStore } from '../../../store'
 import {
   asAnalysisResult,
   getAnalysisScore,
+  getMarkerIssuesForProcess,
   getMoldingScore,
   getPrintingScore,
   getProcessIssues,
@@ -44,6 +45,19 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
     activeTab === 'molding'
       ? getProcessIssues(analysis, 'injection_molding')
       : getProcessIssues(analysis, 'printing')
+
+  // Scope the issues the 3D viewer draws markers for to the active tab so the
+  // markers match the findings listed in the accordions below.
+  const viewerAnalysis = analysis
+    ? {
+        ...analysis,
+        issues: getMarkerIssuesForProcess(
+          analysis,
+          activeTab === 'molding' ? 'injection_molding' : 'printing',
+        ),
+      }
+    : null
+
   const loading = !isDevManual && activeFile?.status === 'processing' && !analysis
   const error =
     activeFile?.status === 'failed' && !isDevManual
@@ -110,7 +124,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
                 ? 'The DEV loader is only a local model preview. Use the drop zone to run DFM analysis.'
                 : 'The backend report will appear here as soon as processing completes.'
           }
-          analysis={analysis}
+          analysis={viewerAnalysis}
           previewFileUrl={livePreviewUrl}
           previewBuffer={fileBuffer}
           previewSourceFormat={activeFile?.sourceFormat ?? null}

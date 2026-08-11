@@ -209,6 +209,48 @@ export function getProcessIssues(
   return getDisplayIssues(analysis)
 }
 
+/**
+ * Scope the 3D-viewport marker issues to a single process so markers match the
+ * findings listed in the active tab. Falls back to the legacy report's
+ * `analysis.issues` rule-id prefixes when the DFM report has no rule results.
+ */
+export function getMarkerIssuesForProcess(
+  analysis: AnalysisResult | null,
+  processType: 'injection_molding' | 'printing',
+): ManufacturabilityIssue[] {
+  if (!analysis) return []
+  const issues = Array.isArray(analysis.issues) ? analysis.issues : []
+  if (issues.length === 0) return issues
+
+  const report = getRecord(analysis.dfm_report)
+  const processes = Array.isArray(report?.processes) ? report.processes : []
+  const ruleIds = new Set<string>()
+  for (const proc of processes) {
+    const pRec = getRecord(proc)
+    if (!pRec?.process) continue
+    const matches =
+      processType === 'injection_molding'
+        ? pRec.process === 'injection_molding' || pRec.process === 'molding'
+        : pRec.process === 'printing' || pRec.process === '3d_printing'
+    if (!matches) continue
+    const rules = Array.isArray(pRec.rule_results) ? pRec.rule_results : []
+    for (const rule of rules) {
+      const rRec = getRecord(rule)
+      const id = getString(rRec?.rule_id)
+      if (id) ruleIds.add(id)
+    }
+  }
+
+  if (ruleIds.size > 0) {
+    return issues.filter((issue) => !issue.type || ruleIds.has(issue.type))
+  }
+
+  const prefix = processType === 'injection_molding' ? 'M' : 'P'
+  return issues.filter(
+    (issue) => !issue.type || String(issue.type).toUpperCase().startsWith(prefix),
+  )
+}
+
 export function getScoreColor(score: number | null | undefined): string {
   if (score === null || score === undefined || !Number.isFinite(score)) return 'var(--text-h)'
   if (score >= 50) return '#66bb6a' // Green / Pro
