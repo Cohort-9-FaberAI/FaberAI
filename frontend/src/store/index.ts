@@ -24,21 +24,29 @@ export interface Project {
 
 export type WizardSource = 'quick' | 'project' | 'view'
 
-interface ProjectSettingsSlice {
-  isProject: boolean
+export type ProjectSettings = {
   process: 'molding' | 'printing' | null
   printingProcess: string
   surfaceFinish: string
   quantity: number
   material: string
   tolerance: string
+}
+
+export const DEFAULT_SETTINGS: ProjectSettings = {
+  process: null,
+  printingProcess: '',
+  surfaceFinish: '',
+  quantity: 1,
+  material: '',
+  tolerance: '',
+}
+
+interface ProjectSettingsSlice {
+  isProject: boolean
+  settingsByFile: Record<string, ProjectSettings>
   setProject: (v: boolean) => void
-  setProcess: (v: 'molding' | 'printing' | null) => void
-  setPrintingProcess: (v: string) => void
-  setSurfaceFinish: (v: string) => void
-  setQuantity: (v: number) => void
-  setMaterial: (v: string) => void
-  setTolerance: (v: string) => void
+  setSettings: (fileId: string, patch: Partial<ProjectSettings>) => void
 }
 
 interface WizardSlice {
@@ -211,19 +219,15 @@ export const useStore = create<StoreState>()(
 
       // Project settings slice
       isProject: false,
-      process: null,
-      printingProcess: '',
-      surfaceFinish: '',
-      quantity: 1,
-      material: '',
-      tolerance: '',
+      settingsByFile: {},
       setProject: (v) => set({ isProject: v }),
-      setProcess: (v) => set({ process: v }),
-      setPrintingProcess: (v) => set({ printingProcess: v }),
-      setSurfaceFinish: (v) => set({ surfaceFinish: v }),
-      setQuantity: (v) => set({ quantity: v }),
-      setMaterial: (v) => set({ material: v }),
-      setTolerance: (v) => set({ tolerance: v }),
+      setSettings: (fileId, patch) =>
+        set((s) => ({
+          settingsByFile: {
+            ...s.settingsByFile,
+            [fileId]: { ...(s.settingsByFile[fileId] ?? DEFAULT_SETTINGS), ...patch },
+          },
+        })),
 
       // Wizard slice
       ...EMPTY_WIZARD,
@@ -257,6 +261,7 @@ export const useStore = create<StoreState>()(
           analysisResults: {},
           currentFileBuffer: null,
           fileBuffers: {},
+          settingsByFile: {},
         }),
       setActiveFileId: (id) => set({ activeFileId: id }),
       openTab: (id) =>
@@ -277,12 +282,15 @@ export const useStore = create<StoreState>()(
           delete analysisResults[id]
           const fileBuffers = { ...s.fileBuffers }
           delete fileBuffers[id]
+          const settingsByFile = { ...s.settingsByFile }
+          delete settingsByFile[id]
           return {
             files: s.files.filter((f) => f.id !== id),
             openTabIds: filtered,
             activeFileId: nextActive,
             analysisResults,
             fileBuffers,
+            settingsByFile,
             currentFileBuffer:
               s.currentFileBuffer && s.files.find((f) => f.id === id)
                 ? s.currentFileBuffer

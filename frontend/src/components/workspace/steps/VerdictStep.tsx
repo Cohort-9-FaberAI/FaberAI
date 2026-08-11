@@ -26,8 +26,8 @@ const conclusionLegendItems = [
 ]
 
 export default function VerdictStep({ activeFile }: VerdictStepProps) {
-  const process = useStore((s) => s.process)
   const activeId = activeFile?.id ?? ''
+  const process = useStore((s) => s.settingsByFile[activeId]?.process ?? null)
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [activeTab, setActiveTab] = useState<'reasons' | 'improvements'>('reasons')

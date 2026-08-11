@@ -1,8 +1,8 @@
-import { useStore } from '../../store'
+import { useStore, DEFAULT_SETTINGS } from '../../store'
 
-export default function ProcessToggle() {
-  const process = useStore((s) => s.process)
-  const setProcess = useStore((s) => s.setProcess)
+export default function ProcessToggle({ fileId }: { fileId: string }) {
+  const process = useStore((s) => s.settingsByFile[fileId]?.process ?? DEFAULT_SETTINGS.process)
+  const setSettings = useStore((s) => s.setSettings)
 
   const options = [
     { value: null, label: 'Not sure' },
@@ -17,7 +17,7 @@ export default function ProcessToggle() {
           key={opt.label}
           type="button"
           className={`process-toggle-btn${process === opt.value ? ' active' : ''}`}
-          onClick={() => setProcess(opt.value)}
+          onClick={() => setSettings(fileId, { process: opt.value })}
         >
           {opt.label}
         </button>

@@ -9,19 +9,17 @@ import {
 } from '../../../lib/analysisView'
 import { downloadAnalysisReportPdf } from '../../../lib/api'
 import type { UploadedFile } from '../../../store'
+import { DEFAULT_SETTINGS } from '../../../store'
 
 interface ExportStepProps {
   activeFile: UploadedFile | null
 }
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
-  const process = useStore((s) => s.process)
-  const printingProcess = useStore((s) => s.printingProcess)
-  const material = useStore((s) => s.material)
-  const tolerance = useStore((s) => s.tolerance)
-  const surfaceFinish = useStore((s) => s.surfaceFinish)
-
   const activeId = activeFile?.id ?? ''
+  const settings = useStore((s) => s.settingsByFile[activeId] ?? DEFAULT_SETTINGS)
+  const { process, printingProcess, material, tolerance, surfaceFinish } = settings
+
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
   const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [comparison, setComparison] = useState(false)
