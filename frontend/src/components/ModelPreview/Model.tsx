@@ -35,10 +35,11 @@ function preparePreviewGeometry(source: BufferGeometry): {
 
 type ModelProps = {
   onSizeChanged?: (size: Vector3) => void
-  doXRay: boolean
+  doXRay?: boolean
+  fitToViewport?: boolean
 }
 
-export function Model({ onSizeChanged, doXRay }: ModelProps) {
+export function Model({ onSizeChanged, doXRay = false, fitToViewport = false }: ModelProps) {
   const context = useContext(ModelContext)
   const modelUrl = context?.modelUrl
   const fileBuffer = context?.fileBuffer
@@ -48,12 +49,11 @@ export function Model({ onSizeChanged, doXRay }: ModelProps) {
   const onGeometryLoaded = context?.onGeometryLoaded
   const onModelTransform = context?.onModelTransform
   const [geometry, setGeometry] = useState<BufferGeometry | undefined>(undefined)
-  const { camera } = useThree()
+  const { camera, size: viewportSize } = useThree()
   const objectRef = useRef<Object3D>(null)
 
   useEffect(() => {
     if (objectRef.current == null || !onSizeChanged) return
-    console.log('triggered effect fn')
     const box = new Box3().setFromObject(objectRef.current)
     const size = box.getSize(new Vector3())
     onSizeChanged(size)
@@ -125,10 +125,17 @@ export function Model({ onSizeChanged, doXRay }: ModelProps) {
       const center = box.getCenter(new Vector3())
       const size = box.getSize(new Vector3())
       const distance = Math.max(size.x, size.y, size.z)
-      camera.position.set(center.x + distance, center.y + distance, center.z + distance)
+      const aspect = viewportSize.width / Math.max(viewportSize.height, 1)
+      const portraitFit = fitToViewport && aspect < 1 ? Math.min(1 / aspect, 1.85) : 1
+      const fittedDistance = distance * portraitFit
+      camera.position.set(
+        center.x + fittedDistance,
+        center.y + fittedDistance,
+        center.z + fittedDistance,
+      )
       camera.lookAt(center)
     }
-  }, [geometry, camera])
+  }, [geometry, camera, fitToViewport, viewportSize.height, viewportSize.width])
 
   return (
     <mesh ref={objectRef} geometry={geometry} scale={0.5}>

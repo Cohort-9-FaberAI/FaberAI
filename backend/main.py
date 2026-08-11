@@ -729,7 +729,7 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
             if "assumptions" in proc and isinstance(proc["assumptions"], list):
                 # Filtra fora o aviso de falta de material para o gerador de PDF não imprimir
                 proc["assumptions"] = [
-                    asm for asm in proc["assumptions"] 
+                    asm for asm in proc["assumptions"]
                     if "No material supplied" not in asm
                 ]
                 # Adiciona a suposição correta do material escolhido

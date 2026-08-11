@@ -1,12 +1,29 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
 from typing import Optional
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 logger = logging.getLogger(__name__)
+
+
+def _enabled() -> bool:
+    return os.getenv("FABERAI_MOLDSIM_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _startup_timeout_seconds() -> float:
+    try:
+        return max(float(os.getenv("FABERAI_MOLDSIM_STARTUP_TIMEOUT_SECONDS", "15")), 0.1)
+    except ValueError:
+        return 15.0
 
 
 class MoldSimMCP:
@@ -48,12 +65,21 @@ class MoldSimMCP:
 
     async def start(self):
         self._task = asyncio.create_task(self._run())
-        await self._ready.wait()
+        try:
+            await asyncio.wait_for(self._ready.wait(), timeout=_startup_timeout_seconds())
+        except TimeoutError:
+            logger.warning("moldsim-mcp did not become ready before the startup timeout")
+            self._failed = True
+            await self.stop()
 
     async def stop(self):
         self._shutdown.set()
         if self._task:
-            await self._task  # same task that entered the scopes now exits them
+            try:
+                await asyncio.wait_for(asyncio.shield(self._task), timeout=5)
+            except TimeoutError:
+                self._task.cancel()
+                await asyncio.gather(self._task, return_exceptions=True)
 
     @property
     def is_available(self) -> bool:
@@ -67,6 +93,10 @@ def get_moldsim() -> Optional[MoldSimMCP]:
 
 async def init_moldsim():
     global _moldsim
+    if not _enabled():
+        logger.info("moldsim-mcp disabled; set FABERAI_MOLDSIM_ENABLED=true to enable it")
+        _moldsim = None
+        return
     _moldsim = MoldSimMCP()
     await _moldsim.start()
     if _moldsim._failed:

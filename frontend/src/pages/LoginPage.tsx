@@ -1,46 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import BrandMark from '../components/layout/BrandMark'
 import ModelPreview from '../components/ModelPreview/ModelPreview'
+import { loginPreviewSamples } from '../components/landing/sampleAnalyses'
 import { useStore } from '../store'
-import type { AnalysisResult } from '../types/analysis'
-
-const demoAnalysis: AnalysisResult = {
-  analysis_id: 'demo',
-  filename: 'logo.stl',
-  status: 'completed',
-  manufacturability_score: 87,
-  summary: 'Faber AI brand inspection sample.',
-  file_url: '/logo.stl',
-  part_metadata: {
-    units: 'mm',
-    volume: 0,
-    surface_area: 0,
-    bounding_box: {
-      min: { x: 0, y: 0, z: 0 },
-      max: { x: 0, y: 0, z: 0 },
-    },
-  },
-  geometry_data: {
-    source_format: 'stl',
-    bounding_box: {
-      min: { x: 0, y: 0, z: 0 },
-      max: { x: 0, y: 0, z: 0 },
-    },
-    volume_mm3: 0,
-    surface_area_mm2: 0,
-    measurements_reliable: true,
-    center_mass: { x: 0, y: 0, z: 0 },
-  },
-  issues: [],
-}
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const setEmail = useStore((s) => s.setEmail)
   const [email, setEmailLocal] = useState('')
   const [password, setPassword] = useState('')
+  const [sampleIndex, setSampleIndex] = useState(0)
+  const reduceMotion = useReducedMotion()
+  const activeSample = loginPreviewSamples[sampleIndex]
+
+  useEffect(() => {
+    if (reduceMotion) return
+
+    const interval = window.setInterval(() => {
+      setSampleIndex((current) => (current + 1) % loginPreviewSamples.length)
+    }, 7200)
+
+    return () => window.clearInterval(interval)
+  }, [reduceMotion])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -104,21 +87,90 @@ export default function LoginPage() {
         </div>
       </motion.form>
       <aside className="login-visual" aria-label="FaberAI live inspection preview">
-        <div className="inspection-readout inspection-readout-a">
-          <span className="readout-dot" />
-          <span>draft</span>
-          <strong>2.3 deg</strong>
+        <div className="login-preview-shell">
+          <div className="login-preview-status">
+            <i />
+            Live sample analysis
+          </div>
+
+          <div className="login-model-stage" aria-live="polite">
+            {loginPreviewSamples.map((sample, index) => {
+              const isActive = index === sampleIndex
+
+              return (
+                <motion.div
+                  className={`login-model-layer ${isActive ? 'is-active' : ''}`}
+                  key={sample.id}
+                  initial={false}
+                  animate={{
+                    opacity: isActive ? 1 : 0,
+                    scale: isActive ? 1 : 0.96,
+                    filter: isActive ? 'blur(0px)' : 'blur(8px)',
+                  }}
+                  transition={{ duration: reduceMotion ? 0 : 0.9, ease: [0.16, 1, 0.3, 1] }}
+                  aria-hidden={!isActive}
+                >
+                  <ModelPreview
+                    analysis={sample.analysis}
+                    height="100%"
+                    autoRotate
+                    markerRadius={sample.markerRadius}
+                    fitToViewport
+                  />
+                </motion.div>
+              )
+            })}
+          </div>
+
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              className="login-preview-data"
+              key={activeSample.id}
+              initial={reduceMotion ? false : { opacity: 0, y: 10, filter: 'blur(6px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -8, filter: 'blur(6px)' }}
+              transition={{ duration: reduceMotion ? 0 : 0.42 }}
+            >
+              <div className="login-preview-heading">
+                <span>{activeSample.process}</span>
+                <strong>{activeSample.name}</strong>
+              </div>
+
+              <div className="login-preview-score">
+                <span>DFM score</span>
+                <strong>{activeSample.score}</strong>
+                <small>/100</small>
+              </div>
+
+              {activeSample.readouts.map((readout, index) => (
+                <div
+                  className={`login-preview-readout login-preview-readout-${index + 1} is-${readout.tone}`}
+                  key={readout.label}
+                >
+                  <span>{readout.label}</span>
+                  <strong>{readout.value}</strong>
+                  <small>{readout.detail}</small>
+                </div>
+              ))}
+            </motion.div>
+          </AnimatePresence>
+
+          <div className="login-preview-switcher" role="tablist" aria-label="Preview sample">
+            {loginPreviewSamples.map((sample, index) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={index === sampleIndex}
+                className={index === sampleIndex ? 'is-active' : ''}
+                key={sample.id}
+                onClick={() => setSampleIndex(index)}
+              >
+                <i />
+                {sample.name}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="inspection-readout inspection-readout-b">
-          <span className="readout-dot" />
-          <span>wall</span>
-          <strong>1.8 mm</strong>
-        </div>
-        <div className="login-score">
-          <strong>87</strong>
-          <span>manufacturability</span>
-        </div>
-        <ModelPreview analysis={demoAnalysis} />
       </aside>
     </motion.div>
   )

@@ -20,8 +20,10 @@ type ModelPreviewProps = {
   previewFileUrl?: string | null
   previewBuffer?: ArrayBuffer | null
   previewSourceFormat?: 'stl' | 'step' | null
-  onIssueSelected?: (issue: ManufacturabilityIssue | null) => void
   height?: number | string
+  autoRotate?: boolean
+  markerRadius?: number
+  fitToViewport?: boolean
 }
 
 function toPoint(value?: [number, number, number] | Vector3): [number, number, number] | null {
@@ -119,11 +121,17 @@ function getPreviewUrl(analysis: AnalysisResult | null, previewFileUrl: string |
   return null
 }
 
-type ModelCanvasProps = {
+function ModelCanvas({
+  xRayEnabled,
+  autoRotate = false,
+  markerRadius,
+  fitToViewport = false,
+}: {
   xRayEnabled: boolean
-}
-
-function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
+  autoRotate?: boolean
+  markerRadius?: number
+  fitToViewport?: boolean
+}) {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
   const sharedGeometry = context?.sharedGeometry
@@ -148,9 +156,9 @@ function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
 
   const [markerSize, setMarkerSize] = useState(0.5)
 
-  function scaleMarketSizeToGeometry(size: ThreeVector3) {
+  const scaleMarkerSizeToGeometry = useCallback((size: ThreeVector3) => {
     setMarkerSize(((size.x + size.y + size.z) / 3) * 0.01)
-  }
+  }, [])
 
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
@@ -160,10 +168,18 @@ function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
 
       {isLoginLogo ? (
         <Float speed={2.2} rotationIntensity={0.6} floatIntensity={1.8}>
-          <Model doXRay={xRayEnabled} onSizeChanged={scaleMarketSizeToGeometry} />
+          <Model
+            doXRay={xRayEnabled}
+            fitToViewport={fitToViewport}
+            onSizeChanged={scaleMarkerSizeToGeometry}
+          />
         </Float>
       ) : (
-        <Model doXRay={xRayEnabled} onSizeChanged={scaleMarketSizeToGeometry} />
+        <Model
+          doXRay={xRayEnabled}
+          fitToViewport={fitToViewport}
+          onSizeChanged={scaleMarkerSizeToGeometry}
+        />
       )}
 
       {issueMarkers.map(({ issue, worldPos }) => (
@@ -171,14 +187,14 @@ function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
           key={`${issue.issue_id}:${worldPos.join(':')}`}
           position={worldPos}
           color={markerColor(issue)}
-          radius={markerSize}
+          radius={markerRadius ?? markerSize}
           renderAsSphere={true}
           issue={issue}
           type="POINT"
         />
       ))}
 
-      <OrbitControls autoRotate={Boolean(isLoginLogo)} autoRotateSpeed={1.5} />
+      <OrbitControls autoRotate={autoRotate || Boolean(isLoginLogo)} autoRotateSpeed={1.15} />
       {!isLoginLogo && (
         <GizmoHelper alignment="top-left" margin={[80, 80]}>
           <GizmoViewport />
@@ -194,6 +210,9 @@ export default function ModelPreview({
   previewBuffer,
   previewSourceFormat = null,
   height,
+  autoRotate = false,
+  markerRadius,
+  fitToViewport = false,
 }: ModelPreviewProps) {
   const [loadError, setLoadError] = useState<{ source: string; message: string } | null>(null)
   const [loadedSource, setLoadedSource] = useState<string | null>(null)
@@ -303,7 +322,12 @@ export default function ModelPreview({
             onModelTransform: handleModelTransform,
           }}
         >
-          <ModelCanvas xRayEnabled={showXRay} />
+          <ModelCanvas
+            xRayEnabled={showXRay}
+            autoRotate={autoRotate}
+            markerRadius={markerRadius}
+            fitToViewport={fitToViewport}
+          />
         </ModelContext.Provider>
       </div>
     </div>

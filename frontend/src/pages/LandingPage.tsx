@@ -1,73 +1,158 @@
-import { useNavigate } from 'react-router-dom'
-import landingPageImg from '../assets/landingPage.png'
+import { useEffect, useRef, useState } from 'react'
+import { LuArrowRight, LuMenu, LuMoon, LuSun, LuX } from 'react-icons/lu'
+import { Link } from 'react-router-dom'
+import '../components/landing/LandingStyles.css'
+import { DemoViewer } from '../components/landing/DemoViewer'
+import { HeroViewer } from '../components/landing/HeroViewer'
+import {
+  CredibilityStrip,
+  FinalCtaSection,
+  FooterSection,
+  ProcessComparisonSection,
+  ProductProofSection,
+  WorkflowSection,
+} from '../components/landing/LandingSections'
+import { ReportShowcase } from '../components/landing/ReportShowcase'
+import BrandMark from '../components/layout/BrandMark'
+import { useAssetPreloader } from '../hooks/useAssetPreloader'
+import { useStore } from '../store'
+
+const LANDING_ASSETS = [
+  '/logo-full.svg',
+  '/logo-full-white.svg',
+  '/logo-white.svg',
+  '/logo.svg',
+  '/logo.glb',
+  '/logo.stl',
+  '/faberai-sample-part.stl',
+  '/report/page-0.jpg',
+  '/report/page-1.jpg',
+  '/report/page-2.jpg',
+  '/report/page-3.jpg',
+  '/report/page-4.jpg',
+  '/report/page-5.jpg',
+]
+
+const navLinks = [
+  ['Product', '#product'],
+  ['How it works', '#workflow'],
+  ['Sample report', '#report'],
+  ['Processes', '#processes'],
+]
 
 export default function LandingPage() {
-  const navigate = useNavigate()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const { progress, isLoading } = useAssetPreloader(LANDING_ASSETS)
+  const theme = useStore((state) => state.theme)
+  const toggleTheme = useStore((state) => state.toggleTheme)
+  const [navScrolled, setNavScrolled] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const goToLogin = () => {
-    navigate('/login')
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add('is-visible')
+        })
+      },
+      { root, threshold: 0.08, rootMargin: '0px 0px -6% 0px' },
+    )
+
+    const observeElements = () => {
+      root
+        .querySelectorAll('.reveal:not(.is-visible)')
+        .forEach((element) => observer.observe(element))
+    }
+
+    observeElements()
+    const frame = window.requestAnimationFrame(observeElements)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [isLoading])
+
+  const handleScroll = () => {
+    setNavScrolled((rootRef.current?.scrollTop ?? 0) > 24)
   }
 
-  return (
-    <div>
-      <div className="title-bar">
-        <img
-          className="title-image"
-          src="/logo-full.svg"
-          alt="FaberAI"
-          style={{ height: '36px', width: 'auto' }}
-        />
-      </div>
+  const closeMenu = () => setMobileMenuOpen(false)
 
-      <div className="landing-bg">
-        <div className="info-box">
-          <h1
-            style={{
-              color: '#ffffff',
-              marginBottom: '16px',
-              fontFamily: "'Geist', Inter, sans-serif",
-            }}
-          >
-            Quick and accurate AI review
-          </h1>
-          <ul>
-            <li>
-              How it works: AI parses the STL's mesh data — the triangular facets defining the
-              model's surface — and runs geometric checks a human would otherwise do by eye.
-            </li>
-            <br />
-            <li>3D printing checks:</li>
-            <ul>
-              <li>Overhangs beyond a safe angle (would sag without support)</li>
-              <li>Walls thinner than the printer's minimum extrusion width</li>
-              <li>Unsupported bridges</li>
-              <li>Non-manifold geometry (holes, duplicate faces) that would confuse a slicer</li>
-            </ul>
-            <li>Injection molding checks:</li>
-            <ul>
-              <li>Draft angles needed for clean part ejection</li>
-              <li>Uniform wall thickness (prevents warping or sink marks)</li>
-              <li>Sharp internal corners (create stress concentrations)</li>
-              <li>Undercuts that would require complex tooling</li>
-            </ul>
-            <br />
-            <li>
-              Scoring: Individual flaws are weighted by severity and frequency, then compressed into
-              a single manufacturability score.
-            </li>
-            <li>
-              Output: Gives designers a fast, at-a-glance read on how print- or mold-ready a file
-              is, plus a prioritized list of exactly which regions to fix before production.
-            </li>
-          </ul>
+  return (
+    <div className="faber-landing-root" ref={rootRef} onScroll={handleScroll}>
+      {isLoading && (
+        <div className="landing-loader" role="status" aria-label={`Loading FaberAI ${progress}%`}>
+          <BrandMark size={70} variant="full" />
+          <div className="landing-loader-track">
+            <span style={{ width: `${progress}%` }} />
+          </div>
+          <small>{progress}%</small>
         </div>
-        <div>
-          <img src={landingPageImg} className="landing-img" alt="Landing visual" />
-          <div className="button-box">
-            <button onClick={goToLogin}>Get Started</button>
+      )}
+
+      <nav
+        className={`landing-nav ${navScrolled ? 'is-scrolled' : ''}`}
+        aria-label="Main navigation"
+      >
+        <div className="landing-wrap landing-nav-inner">
+          <a
+            className="landing-nav-brand"
+            href="#top"
+            onClick={closeMenu}
+            aria-label="FaberAI home"
+          >
+            <BrandMark size={30} variant="full" />
+          </a>
+
+          <div className={`landing-nav-links ${mobileMenuOpen ? 'is-open' : ''}`}>
+            {navLinks.map(([label, href]) => (
+              <a href={href} key={href} onClick={closeMenu}>
+                {label}
+              </a>
+            ))}
+          </div>
+
+          <div className="landing-nav-actions">
+            <button
+              className="landing-icon-button"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? <LuSun /> : <LuMoon />}
+            </button>
+            <Link className="landing-button landing-button-primary landing-nav-cta" to="/login">
+              Analyze a part <LuArrowRight />
+            </Link>
+            <button
+              className="landing-icon-button landing-menu-button"
+              type="button"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <LuX /> : <LuMenu />}
+            </button>
           </div>
         </div>
-      </div>
+      </nav>
+
+      <main>
+        <HeroViewer />
+        <CredibilityStrip />
+        <DemoViewer />
+        <WorkflowSection />
+        <ProductProofSection />
+        <ProcessComparisonSection />
+        <ReportShowcase />
+        <FinalCtaSection />
+      </main>
+
+      <FooterSection />
     </div>
   )
 }

@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AppShell from '../components/layout/AppShell'
+import { motion, AnimatePresence } from 'framer-motion'
 import UploadDropzone from '../components/home/UploadDropzone'
 import FileCard from '../components/home/FileCard'
 import WizardNav from '../components/layout/WizardNav'
@@ -53,14 +54,15 @@ function FilePoller({
 export default function HomePage() {
   const navigate = useNavigate()
   const files = useStore((s) => s.files)
-  const clearFiles = useStore((s) => s.clearFiles)
   const closeTab = useStore((s) => s.closeTab)
+  const [projectPromptDismissed, setProjectPromptDismissed] = useState(false)
 
   const sessionFiles = files.filter((f) => f.taskId !== 'dev-manual' && !f.projectName)
   const hasProcessing = files.some(
     (f) => f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending'),
   )
   const canContinue = sessionFiles.length > 0
+  const showProjectPrompt = sessionFiles.length === 0 && !projectPromptDismissed
   const nextHint = canContinue
     ? null
     : hasProcessing
@@ -68,12 +70,54 @@ export default function HomePage() {
       : 'Upload a CAD file before continuing. Files are analyzed from the DFM workspace.'
 
   return (
-    <AppShell>
+    <>
       {sessionFiles.map((f) =>
         f.taskId !== 'dev-manual' && (f.status === 'processing' || f.status === 'pending') ? (
           <FilePoller key={f.id} file={f} />
         ) : null,
       )}
+
+      <AnimatePresence>
+        {showProjectPrompt && (
+          <motion.aside
+            className="project-side-prompt"
+            aria-label="Start a new project"
+            initial={{ opacity: 0, x: '100%' }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: '100%' }}
+            transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+          >
+            <button
+              className="project-side-prompt-close"
+              type="button"
+              aria-label="Dismiss project prompt"
+              onClick={() => setProjectPromptDismissed(true)}
+            >
+              x
+            </button>
+            <h2>Start this upload as a project?</h2>
+            <p>
+              Use a project when you want to keep the analysis, notes, and follow-up files grouped.
+            </p>
+            <div className="project-side-prompt-actions">
+              <button
+                type="button"
+                className="project-prompt-primary"
+                onClick={() => navigate('/projects')}
+              >
+                Start Project
+              </button>
+              <button
+                type="button"
+                className="project-prompt-secondary"
+                onClick={() => setProjectPromptDismissed(true)}
+              >
+                Just Upload
+              </button>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       <div className="workflow-layout">
         <section className="workflow-panel">
@@ -86,7 +130,11 @@ export default function HomePage() {
             <div className="file-list-container">
               <div className="file-list-header">
                 <h3>Uploaded Files ({sessionFiles.length})</h3>
-                <button type="button" className="clear-files-btn" onClick={() => clearFiles()}>
+                <button
+                  type="button"
+                  className="clear-files-btn"
+                  onClick={() => sessionFiles.forEach((file) => closeTab(file.id))}
+                >
                   Clear all
                 </button>
               </div>
@@ -125,6 +173,6 @@ export default function HomePage() {
           title: nextHint ?? undefined,
         }}
       />
-    </AppShell>
+    </>
   )
 }

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import AppShell from '../components/layout/AppShell'
 import FileDropzone from '../components/common/FileDropzone'
 import { useStore, type ProjectFile, type UploadedFile } from '../store'
 
@@ -36,12 +35,12 @@ export default function ProjectDetailPage() {
 
   if (!project) {
     return (
-      <AppShell>
+      <>
         <p className="list-empty">Project not found.</p>
         <button type="button" onClick={() => navigate('/projects')}>
           Back to Projects
         </button>
-      </AppShell>
+      </>
     )
   }
 
@@ -152,7 +151,7 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <div className="project-detail-header">
         <div>
           <button type="button" className="wizard-nav-back" onClick={() => navigate('/projects')}>
@@ -218,6 +217,6 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </section>
-    </AppShell>
+    </>
   )
 }
