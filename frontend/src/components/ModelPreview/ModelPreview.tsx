@@ -157,7 +157,7 @@ function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
   const [markerSize, setMarkerSize] = useState(0.5)
 
   function scaleMarketSizeToGeometry(size: ThreeVector3) {
-    setMarkerSize(((size.x + size.y + size.z) / 3) * 0.04)
+    setMarkerSize(((size.x + size.y + size.z) / 3) * 0.01)
   }
 
   return (
