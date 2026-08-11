@@ -191,23 +191,23 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
                 count={minor.length}
                 color={SEVERITY_COLORS.minor}
                 items={minor}
-                emptyLabel={
-                  analysis
-                    ? 'No minor findings are available for this report yet.'
-                    : 'Findings will appear once analysis is complete.'
-                }
+                emptyLabel={analysis ? 'No minor findings are available for this report.' : ''}
               />
               <IssueAccordion
                 title="Problematic"
                 count={problematic.length}
                 color={SEVERITY_COLORS.problematic}
                 items={problematic}
+                emptyLabel={
+                  analysis ? 'No problematic findings are available for this report.' : ''
+                }
               />
               <IssueAccordion
                 title="Severe"
                 count={severe.length}
                 color={SEVERITY_COLORS.severe}
                 items={severe}
+                emptyLabel={analysis ? 'No severe findings are available for this report.' : ''}
               />
             </div>
           </motion.div>
