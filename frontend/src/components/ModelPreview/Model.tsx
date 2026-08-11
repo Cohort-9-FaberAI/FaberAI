@@ -33,7 +33,12 @@ function preparePreviewGeometry(source: BufferGeometry): {
   }
 }
 
-export function Model() {
+type ModelProps = {
+  onSizeChanged?: (size: Vector3) => void
+  doXRay: boolean
+}
+
+export function Model({ onSizeChanged, doXRay }: ModelProps) {
   const context = useContext(ModelContext)
   const modelUrl = context?.modelUrl
   const fileBuffer = context?.fileBuffer
@@ -45,6 +50,14 @@ export function Model() {
   const [geometry, setGeometry] = useState<BufferGeometry | undefined>(undefined)
   const { camera } = useThree()
   const objectRef = useRef<Object3D>(null)
+
+  useEffect(() => {
+    if (objectRef.current == null || !onSizeChanged) return
+    console.log('triggered effect fn')
+    const box = new Box3().setFromObject(objectRef.current)
+    const size = box.getSize(new Vector3())
+    onSizeChanged(size)
+  }, [geometry, onSizeChanged])
 
   //loads the geometry from the URL on-load
   useEffect(() => {
@@ -124,6 +137,8 @@ export function Model() {
         roughness={0.45}
         metalness={0.05}
         clearcoat={0.1}
+        transparent
+        opacity={doXRay ? 0.22 : 1}
         side={DoubleSide}
       />
     </mesh>

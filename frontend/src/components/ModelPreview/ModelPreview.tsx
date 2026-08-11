@@ -11,12 +11,10 @@ import {
 import { ModelContext, type ModelTransform } from './ModelContext'
 import { Model } from './Model'
 import IssueMarker from './IssueMarker'
-import { PCFShadowMap, type BufferGeometry } from 'three'
+import { PCFShadowMap, type BufferGeometry, Vector3 as ThreeVector3 } from 'three'
 import { useStore } from '../../store'
 import Toolbar from './Toolbar'
-import XRayCanvas from './XRayCanvas'
 import { severityColor } from '../../lib/analysisView'
-import { LuBox, LuLayers } from 'react-icons/lu'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
   previewFileUrl?: string | null
@@ -121,7 +119,11 @@ function getPreviewUrl(analysis: AnalysisResult | null, previewFileUrl: string |
   return null
 }
 
-function ModelCanvas() {
+type ModelCanvasProps = {
+  xRayEnabled: boolean
+}
+
+function ModelCanvas({ xRayEnabled }: ModelCanvasProps) {
   const context = useContext(ModelContext)
   const modelTransform = context?.modelTransform
   const sharedGeometry = context?.sharedGeometry
@@ -144,6 +146,12 @@ function ModelCanvas() {
         return { issue, worldPos }
       }) ?? []
 
+  const [markerSize, setMarkerSize] = useState(0.5)
+
+  function scaleMarketSizeToGeometry(size: ThreeVector3) {
+    setMarkerSize(((size.x + size.y + size.z) / 3) * 0.005)
+  }
+
   return (
     <Canvas shadows={{ type: PCFShadowMap }} camera={{ position: [3, 3, 3], fov: 45 }}>
       <ambientLight intensity={2.4} />
@@ -152,10 +160,10 @@ function ModelCanvas() {
 
       {isLoginLogo ? (
         <Float speed={2.2} rotationIntensity={0.6} floatIntensity={1.8}>
-          <Model />
+          <Model doXRay={xRayEnabled} onSizeChanged={scaleMarketSizeToGeometry} />
         </Float>
       ) : (
-        <Model />
+        <Model doXRay={xRayEnabled} onSizeChanged={scaleMarketSizeToGeometry} />
       )}
 
       {issueMarkers.map(({ issue, worldPos }) => (
@@ -163,7 +171,7 @@ function ModelCanvas() {
           key={`${issue.issue_id}:${worldPos.join(':')}`}
           position={worldPos}
           color={markerColor(issue)}
-          radius={0.5}
+          radius={markerSize}
           renderAsSphere={true}
           issue={issue}
           type="POINT"
@@ -248,10 +256,6 @@ export default function ModelPreview({
   const isLoadingModel = Boolean(modelSource && loadedSource !== modelSource && !activeLoadError)
 
   const isLoginLogo = modelUrl === '/logo.stl' || Boolean(modelUrl?.endsWith('logo.stl'))
-  const hasIssues = Boolean(
-    analysis?.issues && analysis.issues.some((issue) => markerPoint(issue) !== null),
-  )
-  const shouldDisplayXRay = hasIssues && !isLoginLogo && showXRay
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullScreen, setFullScreen] = useState<boolean>(false)
@@ -269,32 +273,15 @@ export default function ModelPreview({
   return (
     <div className={styles.wrapper} style={{ height }}>
       <div ref={containerRef} className={styles.canvasContainer}>
-        {hasIssues && !isLoginLogo && (
-          <div className={styles.viewModeSelector}>
-            <button
-              type="button"
-              className={`${styles.viewModeOption} ${!showXRay ? styles.activeOption : ''}`}
-              onClick={() => setShowXRay(false)}
-            >
-              <LuBox size={16} />
-              <span>Solid</span>
-            </button>
-            <button
-              type="button"
-              className={`${styles.viewModeOption} ${showXRay ? styles.activeOption : ''}`}
-              onClick={() => setShowXRay(true)}
-            >
-              <LuLayers size={16} />
-              <span>X-Ray</span>
-            </button>
-          </div>
-        )}
         {!isLoginLogo && (
           <Toolbar
             onFullScreenPressed={() => {
               if (isFullScreen) document.exitFullscreen()
               else containerRef.current?.requestFullscreen()
               setFullScreen(!isFullScreen)
+            }}
+            onXRayPressed={(val) => {
+              setShowXRay(val)
             }}
             isFullScreen={isFullScreen}
           />
@@ -316,7 +303,7 @@ export default function ModelPreview({
             onModelTransform: handleModelTransform,
           }}
         >
-          {shouldDisplayXRay ? <XRayCanvas /> : <ModelCanvas />}
+          <ModelCanvas xRayEnabled={showXRay} />
         </ModelContext.Provider>
       </div>
     </div>

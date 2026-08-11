@@ -582,7 +582,8 @@ def build_report_pdf(analysis: dict[str, Any], include_comparison: bool = False)
             pdf.score_card(
                 process.process.value.replace("_", " ").title(),
                 process.score,
-                f"{process.verdict_label or 'Completed'} - {round(process.confidence * 100)}% confidence",
+                #f"{process.verdict_label or 'Completed'} - {round(process.confidence * 100)}% confidence",
+                f"{process.verdict_label or 'Completed'}",
                 x,
                 row_y,
                 card_width,
@@ -616,7 +617,8 @@ def build_report_pdf(analysis: dict[str, Any], include_comparison: bool = False)
             pdf.y -= 18
             pdf.wrapped(
                 f"Rules: {len(passed)} passed, {len(failed)} failed, "
-                f"{len(not_assessed)} not assessed. Confidence: {round(process.confidence * 100)}%.",
+                #f"{len(not_assessed)} not assessed. Confidence: {round(process.confidence * 100)}%.",
+                f"{len(not_assessed)} not assessed. ",
                 max_chars=92,
                 color=MUTED,
             )

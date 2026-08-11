@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 
 from celery.result import AsyncResult
 from celery.exceptions import CeleryError
-from fastapi import Form, FastAPI, HTTPException, Request, UploadFile, status
+from fastapi import FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
@@ -17,12 +17,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from core.workers import celery_app, extract_geometry_task, _upload_preview_stl_for_step
 from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
-from app.services.ai import AIAnswer, answer_dfm_question
+from app.services.ai import AIAnswer, answer_dfm_question_async
 from app.services.report_pdf import build_report_pdf, report_pdf_filename
 from app.services.storage import upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
 from app.observability import setup_langtrace
+from app.services.ai.mcp_moldsim import init_moldsim, shutdown_moldsim
 import requests
 
 setup_langtrace()
@@ -187,7 +188,11 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # noqa: BLE001 - startup must not fail on this
         logger.warning("Embedding model preload skipped: %s", exc)
 
+    await init_moldsim()
+
     yield
+
+    await shutdown_moldsim()
 
 
 app = FastAPI(
@@ -282,14 +287,7 @@ def dependency_health_check():
     }
 
 @app.post("/upload/", status_code=status.HTTP_202_ACCEPTED, tags=["Upload"])
-async def upload_cad_file(
-    file: UploadFile,
-    quantity: Optional[int] = Form(default=None),
-    material: Optional[str] = Form(default=None),
-    tolerance: Optional[str] = Form(default=None),
-    process: Optional[str] = Form(default=None),
-    notes: Optional[str] = Form(default=None),
-):
+async def upload_cad_file(file: UploadFile):
     """
     Accepts a CAD file (STEP or STL), uploads it to Supabase Storage,
     creates a pending record in Supabase, and dispatches a background
@@ -316,20 +314,11 @@ async def upload_cad_file(
         )
 
     # Pass analysis_id to the worker so it can update the record
-    setup_inputs = {
-        "quantity": quantity,
-        "material": material,
-        "tolerance": tolerance,
-        "process": process,
-        "notes": notes,
-    }
-
     try:
         task = extract_geometry_task.delay(
             upload_result["public_url"],
             upload_result["original_filename"],
             analysis.analysis_id,
-            setup_inputs,
         )
     except (CeleryError, OSError, TimeoutError) as exc:
         _raise_backend_unhealthy(
@@ -734,7 +723,7 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
 # ---------------------------------------------------------------------------
 
 @app.post("/ai/ask", response_model=AIAnswer, tags=["AI"])
-def ask_faber_ai(request: AIAskRequest):
+async def ask_faber_ai(request: AIAskRequest):
     """Answer a question about a manufacturability report.
 
     Strictly downstream: this endpoint reads a report that already exists. It
@@ -773,7 +762,7 @@ def ask_faber_ai(request: AIAskRequest):
             detail=f"The supplied report is not a valid DFM report: {exc}",
         ) from exc
 
-    return answer_dfm_question(
+    return await answer_dfm_question_async(
         report=report,
         question=request.question,
         geometry=geometry if isinstance(geometry, dict) else None,
