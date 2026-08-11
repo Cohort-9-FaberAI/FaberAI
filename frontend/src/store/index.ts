@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { applyAccentHue, DEFAULT_ACCENT_HUE } from '../lib/theme'
 
 export type FileStatus = 'stored' | 'pending' | 'processing' | 'completed' | 'failed'
 
@@ -135,8 +136,15 @@ export type ThemeMode = 'dark' | 'light'
 
 interface ThemeSlice {
   theme: ThemeMode
+  accentHue: number
   toggleTheme: () => void
   setTheme: (t: ThemeMode) => void
+  setAccentHue: (hue: number) => void
+}
+
+interface UserSlice {
+  userEmail: string | null
+  setEmail: (email: string | null) => void
 }
 
 type StoreState = ProjectSettingsSlice &
@@ -146,7 +154,8 @@ type StoreState = ProjectSettingsSlice &
   AnalysisSlice &
   ChatSlice &
   ModelSlice &
-  ThemeSlice
+  ThemeSlice &
+  UserSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
 
@@ -215,6 +224,23 @@ export const useStore = create<StoreState>()(
         localStorage.setItem('faberai_theme', t)
         document.documentElement.setAttribute('data-theme', t)
         set({ theme: t })
+      },
+      accentHue: (() => {
+        const stored = Number(localStorage.getItem('faberai_hue'))
+        return Number.isFinite(stored) && stored >= 0 ? stored : DEFAULT_ACCENT_HUE
+      })(),
+      setAccentHue: (hue: number) => {
+        localStorage.setItem('faberai_hue', String(hue))
+        applyAccentHue(hue)
+        set({ accentHue: hue })
+      },
+
+      // User slice
+      userEmail: localStorage.getItem('faberai_email') ?? null,
+      setEmail: (email: string | null) => {
+        if (email) localStorage.setItem('faberai_email', email)
+        else localStorage.removeItem('faberai_email')
+        set({ userEmail: email })
       },
 
       // Project settings slice
