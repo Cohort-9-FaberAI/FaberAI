@@ -26,7 +26,14 @@ export async function analyzeFile(fileId: string): Promise<void> {
   updateFile(fileId, { status: 'processing' })
 
   try {
-    const res = await uploadFile(file.file)
+    const { process, material, surfaceFinish, printingProcess, tolerance } = useStore.getState()
+    const res = await uploadFile(file.file, {
+      process,
+      material,
+      surface_finish: surfaceFinish,
+      printing_process: printingProcess,
+      tolerance,
+    })
     updateFile(fileId, {
       taskId: res.task_id,
       analysisId: res.analysis_id ?? null,

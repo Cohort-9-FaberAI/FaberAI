@@ -16,8 +16,10 @@ interface ExportStepProps {
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
   const process = useStore((s) => s.process)
+  const printingProcess = useStore((s) => s.printingProcess)
   const material = useStore((s) => s.material)
   const tolerance = useStore((s) => s.tolerance)
+  const surfaceFinish = useStore((s) => s.surfaceFinish)
 
   const activeId = activeFile?.id ?? ''
   const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
@@ -57,6 +59,8 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
         process,
         material,
         tolerance,
+        printingProcess,
+        surfaceFinish,
       )
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')

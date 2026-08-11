@@ -10,7 +10,7 @@ from app.schemas import (
     Vector3,
 )
 from app.services.geometry_engine_adapter import run_geometry_engine
-from dfm import run_dfm_analysis
+from dfm import DFMInputs, ToleranceRequest, run_dfm_analysis
 from dfm.models import Finding
 from geometry.loaders import StepSupportUnavailableError
 import tempfile
@@ -162,6 +162,60 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
     )
 
 
+# Setup-step inputs -> DFMInputs. `tolerance` is not a DFMInputs field (the
+# engine's M7 rule takes per-dimension requests), so the UI's global tolerance
+# class is translated into a single request against the part's largest
+# bounding-box dimension.
+_TOLERANCE_MM = {
+    "standard": 0.5,
+    "tight": 0.2,
+    "precision": 0.1,
+}
+
+
+def _largest_part_dimension_mm(result: dict) -> float | None:
+    bbox = result.get("bounding_box") or {}
+    for key in ("width", "depth", "height"):
+        value = bbox.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            return float(value)
+    lo = bbox.get("min") or {}
+    hi = bbox.get("max") or {}
+    dims = []
+    for axis in ("x", "y", "z"):
+        lo_val = lo.get(axis)
+        hi_val = hi.get(axis)
+        if isinstance(lo_val, (int, float)) and isinstance(hi_val, (int, float)):
+            dims.append(abs(float(hi_val) - float(lo_val)))
+    if not dims:
+        return None
+    return max(dims)
+
+
+def _build_dfm_inputs(
+    inputs: dict | None,
+    tolerance: str | None,
+    result: dict,
+) -> DFMInputs | None:
+    if not inputs and not tolerance:
+        return None
+    dfm_inputs = DFMInputs.model_validate(
+        {k: v for k, v in (inputs or {}).items() if v not in (None, "")}
+    )
+    requested = _TOLERANCE_MM.get((tolerance or "").lower().strip())
+    if requested:
+        size = _largest_part_dimension_mm(result)
+        if size:
+            dfm_inputs.tolerances = [
+                ToleranceRequest(
+                    label="Global tolerance",
+                    feature_size_mm=size,
+                    requested_tolerance_mm=requested,
+                )
+            ]
+    return dfm_inputs
+
+
 @celery_app.task(
     name="extract_geometry_task",
     bind=True,
@@ -178,7 +232,14 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
     retry_backoff_max=60,     #cap backoff at 60 seconds
     retry_jitter=True,       
 )
-def extract_geometry_task(self, file_url: str, original_filename: str, analysis_id: str):
+def extract_geometry_task(
+    self,
+    file_url: str,
+    original_filename: str,
+    analysis_id: str,
+    inputs: dict | None = None,
+    tolerance: str | None = None,
+):
     """
     Full lifecycle Celery task for CAD file analysis:
     1. Sets status to processing in Supabase
@@ -230,7 +291,11 @@ def extract_geometry_task(self, file_url: str, original_filename: str, analysis_
         issues = []
         score = result.get("mock_score")
         try:
-            report = run_dfm_analysis(result, analysis_id=analysis_id)
+            report = run_dfm_analysis(
+                result,
+                inputs=_build_dfm_inputs(inputs, tolerance, result),
+                analysis_id=analysis_id,
+            )
             dfm_report = report.model_dump(mode="json")
             score = report.manufacturability_score
             # Flatten DFM findings into AnalysisResult.issues, translating

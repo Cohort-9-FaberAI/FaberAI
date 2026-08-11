@@ -27,11 +27,15 @@ export type WizardSource = 'quick' | 'project' | 'view'
 interface ProjectSettingsSlice {
   isProject: boolean
   process: 'molding' | 'printing' | null
+  printingProcess: string
+  surfaceFinish: string
   quantity: number
   material: string
   tolerance: string
   setProject: (v: boolean) => void
   setProcess: (v: 'molding' | 'printing' | null) => void
+  setPrintingProcess: (v: string) => void
+  setSurfaceFinish: (v: string) => void
   setQuantity: (v: number) => void
   setMaterial: (v: string) => void
   setTolerance: (v: string) => void
@@ -208,11 +212,15 @@ export const useStore = create<StoreState>()(
       // Project settings slice
       isProject: false,
       process: null,
+      printingProcess: '',
+      surfaceFinish: '',
       quantity: 1,
       material: '',
       tolerance: '',
       setProject: (v) => set({ isProject: v }),
       setProcess: (v) => set({ process: v }),
+      setPrintingProcess: (v) => set({ printingProcess: v }),
+      setSurfaceFinish: (v) => set({ surfaceFinish: v }),
       setQuantity: (v) => set({ quantity: v }),
       setMaterial: (v) => set({ material: v }),
       setTolerance: (v) => set({ tolerance: v }),

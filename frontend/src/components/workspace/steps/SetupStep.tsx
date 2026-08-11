@@ -15,9 +15,14 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
   const quantity = useStore((s) => s.quantity)
   const material = useStore((s) => s.material)
   const tolerance = useStore((s) => s.tolerance)
+  const process = useStore((s) => s.process)
+  const printingProcess = useStore((s) => s.printingProcess)
+  const surfaceFinish = useStore((s) => s.surfaceFinish)
   const setQuantity = useStore((s) => s.setQuantity)
   const setMaterial = useStore((s) => s.setMaterial)
   const setTolerance = useStore((s) => s.setTolerance)
+  const setPrintingProcess = useStore((s) => s.setPrintingProcess)
+  const setSurfaceFinish = useStore((s) => s.setSurfaceFinish)
 
   const analysis = asAnalysisResult(analysisResult)
   const activeFileIsStl =
@@ -66,12 +71,32 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
           <label htmlFor="material">Material</label>
           <select id="material" value={material} onChange={(e) => setMaterial(e.target.value)}>
             <option value="">Select material</option>
-            <option value="pla">PLA</option>
             <option value="abs">ABS</option>
-            <option value="petg">PETG</option>
-            <option value="nylon">Nylon</option>
+            <option value="pp">Polypropylene (PP)</option>
+            <option value="pc">Polycarbonate (PC)</option>
+            <option value="pa66">Nylon PA66</option>
+            <option value="pom">POM / Acetal</option>
+            <option value="ps">Polystyrene (PS)</option>
+            <option value="pbt">PBT</option>
           </select>
         </div>
+
+        {process !== 'printing' && (
+          <div className="form-group">
+            <label htmlFor="surface-finish">Surface finish</label>
+            <select
+              id="surface-finish"
+              value={surfaceFinish}
+              onChange={(e) => setSurfaceFinish(e.target.value)}
+            >
+              <option value="">Auto (recommended)</option>
+              <option value="semi_gloss">Semi-gloss</option>
+              <option value="polished">Polished</option>
+              <option value="light_texture">Light texture</option>
+              <option value="heavy_texture">Heavy texture</option>
+            </select>
+          </div>
+        )}
 
         <div className="form-group">
           <label htmlFor="tolerance">Tolerance</label>
@@ -82,6 +107,23 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
             <option value="precision">Precision (&plusmn;0.1mm)</option>
           </select>
         </div>
+
+        {process !== 'molding' && (
+          <div className="form-group">
+            <label htmlFor="printing-process">Printing process</label>
+            <select
+              id="printing-process"
+              value={printingProcess}
+              onChange={(e) => setPrintingProcess(e.target.value)}
+            >
+              <option value="">Auto (recommended)</option>
+              <option value="fdm">FDM</option>
+              <option value="sla">SLA (resin)</option>
+              <option value="sls">SLS</option>
+              <option value="mjf">MJF</option>
+            </select>
+          </div>
+        )}
       </form>
     </WorkflowLayout>
   )
