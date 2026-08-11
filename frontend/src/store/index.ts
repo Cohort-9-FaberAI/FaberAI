@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { applyAccentHue, DEFAULT_ACCENT_HUE } from '../lib/theme'
 
 export type FileStatus = 'stored' | 'pending' | 'processing' | 'completed' | 'failed'
 
@@ -24,17 +25,29 @@ export interface Project {
 
 export type WizardSource = 'quick' | 'project' | 'view'
 
-interface ProjectSettingsSlice {
-  isProject: boolean
+export type ProjectSettings = {
   process: 'molding' | 'printing' | null
+  printingProcess: string
+  surfaceFinish: string
   quantity: number
   material: string
   tolerance: string
+}
+
+export const DEFAULT_SETTINGS: ProjectSettings = {
+  process: null,
+  printingProcess: '',
+  surfaceFinish: '',
+  quantity: 1,
+  material: '',
+  tolerance: '',
+}
+
+interface ProjectSettingsSlice {
+  isProject: boolean
+  settingsByFile: Record<string, ProjectSettings>
   setProject: (v: boolean) => void
-  setProcess: (v: 'molding' | 'printing' | null) => void
-  setQuantity: (v: number) => void
-  setMaterial: (v: string) => void
-  setTolerance: (v: string) => void
+  setSettings: (fileId: string, patch: Partial<ProjectSettings>) => void
 }
 
 interface WizardSlice {
@@ -123,8 +136,15 @@ export type ThemeMode = 'dark' | 'light'
 
 interface ThemeSlice {
   theme: ThemeMode
+  accentHue: number
   toggleTheme: () => void
   setTheme: (t: ThemeMode) => void
+  setAccentHue: (hue: number) => void
+}
+
+interface UserSlice {
+  userEmail: string | null
+  setEmail: (email: string | null) => void
 }
 
 type StoreState = ProjectSettingsSlice &
@@ -134,7 +154,8 @@ type StoreState = ProjectSettingsSlice &
   AnalysisSlice &
   ChatSlice &
   ModelSlice &
-  ThemeSlice
+  ThemeSlice &
+  UserSlice
 
 const EMPTY_WIZARD = { source: 'quick' as WizardSource, projectId: null, fileId: null, file: null }
 
@@ -204,18 +225,35 @@ export const useStore = create<StoreState>()(
         document.documentElement.setAttribute('data-theme', t)
         set({ theme: t })
       },
+      accentHue: (() => {
+        const stored = Number(localStorage.getItem('faberai_hue'))
+        return Number.isFinite(stored) && stored >= 0 ? stored : DEFAULT_ACCENT_HUE
+      })(),
+      setAccentHue: (hue: number) => {
+        localStorage.setItem('faberai_hue', String(hue))
+        applyAccentHue(hue)
+        set({ accentHue: hue })
+      },
+
+      // User slice
+      userEmail: localStorage.getItem('faberai_email') ?? null,
+      setEmail: (email: string | null) => {
+        if (email) localStorage.setItem('faberai_email', email)
+        else localStorage.removeItem('faberai_email')
+        set({ userEmail: email })
+      },
 
       // Project settings slice
       isProject: false,
-      process: null,
-      quantity: 1,
-      material: '',
-      tolerance: '',
+      settingsByFile: {},
       setProject: (v) => set({ isProject: v }),
-      setProcess: (v) => set({ process: v }),
-      setQuantity: (v) => set({ quantity: v }),
-      setMaterial: (v) => set({ material: v }),
-      setTolerance: (v) => set({ tolerance: v }),
+      setSettings: (fileId, patch) =>
+        set((s) => ({
+          settingsByFile: {
+            ...s.settingsByFile,
+            [fileId]: { ...(s.settingsByFile[fileId] ?? DEFAULT_SETTINGS), ...patch },
+          },
+        })),
 
       // Wizard slice
       ...EMPTY_WIZARD,
@@ -249,6 +287,7 @@ export const useStore = create<StoreState>()(
           analysisResults: {},
           currentFileBuffer: null,
           fileBuffers: {},
+          settingsByFile: {},
         }),
       setActiveFileId: (id) => set({ activeFileId: id }),
       openTab: (id) =>
@@ -269,12 +308,15 @@ export const useStore = create<StoreState>()(
           delete analysisResults[id]
           const fileBuffers = { ...s.fileBuffers }
           delete fileBuffers[id]
+          const settingsByFile = { ...s.settingsByFile }
+          delete settingsByFile[id]
           return {
             files: s.files.filter((f) => f.id !== id),
             openTabIds: filtered,
             activeFileId: nextActive,
             analysisResults,
             fileBuffers,
+            settingsByFile,
             currentFileBuffer:
               s.currentFileBuffer && s.files.find((f) => f.id === id)
                 ? s.currentFileBuffer

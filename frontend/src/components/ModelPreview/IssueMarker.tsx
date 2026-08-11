@@ -57,7 +57,7 @@ export default function IssueMarker({
         e.stopPropagation()
         setFocusedIssue(issue.issue_id)
       }}
-      scale={hovered || highlightedIssue ? 1.2 : 1}
+      scale={hovered || highlightedIssue ? 2 : 1}
     >
       {renderAsSphere ? (
         <sphereGeometry args={[radius ?? 0.22, 24, 24]} />

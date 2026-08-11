@@ -4,10 +4,12 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import BrandMark from '../components/layout/BrandMark'
 import ModelPreview from '../components/ModelPreview/ModelPreview'
 import { loginPreviewSamples } from '../components/landing/sampleAnalyses'
+import { useStore } from '../store'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const setEmail = useStore((s) => s.setEmail)
+  const [email, setEmailLocal] = useState('')
   const [password, setPassword] = useState('')
   const [sampleIndex, setSampleIndex] = useState(0)
   const reduceMotion = useReducedMotion()
@@ -25,6 +27,7 @@ export default function LoginPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setEmail(email.trim() || null)
     navigate('/projects')
   }
 
@@ -54,7 +57,12 @@ export default function LoginPage() {
         </p>
         <label className="login-field">
           <span>Username or email</span>
-          <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input
+            type="text"
+            value={email}
+            onChange={(e) => setEmailLocal(e.target.value)}
+            required
+          />
         </label>
         <label className="login-field">
           <span>Password</span>
