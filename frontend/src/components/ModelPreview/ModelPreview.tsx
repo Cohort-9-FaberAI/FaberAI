@@ -15,6 +15,7 @@ import { PCFShadowMap, type BufferGeometry } from 'three'
 import { useStore } from '../../store'
 import Toolbar from './Toolbar'
 import XRayCanvas from './XRayCanvas'
+import { severityColor } from '../../lib/analysisView'
 import { LuBox, LuLayers } from 'react-icons/lu'
 type ModelPreviewProps = {
   analysis?: AnalysisResult | null
@@ -98,10 +99,7 @@ function getClosestSurfacePoint(
 }
 
 function markerColor(issue: ManufacturabilityIssue) {
-  if (issue.three_js_highlight?.color) return issue.three_js_highlight.color
-  if (issue.severity === 'blocker' || issue.severity === 'high') return 'red'
-  if (issue.severity === 'major' || issue.severity === 'medium') return 'orange'
-  return 'yellow'
+  return severityColor(issue.severity)
 }
 
 function isStepUrl(value?: string | null) {

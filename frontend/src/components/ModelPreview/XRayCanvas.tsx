@@ -6,6 +6,7 @@ import { ModelContext, type ModelTransform } from './ModelContext'
 import { GhostModel } from './GhostModel'
 import IssueMarker from './IssueMarker'
 import type { ManufacturabilityIssue, Vector3 } from '../../types/analysis'
+import { severityColor } from '../../lib/analysisView'
 
 function toPoint(value?: [number, number, number] | Vector3): [number, number, number] | null {
   if (Array.isArray(value) && value.length === 3) {
@@ -91,10 +92,7 @@ function getClosestSurfacePoint(
 const MESH_SCALE = 0.5
 
 function markerColor(issue: ManufacturabilityIssue) {
-  if (issue.three_js_highlight?.color) return issue.three_js_highlight.color
-  if (issue.severity === 'blocker' || issue.severity === 'high') return 'red'
-  if (issue.severity === 'major' || issue.severity === 'medium') return 'orange'
-  return 'yellow'
+  return severityColor(issue.severity)
 }
 
 export default function XRayCanvas() {

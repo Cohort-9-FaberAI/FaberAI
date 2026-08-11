@@ -259,3 +259,20 @@ export function getScoreColor(score: number | null | undefined): string {
   if (score >= 30) return '#ffb74d' // Amber / Neutral
   return '#ef5350' // Red / Fail
 }
+
+/**
+ * Severity colours shared by the DFM analysis legend and the 3D issue
+ * markers so both always render the same colours. Values mirror the CSS
+ * custom properties `--severity-high/medium/low` in index.css.
+ */
+export const SEVERITY_COLORS = {
+  severe: '#ef5350',
+  problematic: '#ff7b00',
+  minor: '#1aff00',
+} as const
+
+export function severityColor(severity: IssueSeverity | null | undefined): string {
+  if (severity === 'blocker' || severity === 'high') return SEVERITY_COLORS.severe
+  if (severity === 'major' || severity === 'medium') return SEVERITY_COLORS.problematic
+  return SEVERITY_COLORS.minor
+}

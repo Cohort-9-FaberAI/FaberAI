@@ -1,3 +1,5 @@
+import { SEVERITY_COLORS } from '../../lib/analysisView'
+
 interface LegendItem {
   label: string
   color: string
@@ -8,9 +10,9 @@ interface SeverityLegendProps {
 }
 
 const defaultItems: LegendItem[] = [
-  { label: 'Minor', color: '#ffd54f' },
-  { label: 'Problematic', color: '#ffb74d' },
-  { label: 'Severe', color: '#ef5350' },
+  { label: 'Minor', color: SEVERITY_COLORS.minor },
+  { label: 'Problematic', color: SEVERITY_COLORS.problematic },
+  { label: 'Severe', color: SEVERITY_COLORS.severe },
 ]
 
 export default function SeverityLegend({ items = defaultItems }: SeverityLegendProps) {
