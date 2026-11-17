@@ -2,9 +2,13 @@
 
 React + TypeScript frontend for FaberAI, built with [Vite](https://vitejs.dev/).
 
+To run the entire application with Docker only, see the root
+[quick start](../README.md#run-locally). The instructions below are for editing
+the frontend with Vite hot reload.
+
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - npm
 
 ## Install

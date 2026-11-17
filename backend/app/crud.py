@@ -1,4 +1,5 @@
-from app.database import supabase
+from app.database import LOCAL_MODE, supabase
+from app import local_store
 from app.schemas import AnalysisResult, AnalysisDBRecord
 
 TABLE_NAME = "analysis_jobs"
@@ -6,9 +7,9 @@ TABLE_NAME = "analysis_jobs"
 
 def insert_analysis_result(result: AnalysisResult) -> dict:
     """
-    Validates and inserts a completed analysis result into Supabase.
+    Validates and inserts an analysis into the configured record store.
     The full result payload is stored as JSON in the results_json column.
-    Returns the inserted row from Supabase.
+    Returns the inserted row data.
     """
     record = AnalysisDBRecord(
         analysis_id=result.analysis_id,
@@ -17,6 +18,9 @@ def insert_analysis_result(result: AnalysisResult) -> dict:
         manufacturability_score=result.manufacturability_score,
         results_json=result.model_dump(),
     )
+
+    if LOCAL_MODE:
+        return local_store.insert_record(record.model_dump(mode="json"))
 
     response = (
         supabase
@@ -30,7 +34,7 @@ def insert_analysis_result(result: AnalysisResult) -> dict:
 
 def get_analysis_by_id(analysis_id: str) -> dict | None:
     """
-    Fetches a single analysis record from Supabase by analysis_id.
+    Fetches a single analysis record by analysis_id.
 
     Args:
         analysis_id: The UUID of the analysis record to fetch.
@@ -43,6 +47,9 @@ def get_analysis_by_id(analysis_id: str) -> dict | None:
         postgrest.exceptions.APIError: If the database request itself fails
         (e.g. invalid credentials, RLS rejection, connectivity issues).
     """
+    if LOCAL_MODE:
+        return local_store.get_record(analysis_id)
+
     # maybe_single() returns None for the whole response when no row matches.
     response = (
         supabase
@@ -57,7 +64,7 @@ def get_analysis_by_id(analysis_id: str) -> dict | None:
 
 def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = None) -> dict:
     """
-    Updates the status of an existing analysis record in Supabase.
+    Updates the status of an existing analysis record.
     Optionally updates additional fields (e.g. manufacturability_score, results_json)
     at the same time as the status change.
 
@@ -72,6 +79,9 @@ def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = N
     payload = {"status": status}
     if extra_fields:
         payload.update(extra_fields)
+
+    if LOCAL_MODE:
+        return local_store.update_record(analysis_id, payload)
 
     response = (
         supabase

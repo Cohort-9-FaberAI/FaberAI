@@ -77,7 +77,7 @@ class LLMClient:
             or os.environ.get("FABERAI_AI_API_KEY")
             or os.environ.get("ANTHROPIC_API_KEY", "")
         )
-        self.model = model or os.environ.get("FABERAI_AI_MODEL", DEFAULT_MODEL)
+        self.model = model or os.environ.get("FABERAI_AI_MODEL") or DEFAULT_MODEL
         self.timeout = float(
             timeout or os.environ.get("FABERAI_AI_TIMEOUT", DEFAULT_TIMEOUT_SECONDS)
         )

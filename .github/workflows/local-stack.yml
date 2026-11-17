@@ -1,0 +1,33 @@
+name: Local stack
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/smoke_test.py'
+      - '.github/workflows/local-stack.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the default stack without credentials
+        run: docker compose up --build --detach --wait --wait-timeout 240
+      - name: Check STL upload, analysis, preview, PDF, and Q&A
+        run: python scripts/smoke_test.py
+      - name: Generate a STEP file with the bundled CAD kernel
+        run: |
+          docker compose exec -T api python -c "from build123d import Box, export_step; export_step(Box(10, 10, 10), '/tmp/faberai-step-smoke.step')"
+          docker compose cp api:/tmp/faberai-step-smoke.step /tmp/faberai-step-smoke.step
+      - name: Check the STEP workflow
+        run: python scripts/smoke_test.py --file /tmp/faberai-step-smoke.step
+      - name: Show diagnostics
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Stop the stack
+        if: always()
+        run: docker compose down

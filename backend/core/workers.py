@@ -1,5 +1,6 @@
 from celery import Celery
-from app.database import supabase
+from app.database import LOCAL_MODE, supabase
+from app import local_store
 from app.crud import insert_analysis_result, update_analysis_status
 from app.schemas import (
     AnalysisResult,
@@ -93,6 +94,8 @@ def _upload_preview_stl_for_step(step_path: str) -> str | None:
             return None
 
         with open(preview_path, "rb") as preview_file:
+            if LOCAL_MODE:
+                return local_store.save_file(storage_path, preview_file.read())
             supabase.storage.from_("cad-uploads").upload(
                 path=storage_path,
                 file=preview_file.read(),
@@ -242,17 +245,17 @@ def extract_geometry_task(
 ):
     """
     Full lifecycle Celery task for CAD file analysis:
-    1. Sets status to processing in Supabase
-    2. Downloads the CAD file from Supabase Storage into a secure temp file
+    1. Sets status to processing in the configured record store
+    2. Reads the stored CAD file into a secure temp file
     3. Passes the temp path to the geometry engine
     4. Saves the result and sets status to completed
     5. On any failure, sets status to failed
     6. Retries automatically on network errors with exponential backoff
 
     Args:
-        file_url: The public Supabase Storage URL of the uploaded CAD file.
+        file_url: The public storage URL of the uploaded CAD file.
         original_filename: The original name of the file for logging.
-        analysis_id: The Supabase record ID to update throughout the lifecycle.
+        analysis_id: The record ID to update throughout the lifecycle.
     """
     print(f"[WORKER] Starting processing for: {original_filename}")
     update_analysis_status(analysis_id, AnalysisStatus.processing.value)
@@ -264,14 +267,18 @@ def extract_geometry_task(
     try:
         #file from Supabase Storage
         print(f"[WORKER] Downloading from: {file_url}")
-        response = requests.get(file_url, timeout=30)
-        response.raise_for_status()
+        if LOCAL_MODE:
+            file_content = local_store.read_file_url(file_url)
+        else:
+            response = requests.get(file_url, timeout=30)
+            response.raise_for_status()
+            file_content = response.content
 
         with tempfile.NamedTemporaryFile(
             suffix=f".{file_extension}",
             delete=False
         ) as tmp_file:
-            tmp_file.write(response.content)
+            tmp_file.write(file_content)
             tmp_path = tmp_file.name
 
         print(f"[WORKER] File downloaded to temp path: {tmp_path}")
