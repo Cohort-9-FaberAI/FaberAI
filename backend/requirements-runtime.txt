@@ -1,0 +1,22 @@
+# Direct dependencies for CAD analysis, the API, workers, and PDF reporting.
+# Knowledge-base embeddings and tracing remain in requirements.txt; the core
+# application does not need a multi-gigabyte ML stack or a model download.
+anthropic==0.120.2
+build123d==0.12.0
+celery[redis]==5.6.3
+fastapi==0.139.0
+fpdf2==2.8.7
+manifold3d==3.5.2
+mcp==1.30.0
+networkx==3.5
+numpy==2.5.1
+Pillow==12.3.0
+python-dotenv==1.2.2
+python-multipart==0.0.32
+PyYAML==6.0.3
+requests==2.34.2
+rtree==1.4.1
+scipy==1.18.0
+supabase==2.31.0
+trimesh==4.12.2
+uvicorn==0.51.0

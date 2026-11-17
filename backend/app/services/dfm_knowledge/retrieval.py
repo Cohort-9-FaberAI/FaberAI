@@ -38,6 +38,9 @@ def retrieve_relevant_chunks(
     # --dry-run) don't require Supabase credentials just to be imported.
     from app.database import supabase
 
+    if supabase is None:
+        return []
+
     embed_start = time.monotonic()
     query_vector = embed_query(query)
     embed_seconds = time.monotonic() - embed_start

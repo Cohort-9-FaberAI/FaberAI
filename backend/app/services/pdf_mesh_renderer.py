@@ -9,6 +9,8 @@ import numpy as np
 import requests
 import trimesh
 from PIL import Image, ImageDraw
+from app.database import LOCAL_MODE
+from app import local_store
 
 logger = logging.getLogger(__name__)
 
@@ -288,7 +290,10 @@ def render_mesh_snapshot(
 
 def _load_mesh_from_source(file_url: str) -> trimesh.Trimesh | None:
     try:
-        if os.path.exists(file_url):
+        if LOCAL_MODE and file_url.startswith(("http://", "https://")):
+            file_obj = io.BytesIO(local_store.read_file_url(file_url))
+            mesh = trimesh.load(file_obj, file_type="stl", force="mesh")
+        elif os.path.exists(file_url):
             mesh = trimesh.load(file_url, force="mesh")
         elif file_url.startswith("http://") or file_url.startswith("https://"):
             logger.info("Downloading mesh from %s for PDF snapshot generation", file_url)

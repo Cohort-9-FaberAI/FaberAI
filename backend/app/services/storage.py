@@ -1,7 +1,8 @@
 import os
 import uuid
 from fastapi import HTTPException, UploadFile, status
-from app.database import supabase
+from app.database import LOCAL_MODE, supabase
+from app import local_store
 from geometry.loaders.dispatcher import STEP_EXTENSIONS, STL_EXTENSIONS, get_file_format
 import logging
 
@@ -78,7 +79,7 @@ def _read_upload_within_limit(file: UploadFile) -> bytes:
 
 def upload_cad_file_to_storage(file: UploadFile) -> dict:
     """
-    Uploads a CAD file (STEP or STL) to Supabase Storage.
+    Uploads a CAD file (STEP or STL) to local or Supabase storage.
 
     Here the Supabase upload is in a try/except so that when the
     storage3 library crashes while formatting its own error response, the
@@ -92,30 +93,28 @@ def upload_cad_file_to_storage(file: UploadFile) -> dict:
     storage_path = f"uploads/{unique_filename}"
 
     try:
-        supabase.storage.from_(BUCKET_NAME).upload(
-            path=storage_path,
-            file=file_bytes,
-            file_options={"content-type": file.content_type or "application/octet-stream"},
-        )
+        if LOCAL_MODE:
+            public_url = local_store.save_file(storage_path, file_bytes)
+        else:
+            public_url = _upload_supabase_file(storage_path, file_bytes, file.content_type)
     except Exception as exc:
-        # The storage3 library can crash while formatting its own error
-        # response (AttributeError: 'dict' object has no attribute 'text'),
-        # which masks the real storage failure. Logs cause here.
-        logger.error(
-            "Supabase Storage upload failed for path '%s': %s",
-            storage_path,
-            exc,
-            exc_info=True,
-        )
+        logger.exception("File storage upload failed for path '%s': %s", storage_path, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="File storage is temporarily unavailable. Please try again.",
-        )
-
-    public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+        ) from exc
 
     return {
         "storage_path": storage_path,
         "public_url": public_url,
         "original_filename": file.filename,
     }
+
+
+def _upload_supabase_file(storage_path: str, file_bytes: bytes, content_type: str | None) -> str:
+    supabase.storage.from_(BUCKET_NAME).upload(
+        path=storage_path,
+        file=file_bytes,
+        file_options={"content-type": content_type or "application/octet-stream"},
+    )
+    return supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)

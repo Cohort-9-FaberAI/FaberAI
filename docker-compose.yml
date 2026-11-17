@@ -1,9 +1,85 @@
-version: '3.8'
+name: faberai
+
+x-backend: &backend
+  build: ./backend
+  image: faberai-backend:local
+  init: true
+  environment:
+    FABERAI_STORAGE_BACKEND: ${FABERAI_STORAGE_BACKEND:-local}
+    FABERAI_DATA_DIR: /data
+    FABERAI_PUBLIC_API_URL: http://127.0.0.1:${FABERAI_API_PORT:-8000}
+    FABERAI_PRELOAD_EMBEDDINGS: "false"
+    REDIS_URL: redis://redis:6379/0
+    SUPABASE_URL: ${SUPABASE_URL:-}
+    SUPABASE_KEY: ${SUPABASE_KEY:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    FABERAI_AI_API_KEY: ${FABERAI_AI_API_KEY:-}
+    FABERAI_AI_BASE_URL: ${FABERAI_AI_BASE_URL:-}
+    FABERAI_AI_MODEL: ${FABERAI_AI_MODEL:-}
+  volumes:
+    - faberai-data:/data
+  depends_on:
+    redis:
+      condition: service_healthy
 
 services:
   redis:
-    image: redis:alpine
-    container_name: faberai-redis
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    # Exposed only on localhost for developers running the backend natively.
     ports:
-      - "6379:6379"
-    restart: always
+      - "127.0.0.1:${FABERAI_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "core.workers:celery_app", "worker", "--loglevel=info", "--concurrency=2", "--hostname=worker@%h"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A core.workers:celery_app inspect ping --destination worker@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 15s
+      timeout: 10s
+      start_period: 30s
+      retries: 10
+    stop_grace_period: 60s
+
+  api:
+    <<: *backend
+    ports:
+      - "127.0.0.1:${FABERAI_API_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/dependencies', timeout=10)"]
+      interval: 15s
+      timeout: 15s
+      start_period: 20s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://127.0.0.1:${FABERAI_API_PORT:-8000}
+    ports:
+      - "127.0.0.1:${FABERAI_WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  faberai-data:
+  redis-data:

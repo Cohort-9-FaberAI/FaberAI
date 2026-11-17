@@ -22,6 +22,9 @@ from app.services.report_pdf import build_report_pdf, report_pdf_filename
 from app.services.storage import upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from app.database import LOCAL_MODE
+from app import local_store
 from app.observability import setup_langtrace
 from app.services.ai.mcp_moldsim import init_moldsim, shutdown_moldsim
 import requests
@@ -126,11 +129,15 @@ def _attach_missing_step_preview(analysis: dict) -> dict:
     tmp_path = None
 
     try:
-        response = requests.get(source_url, timeout=30)
-        response.raise_for_status()
+        if LOCAL_MODE:
+            file_content = local_store.read_file_url(source_url)
+        else:
+            response = requests.get(source_url, timeout=30)
+            response.raise_for_status()
+            file_content = response.content
 
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
-            tmp_file.write(response.content)
+            tmp_file.write(file_content)
             tmp_path = tmp_file.name
 
         preview_url = _upload_preview_stl_for_step(tmp_path)
@@ -183,8 +190,9 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.dfm_knowledge.embeddings import embed_query
 
-        embed_query("warm up")
-        logger.info("ASME embedding model preloaded.")
+        if os.environ.get("FABERAI_PRELOAD_EMBEDDINGS", "true").lower() == "true":
+            embed_query("warm up")
+            logger.info("ASME embedding model preloaded.")
     except Exception as exc:  # noqa: BLE001 - startup must not fail on this
         logger.warning("Embedding model preload skipped: %s", exc)
 
@@ -201,6 +209,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+if LOCAL_MODE:
+    app.mount("/files", StaticFiles(directory=local_store.files_dir()), name="local-files")
 
 app.add_middleware(
     CORSMiddleware,
@@ -296,8 +307,8 @@ async def upload_cad_file(
     tolerance: Optional[str] = Form(default=None),
 ):
     """
-    Accepts a CAD file (STEP or STL), uploads it to Supabase Storage,
-    creates a pending record in Supabase, and dispatches a background
+    Accepts a CAD file (STEP or STL), stores the file,
+    creates a pending analysis record, and dispatches a background
     Celery task for geometry analysis.
     Returns the task ID and analysis ID for status polling.
     """
