@@ -61,8 +61,8 @@ mode stores SQLite records and CAD files in `backend/.data/`. Override this with
 
 Supabase mode needs `SUPABASE_URL`, `SUPABASE_KEY`, the `analysis_jobs` table, and a
 public `cad-uploads` bucket. SQL definitions live in [database/migrations/](database/migrations/).
-Native processes load `backend/.env` and the working-directory `.env`; Compose
-uses the root `.env` as documented in the [root configuration guide](../README.md#optional-configuration).
+Native processes load `backend/.env` and accept exported environment variables.
+Compose uses the root `.env` as documented in the [root configuration guide](../README.md#optional-configuration).
 
 An LLM provider key is optional for report Q&A. Standards retrieval additionally
 needs the knowledge packages, ingested reference documents, and Supabase vector
