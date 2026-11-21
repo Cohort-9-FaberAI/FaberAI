@@ -1,36 +1,26 @@
 import { useState } from 'react'
 import WorkflowLayout from '../../layout/WorkflowLayout'
-import { useStore } from '../../../store'
-import { asAnalysisResult, hasCompletedReport } from '../../../lib/analysisView'
+import { hasCompletedReport } from '../../../lib/analysisView'
+import { useFileWorkspace } from '../../../hooks/useFileWorkspace'
 import { downloadAnalysisReportPdf } from '../../../lib/api'
 import ReportPdfPreview from '../../export/ReportPdfPreview'
 import type { UploadedFile } from '../../../store'
-import { DEFAULT_SETTINGS } from '../../../store'
 
 interface ExportStepProps {
   activeFile: UploadedFile | null
 }
 
 export default function ExportStep({ activeFile }: ExportStepProps) {
-  const activeId = activeFile?.id ?? ''
-  const settings = useStore((s) => s.settingsByFile[activeId] ?? DEFAULT_SETTINGS)
+  const { analysis, analysisResult, settings, previewProps } = useFileWorkspace(activeFile)
   const { process, printingProcess, material, tolerance, surfaceFinish } = settings
 
-  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
-  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
   const [comparison, setComparison] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const showComparison = process === null
-  const analysis = asAnalysisResult(analysisResult)
   const canDownload = hasCompletedReport(analysis)
 
-  const activeFileIsStl =
-    activeFile?.sourceFormat === 'stl' ||
-    (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
-  const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
-  const livePreviewFilename = activeFile?.name ?? null
   const cleanAnalysis = analysis ? { ...analysis, issues: [] } : null
 
   async function handleDownload() {
@@ -43,9 +33,6 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
     setDownloadError(null)
 
     try {
-      // Rastreador para provar se as variáveis estão chegando vivas ou mortas aqui
-      console.log('Rastreio do ExportStep ->', { process, material, tolerance })
-
       const { blob, filename } = await downloadAnalysisReportPdf(
         analysisResult,
         comparison,
@@ -76,11 +63,7 @@ export default function ExportStep({ activeFile }: ExportStepProps) {
       title="Download DFM report"
       description="Package the completed inspection results and design recommendations for supplier review."
       analysis={cleanAnalysis}
-      previewFileUrl={livePreviewUrl}
-      previewBuffer={fileBuffer}
-      previewSourceFormat={activeFile?.sourceFormat ?? null}
-      previewFilename={livePreviewFilename}
-
+      {...previewProps}
       viewerOverride={
         <ReportPdfPreview
           analysis={analysisResult}

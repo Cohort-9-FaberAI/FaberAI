@@ -1,0 +1,4 @@
+# Local development and offline CI checks.
+-r requirements-runtime.txt
+pytest==9.1.1
+ruff==0.14.3

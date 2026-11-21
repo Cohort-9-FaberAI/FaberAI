@@ -1,7 +1,8 @@
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import ProcessToggle from '../../extra-info/ProcessToggle'
-import { useStore, DEFAULT_SETTINGS } from '../../../store'
-import { asAnalysisResult, hasCompletedReport } from '../../../lib/analysisView'
+import { useStore } from '../../../store'
+import { hasCompletedReport } from '../../../lib/analysisView'
+import { useFileWorkspace } from '../../../hooks/useFileWorkspace'
 import type { UploadedFile } from '../../../store'
 
 interface SetupStepProps {
@@ -9,20 +10,11 @@ interface SetupStepProps {
 }
 
 export default function SetupStep({ activeFile }: SetupStepProps) {
-  const activeId = activeFile?.id ?? ''
-  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
-  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
-  const settings = useStore((s) => s.settingsByFile[activeId] ?? DEFAULT_SETTINGS)
+  const { activeId, analysis, settings, previewProps } = useFileWorkspace(activeFile)
   const setSettings = useStore((s) => s.setSettings)
   const { quantity, material, tolerance, process, printingProcess, surfaceFinish } = settings
 
-  const analysis = asAnalysisResult(analysisResult)
   const isLocked = hasCompletedReport(analysis)
-  const activeFileIsStl =
-    activeFile?.sourceFormat === 'stl' ||
-    (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
-  const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
-  const livePreviewFilename = activeFile?.name ?? null
 
   const completedPreviewAnalysis = analysis
     ? {
@@ -38,10 +30,7 @@ export default function SetupStep({ activeFile }: SetupStepProps) {
       title="Confirm manufacturing inputs"
       description="Add the constraints that calibrate DFM evaluation thresholds."
       analysis={completedPreviewAnalysis}
-      previewFileUrl={livePreviewUrl}
-      previewBuffer={fileBuffer}
-      previewSourceFormat={activeFile?.sourceFormat ?? null}
-      previewFilename={livePreviewFilename}
+      {...previewProps}
     >
       <form className="extra-info-form" onSubmit={(e) => e.preventDefault()}>
         <div className="form-group">

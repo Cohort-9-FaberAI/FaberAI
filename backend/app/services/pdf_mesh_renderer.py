@@ -6,31 +6,31 @@ import os
 from typing import Any
 
 import numpy as np
-import requests
 import trimesh
 from PIL import Image, ImageDraw
-from app.database import LOCAL_MODE
-from app import local_store
+from app.services.storage import read_stored_file
 
 logger = logging.getLogger(__name__)
 
 
 COLOR_MAP: dict[str, tuple[int, int, int]] = {
-    "red": (239, 83, 80),        # #ef5350
+    "red": (239, 83, 80),  # #ef5350
     "high": (239, 83, 80),
     "blocker": (239, 83, 80),
-    "orange": (255, 183, 77),    # #ffb74d
+    "orange": (255, 183, 77),  # #ffb74d
     "medium": (255, 183, 77),
     "major": (255, 183, 77),
-    "yellow": (255, 213, 79),    # #ffd54f
+    "yellow": (255, 213, 79),  # #ffd54f
     "low": (255, 213, 79),
     "minor": (255, 213, 79),
-    "green": (102, 187, 106),    # #66bb6a
+    "green": (102, 187, 106),  # #66bb6a
     "pro": (102, 187, 106),
 }
 
 
-def _parse_color(color_str: str, default_severity: str = "medium") -> tuple[int, int, int]:
+def _parse_color(
+    color_str: str, default_severity: str = "medium"
+) -> tuple[int, int, int]:
     val = str(color_str).lower().strip()
     if val in COLOR_MAP:
         return COLOR_MAP[val]
@@ -42,7 +42,9 @@ def _parse_color(color_str: str, default_severity: str = "medium") -> tuple[int,
     return COLOR_MAP.get(default_severity.lower(), (255, 183, 77))
 
 
-def extract_issue_markers(analysis: dict[str, Any], mesh_verts: np.ndarray) -> list[tuple[int, tuple[int, int, int]]]:
+def extract_issue_markers(
+    analysis: dict[str, Any], mesh_verts: np.ndarray
+) -> list[tuple[int, tuple[int, int, int]]]:
     """Extracts issue centroids from analysis, snaps them to the nearest mesh vertex, and pairs them with RGB color."""
     if len(mesh_verts) == 0:
         return []
@@ -64,7 +66,9 @@ def extract_issue_markers(analysis: dict[str, Any], mesh_verts: np.ndarray) -> l
                 if isinstance(val, dict):
                     if "center" in val and isinstance(val["center"], (list, dict)):
                         val = val["center"]
-                    elif "centroid" in val and isinstance(val["centroid"], (list, dict)):
+                    elif "centroid" in val and isinstance(
+                        val["centroid"], (list, dict)
+                    ):
                         val = val["centroid"]
                     if isinstance(val, dict) and all(k in val for k in ("x", "y", "z")):
                         point = [float(val["x"]), float(val["y"]), float(val["z"])]
@@ -78,7 +82,9 @@ def extract_issue_markers(analysis: dict[str, Any], mesh_verts: np.ndarray) -> l
 
             if point is not None:
                 col_str = severity
-                if isinstance(issue.get("three_js_highlight"), dict) and issue["three_js_highlight"].get("color"):
+                if isinstance(issue.get("three_js_highlight"), dict) and issue[
+                    "three_js_highlight"
+                ].get("color"):
                     col_str = str(issue["three_js_highlight"]["color"])
                 raw_markers.append((np.array(point, dtype=np.float64), col_str))
 
@@ -101,9 +107,25 @@ def extract_issue_markers(analysis: dict[str, Any], mesh_verts: np.ndarray) -> l
                     if isinstance(ref, dict) and "centroid" in ref:
                         c = ref["centroid"]
                         if isinstance(c, dict) and all(k in c for k in ("x", "y", "z")):
-                            raw_markers.append((np.array([float(c["x"]), float(c["y"]), float(c["z"])], dtype=np.float64), severity))
+                            raw_markers.append(
+                                (
+                                    np.array(
+                                        [float(c["x"]), float(c["y"]), float(c["z"])],
+                                        dtype=np.float64,
+                                    ),
+                                    severity,
+                                )
+                            )
                         elif isinstance(c, list) and len(c) >= 3:
-                            raw_markers.append((np.array([float(c[0]), float(c[1]), float(c[2])], dtype=np.float64), severity))
+                            raw_markers.append(
+                                (
+                                    np.array(
+                                        [float(c[0]), float(c[1]), float(c[2])],
+                                        dtype=np.float64,
+                                    ),
+                                    severity,
+                                )
+                            )
 
     snapped: list[tuple[int, tuple[int, int, int]]] = []
     for pt, col_str in raw_markers:
@@ -142,19 +164,25 @@ def render_mesh_snapshot(
     theta = np.radians(azimuth)
 
     # In mechanical engineering CAD, Z is vertical height. Rotate azimuth around Z axis (turntable yaw)
-    R_z = np.array([
-        [np.cos(theta), -np.sin(theta), 0.0],
-        [np.sin(theta),  np.cos(theta), 0.0],
-        [0.0, 0.0, 1.0],
-    ], dtype=np.float64)
+    R_z = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0.0],
+            [np.sin(theta), np.cos(theta), 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
 
     # Tilt around X axis by (90° - elevation) so +Z tilts up onto screen +Y
     tilt = np.radians(90.0 - elevation)
-    R_x = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, np.cos(tilt), -np.sin(tilt)],
-        [0.0, np.sin(tilt),  np.cos(tilt)],
-    ], dtype=np.float64)
+    R_x = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, np.cos(tilt), -np.sin(tilt)],
+            [0.0, np.sin(tilt), np.cos(tilt)],
+        ],
+        dtype=np.float64,
+    )
 
     R = R_x @ R_z
     v_rot = verts @ R.T
@@ -257,7 +285,11 @@ def render_mesh_snapshot(
             closer = mask & (z_pix > z_buffer[ymin:ymax, xmin:xmax])
             if np.any(closer):
                 z_buffer[ymin:ymax, xmin:xmax][closer] = z_pix[closer]
-                img_buffer[ymin:ymax, xmin:xmax][closer] = [vis_r[i], vis_g[i], vis_b[i]]
+                img_buffer[ymin:ymax, xmin:xmax][closer] = [
+                    vis_r[i],
+                    vis_g[i],
+                    vis_b[i],
+                ]
 
     img = Image.fromarray(img_buffer, "RGB")
     draw = ImageDraw.Draw(img)
@@ -276,7 +308,12 @@ def render_mesh_snapshot(
 
         r = 4.5 * ssaa_factor
         w = 1 * ssaa_factor
-        draw.ellipse([mx - r, my - r, mx + r, my + r], fill=col_rgb, outline=(255, 255, 255), width=w)
+        draw.ellipse(
+            [mx - r, my - r, mx + r, my + r],
+            fill=col_rgb,
+            outline=(255, 255, 255),
+            width=w,
+        )
 
     # Downsample super-sampled image back to standard resolution using high-quality Lanczos filter for perfectly smooth anti-aliasing
     if ssaa_factor > 1:
@@ -290,22 +327,19 @@ def render_mesh_snapshot(
 
 def _load_mesh_from_source(file_url: str) -> trimesh.Trimesh | None:
     try:
-        if LOCAL_MODE and file_url.startswith(("http://", "https://")):
-            file_obj = io.BytesIO(local_store.read_file_url(file_url))
-            mesh = trimesh.load(file_obj, file_type="stl", force="mesh")
-        elif os.path.exists(file_url):
+        if os.path.exists(file_url):
             mesh = trimesh.load(file_url, force="mesh")
         elif file_url.startswith("http://") or file_url.startswith("https://"):
-            logger.info("Downloading mesh from %s for PDF snapshot generation", file_url)
-            response = requests.get(file_url, timeout=20)
-            if response.status_code != 200:
-                logger.warning("Failed to download mesh from %s (status %d)", file_url, response.status_code)
-                return None
-            file_obj = io.BytesIO(response.content)
+            logger.info(
+                "Downloading mesh from %s for PDF snapshot generation", file_url
+            )
+            file_obj = io.BytesIO(read_stored_file(file_url, timeout=20))
             file_obj.name = "model.stl"
             mesh = trimesh.load(file_obj, file_type="stl", force="mesh")
         else:
-            logger.warning("Unrecognized file URL or path for PDF snapshots: %s", file_url)
+            logger.warning(
+                "Unrecognized file URL or path for PDF snapshots: %s", file_url
+            )
             return None
 
         if isinstance(mesh, trimesh.Scene):
@@ -333,10 +367,10 @@ def generate_mesh_snapshots(analysis: dict[str, Any]) -> list[io.BytesIO]:
 
     # 4 standard engineering isometric rotations around Z axis at consistent 30-degree elevation
     angles = [
-        (45.0, 30.0),    # View 1: Front-Right isometric
-        (135.0, 30.0),   # View 2: Back-Right isometric
-        (225.0, 30.0),   # View 3: Back-Left isometric
-        (315.0, 30.0),   # View 4: Front-Left isometric
+        (45.0, 30.0),  # View 1: Front-Right isometric
+        (135.0, 30.0),  # View 2: Back-Right isometric
+        (225.0, 30.0),  # View 3: Back-Left isometric
+        (315.0, 30.0),  # View 4: Front-Left isometric
     ]
 
     snapshots: list[io.BytesIO] = []
@@ -345,5 +379,7 @@ def generate_mesh_snapshots(analysis: dict[str, Any]) -> list[io.BytesIO]:
             snap = render_mesh_snapshot(mesh, azimuth, elevation, markers=markers)
             snapshots.append(snap)
         except Exception as exc:
-            logger.warning("Failed to render snapshot at (%s, %s): %s", azimuth, elevation, exc)
+            logger.warning(
+                "Failed to render snapshot at (%s, %s): %s", azimuth, elevation, exc
+            )
     return snapshots

@@ -1,5 +1,6 @@
 import os
 import uuid
+import requests
 from fastapi import HTTPException, UploadFile, status
 from app.database import LOCAL_MODE, supabase
 from app import local_store
@@ -70,8 +71,7 @@ def _read_upload_within_limit(file: UploadFile) -> bytes:
             raise HTTPException(
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=(
-                    f"File exceeds the maximum upload size of "
-                    f"{MAX_UPLOAD_SIZE_MB} MB."
+                    f"File exceeds the maximum upload size of {MAX_UPLOAD_SIZE_MB} MB."
                 ),
             )
     return bytes(buffer)
@@ -93,12 +93,11 @@ def upload_cad_file_to_storage(file: UploadFile) -> dict:
     storage_path = f"uploads/{unique_filename}"
 
     try:
-        if LOCAL_MODE:
-            public_url = local_store.save_file(storage_path, file_bytes)
-        else:
-            public_url = _upload_supabase_file(storage_path, file_bytes, file.content_type)
+        public_url = store_file(storage_path, file_bytes, file.content_type)
     except Exception as exc:
-        logger.exception("File storage upload failed for path '%s': %s", storage_path, exc)
+        logger.exception(
+            "File storage upload failed for path '%s': %s", storage_path, exc
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="File storage is temporarily unavailable. Please try again.",
@@ -111,10 +110,24 @@ def upload_cad_file_to_storage(file: UploadFile) -> dict:
     }
 
 
-def _upload_supabase_file(storage_path: str, file_bytes: bytes, content_type: str | None) -> str:
+def store_file(
+    storage_path: str, file_bytes: bytes, content_type: str | None = None
+) -> str:
+    """Store an upload or generated preview using the configured backend."""
+    if LOCAL_MODE:
+        return local_store.save_file(storage_path, file_bytes)
     supabase.storage.from_(BUCKET_NAME).upload(
         path=storage_path,
         file=file_bytes,
         file_options={"content-type": content_type or "application/octet-stream"},
     )
     return supabase.storage.from_(BUCKET_NAME).get_public_url(storage_path)
+
+
+def read_stored_file(file_url: str, timeout: int = 30) -> bytes:
+    """Read shared local storage directly, or download a cloud-stored CAD file."""
+    if LOCAL_MODE:
+        return local_store.read_file_url(file_url)
+    response = requests.get(file_url, timeout=timeout)
+    response.raise_for_status()
+    return response.content

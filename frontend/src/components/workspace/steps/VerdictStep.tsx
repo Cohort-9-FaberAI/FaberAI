@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import WorkflowLayout from '../../layout/WorkflowLayout'
 import RadialScore from '../../conclusion/RadialScore'
-import { useStore } from '../../../store'
+import { useFileWorkspace } from '../../../hooks/useFileWorkspace'
 import {
-  asAnalysisResult,
   getAnalysisScore,
   getDisplayIssues,
   getMoldingScore,
@@ -19,18 +18,9 @@ interface VerdictStepProps {
 }
 
 export default function VerdictStep({ activeFile }: VerdictStepProps) {
-  const activeId = activeFile?.id ?? ''
-  const process = useStore((s) => s.settingsByFile[activeId]?.process ?? null)
-  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
-  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
+  const { analysis, settings, previewProps } = useFileWorkspace(activeFile)
+  const { process } = settings
   const [activeTab, setActiveTab] = useState<'reasons' | 'improvements'>('reasons')
-  const analysis = asAnalysisResult(analysisResult)
-
-  const activeFileIsStl =
-    activeFile?.sourceFormat === 'stl' ||
-    (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
-  const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
-  const livePreviewFilename = activeFile?.name ?? null
 
   const issues = getDisplayIssues(analysis)
   const score = getAnalysisScore(analysis)
@@ -73,10 +63,7 @@ export default function VerdictStep({ activeFile }: VerdictStepProps) {
       title="Manufacturability Conclusion"
       description="Compare process favorability and review prioritized design improvements."
       analysis={cleanAnalysis}
-      previewFileUrl={livePreviewUrl}
-      previewBuffer={fileBuffer}
-      previewSourceFormat={activeFile?.sourceFormat ?? null}
-      previewFilename={livePreviewFilename}
+      {...previewProps}
       viewerMeta={
         score !== null ? (
           <span className="viewer-score">

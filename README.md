@@ -1,4 +1,4 @@
-﻿# FaberAI
+# FaberAI
 
 FaberAI helps engineers assess whether CAD parts can be manufactured through
 injection molding or 3D printing. Upload a STEP/STP or STL file, inspect the 3D
@@ -68,8 +68,8 @@ Services bind to localhost; this configuration is for local development.
 
 Supabase mode uses the existing `analysis_jobs` table and `cad-uploads` bucket;
 see [`backend/database/`](backend/database/) for database scripts. Switching
-backends does not migrate local analyses. Embedding and tracing extras remain in
-[`backend/requirements.txt`](backend/requirements.txt).
+backends does not migrate local analyses. Embedding and tracing extras live in
+[`backend/requirements-knowledge.txt`](backend/requirements-knowledge.txt).
 
 ## Develop the frontend with hot reload
 
@@ -88,21 +88,10 @@ If the containerized frontend is running, stop it with
 
 ## Run the backend without Conda
 
-For native backend development, use Python 3.13+ and install
-[`backend/requirements-runtime.txt`](backend/requirements-runtime.txt) in a virtual
-environment. This includes STEP and STL support. From `backend/`, start the API
-and worker in separate terminals using the same environment:
-
-```sh
-python -m uvicorn main:app --reload
-python -m celery -A core.workers:celery_app worker --pool=solo --loglevel=info
-```
-
-Both terminals need `FABERAI_STORAGE_BACKEND=local`; on PowerShell use
-`$env:FABERAI_STORAGE_BACKEND = 'local'`. Redis can still be started with
-`docker compose up --detach redis` from the project root. Native local data is
-stored in `backend/.data/`, ignored by Git. Native runs retain the existing
-Supabase default unless local mode is explicitly selected.
+The [backend development guide](backend/README.md) covers Python virtual
+environments, native API/worker startup, storage configuration, and tests.
+Runtime, development, and optional knowledge dependencies have separate
+requirements files; the runtime group includes STEP and STL support.
 
 ## Troubleshooting
 
@@ -120,4 +109,8 @@ Supabase default unless local mode is explicitly selected.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming and PR conventions.
+- [Architecture](ARCHITECTURE.md): service boundaries and analysis flow.
+- [Backend guide](backend/README.md): configuration, API map, and checks.
+- [Frontend guide](frontend/README.md): Vite development and UI structure.
+- [Contributing](CONTRIBUTING.md): branch naming, validation, and PR conventions.
+- [Product intent](PRODUCT.md) and [brand reference](design.md): product and design context.

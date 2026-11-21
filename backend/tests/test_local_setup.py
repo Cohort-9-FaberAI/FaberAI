@@ -24,7 +24,7 @@ from core import workers
 def local_storage(monkeypatch, tmp_path):
     monkeypatch.setenv("FABERAI_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("FABERAI_PUBLIC_API_URL", "http://127.0.0.1:8000")
-    for module in (database, crud, storage, workers, main, pdf_mesh_renderer):
+    for module in (database, crud, storage, main):
         monkeypatch.setattr(module, "LOCAL_MODE", True)
     monkeypatch.setattr(
         main.app.router,

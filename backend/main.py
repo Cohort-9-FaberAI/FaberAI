@@ -19,7 +19,7 @@ from app.schemas import AnalysisResult, AnalysisStatus
 from app.crud import insert_analysis_result, get_analysis_by_id, update_analysis_status
 from app.services.ai import AIAnswer, answer_dfm_question_async
 from app.services.report_pdf import build_report_pdf, report_pdf_filename
-from app.services.storage import upload_cad_file_to_storage
+from app.services.storage import read_stored_file, upload_cad_file_to_storage
 from dfm import DFMInputs, DFMReport, load_dfm_config, run_dfm_analysis
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,7 +27,6 @@ from app.database import LOCAL_MODE
 from app import local_store
 from app.observability import setup_langtrace
 from app.services.ai.mcp_moldsim import init_moldsim, shutdown_moldsim
-import requests
 
 setup_langtrace()
 logger = logging.getLogger(__name__)
@@ -37,11 +36,15 @@ logger = logging.getLogger(__name__)
 # (including the AI-answer and retrieval timing breakdowns) would otherwise
 # never reach the console. This makes INFO-level logs from every module
 # visible without each one configuring logging itself.
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 _STEP_EXTENSIONS = {".step", ".stp"}
 
 
-def _raise_backend_unhealthy(component: str, message: str, cause: Exception | None = None) -> None:
+def _raise_backend_unhealthy(
+    component: str, message: str, cause: Exception | None = None
+) -> None:
     logger.error("Backend health check failed for %s: %s", component, message)
     exc = HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -129,12 +132,7 @@ def _attach_missing_step_preview(analysis: dict) -> dict:
     tmp_path = None
 
     try:
-        if LOCAL_MODE:
-            file_content = local_store.read_file_url(source_url)
-        else:
-            response = requests.get(source_url, timeout=30)
-            response.raise_for_status()
-            file_content = response.content
+        file_content = read_stored_file(source_url)
 
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
             tmp_file.write(file_content)
@@ -159,7 +157,10 @@ def _attach_missing_step_preview(analysis: dict) -> dict:
             )
         return analysis
     except Exception:
-        logger.exception("Could not backfill STEP preview for analysis %s", analysis.get("analysis_id"))
+        logger.exception(
+            "Could not backfill STEP preview for analysis %s",
+            analysis.get("analysis_id"),
+        )
         return analysis
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -211,7 +212,9 @@ app = FastAPI(
 )
 
 if LOCAL_MODE:
-    app.mount("/files", StaticFiles(directory=local_store.files_dir()), name="local-files")
+    app.mount(
+        "/files", StaticFiles(directory=local_store.files_dir()), name="local-files"
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -223,7 +226,9 @@ app.add_middleware(
 )
 
 
-def _error_response(status_code: int, error_type: str, message, details=None) -> JSONResponse:
+def _error_response(
+    status_code: int, error_type: str, message, details=None
+) -> JSONResponse:
     """
     Builds the standardized error envelope used by all exception handlers:
     {"error": {"code": <int>, "type": <slug>, "message": <str>, "details": <optional>}}
@@ -273,6 +278,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         "An unexpected internal error occurred.",
     )
 
+
 @app.get("/", tags=["Health"])
 def health_check():
     """
@@ -296,6 +302,7 @@ def dependency_health_check():
             "celery_worker": "ok",
         },
     }
+
 
 @app.post("/upload/", status_code=status.HTTP_202_ACCEPTED, tags=["Upload"])
 async def upload_cad_file(
@@ -377,6 +384,7 @@ async def upload_cad_file(
         "status": "pending",
     }
 
+
 @app.get("/tasks/{task_id}", tags=["Tasks"])
 def get_task_status(task_id: str, analysis_id: str | None = None):
     """
@@ -402,14 +410,35 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
                 if results_json:
                     results_json = _attach_missing_step_preview(results_json)
                     analysis = AnalysisResult.model_validate(results_json)
-                    return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id, "result": analysis}
-                return {"task_id": task_id, "status": "SUCCESS", "analysis_id": analysis_id}
+                    return {
+                        "task_id": task_id,
+                        "status": "SUCCESS",
+                        "analysis_id": analysis_id,
+                        "result": analysis,
+                    }
+                return {
+                    "task_id": task_id,
+                    "status": "SUCCESS",
+                    "analysis_id": analysis_id,
+                }
 
             if db_status == "failed":
-                return {"task_id": task_id, "status": "FAILED", "analysis_id": analysis_id}
+                return {
+                    "task_id": task_id,
+                    "status": "FAILED",
+                    "analysis_id": analysis_id,
+                }
 
-            if db_status in {"pending", "processing"} and state in {"PENDING", "STARTED", "RETRY"}:
-                return {"task_id": task_id, "status": "PROCESSING", "analysis_id": analysis_id}
+            if db_status in {"pending", "processing"} and state in {
+                "PENDING",
+                "STARTED",
+                "RETRY",
+            }:
+                return {
+                    "task_id": task_id,
+                    "status": "PROCESSING",
+                    "analysis_id": analysis_id,
+                }
 
     if state == "PENDING":
         _check_analysis_queue()
@@ -430,9 +459,7 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
         task_output = task_result.result
         if isinstance(task_output, dict):
             resolved_analysis_id = (
-                task_output.get("analysis_id")
-                or analysis_id
-                or task_id
+                task_output.get("analysis_id") or analysis_id or task_id
             )
             if task_output.get("status") == AnalysisStatus.completed.value:
                 return {
@@ -452,7 +479,10 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
         if analysis_id:
             try:
                 record = get_analysis_by_id(analysis_id)
-                if record is not None and record.get("status") in {"pending", "processing"}:
+                if record is not None and record.get("status") in {
+                    "pending",
+                    "processing",
+                }:
                     update_analysis_status(analysis_id, AnalysisStatus.failed.value)
             except APIError:
                 logger.exception(
@@ -481,7 +511,7 @@ def get_task_status(task_id: str, analysis_id: str | None = None):
                 "analysis_id": resolved_analysis_id,
                 "result": analysis,
             }
- 
+
         # Fix 1.10: DB record missing or results_json empty — task completed
         # in Celery but the result was not persisted (DB write failed, record
         # deleted, or Supabase was down). Return the Celery payload directly
@@ -515,7 +545,7 @@ def analyze_mock():
     """
     return {
         "analysis_id": "mock-analysis-0001",
-        "filename": "box_prism.stl", 
+        "filename": "box_prism.stl",
         "status": "completed",
         "manufacturability_score": 72,
         "printing_score": 81,
@@ -523,26 +553,26 @@ def analyze_mock():
         "printing_manufacturable": True,
         "molding_manufacturable": False,
         "summary": "Part is mostly manufacturable. 3 issues found that may require design changes.",
-        "file_url": "http://127.0.0.1:8000/mock-file", 
+        "file_url": "http://127.0.0.1:8000/mock-file",
         "part_metadata": {
             "units": "mm",
             "volume": 15420.5,
             "surface_area": 8930.2,
             "bounding_box": {
                 "min": {"x": 0.0, "y": 0.0, "z": 0.0},
-                "max": {"x": 120.0, "y": 80.0, "z": 45.0}
-            }
+                "max": {"x": 120.0, "y": 80.0, "z": 45.0},
+            },
         },
         "geometry_data": {
             "source_format": "stl",
             "bounding_box": {
                 "min": {"x": 0.0, "y": 0.0, "z": 0.0},
-                "max": {"x": 120.0, "y": 80.0, "z": 45.0}
+                "max": {"x": 120.0, "y": 80.0, "z": 45.0},
             },
             "volume_mm3": 15420.5,
             "surface_area_mm2": 8930.2,
             "measurements_reliable": True,
-            "center_mass": {"x": 60.0, "y": 40.0, "z": 22.5}
+            "center_mass": {"x": 60.0, "y": 40.0, "z": 22.5},
         },
         "issues": [
             {
@@ -551,7 +581,7 @@ def analyze_mock():
                 "title": "Wall Thickness Too Thin",
                 "description": "This wall is under the 2mm minimum thickness for injection molding.",
                 "face_id": 104,
-                "centroid": {"x": 15.2, "y": 4.1, "z": 0.0}
+                "centroid": {"x": 15.2, "y": 4.1, "z": 0.0},
             },
             {
                 "issue_id": "err_002",
@@ -559,7 +589,7 @@ def analyze_mock():
                 "title": "Sharp Internal Corner",
                 "description": "Requires a fillet to reduce stress concentration.",
                 "edge_id": 232,
-                "centroid": {"x": -5.0, "y": 10.5, "z": 3.2}
+                "centroid": {"x": -5.0, "y": 10.5, "z": 3.2},
             },
             {
                 "issue_id": "err_003",
@@ -567,11 +597,12 @@ def analyze_mock():
                 "title": "Non-Standard Draft Angle",
                 "description": "Draft angle is 1.5 degrees, but recommended is 2.0.",
                 "face_id": 45,
-                "centroid": {"x": 0.0, "y": -12.3, "z": 5.0}
-            }
+                "centroid": {"x": 0.0, "y": -12.3, "z": 5.0},
+            },
         ],
-        "response_model": AnalysisResult.model_json_schema()  # Include the schema for client validation    
+        "response_model": AnalysisResult.model_json_schema(),  # Include the schema for client validation
     }
+
 
 @app.post("/analysis/", tags=["Analysis"])
 def create_analysis(result: AnalysisResult):
@@ -582,9 +613,11 @@ def create_analysis(result: AnalysisResult):
     inserted = insert_analysis_result(result)
     return {"message": "Analysis result saved successfully.", "data": inserted}
 
+
 # ---------------------------------------------------------------------------
 # DFM rule engine
 # ---------------------------------------------------------------------------
+
 
 class DFMEvaluateRequest(BaseModel):
     """Run the DFM rule-set against a geometry payload.
@@ -706,46 +739,56 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
             detail="A completed analysis is required before downloading a PDF.",
         )
 
-    # 1. Garante que o dicionário de DFM report existe na análise
-    if "dfm_report" not in request.analysis or not isinstance(request.analysis["dfm_report"], dict):
+    # Older analysis payloads may lack the nested report inputs.
+    if "dfm_report" not in request.analysis or not isinstance(
+        request.analysis["dfm_report"], dict
+    ):
         request.analysis["dfm_report"] = {}
 
     report_dict = request.analysis["dfm_report"]
 
-    # 2. Garante que a chave 'inputs' existe dentro do dfm_report
     if "inputs" not in report_dict or not isinstance(report_dict["inputs"], dict):
         report_dict["inputs"] = {}
 
-    # 3. Injeta diretamente os valores que vieram do Frontend (PLA, Printing, etc.)
+    # Preserve the manufacturing selections displayed in the export step.
     if request.process:
-        p = request.process.lower().strip()
-        report_dict["inputs"]["process"] = "3d_printing" if "print" in p else "injection_molding"
+        process = request.process.lower().strip()
+        report_dict["inputs"]["process"] = (
+            "3d_printing" if "print" in process else "injection_molding"
+        )
     if request.printing_process:
-        report_dict["inputs"]["printing_process"] = request.printing_process.lower().strip()
+        report_dict["inputs"]["printing_process"] = (
+            request.printing_process.lower().strip()
+        )
     if request.material:
-        mat = request.material.lower().strip()
-        report_dict["inputs"]["material"] = mat
-        report_dict["inputs"]["material_resolved"] = mat
+        material = request.material.lower().strip()
+        report_dict["inputs"]["material"] = material
+        report_dict["inputs"]["material_resolved"] = material
     if request.tolerance:
-        tol = request.tolerance.lower()
-        report_dict["inputs"]["tolerance"] = "precision" if ("precision" in tol or "fine" in tol) else "standard"
+        tolerance = request.tolerance.lower()
+        report_dict["inputs"]["tolerance"] = (
+            "precision"
+            if ("precision" in tolerance or "fine" in tolerance)
+            else "standard"
+        )
     if request.surface_finish:
         report_dict["inputs"]["surface_finish"] = (
             request.surface_finish.lower().strip().replace(" ", "_")
         )
 
-    # 4. Removemos o aviso genérico de "No material supplied" das suposições se o material foi fornecido
+    # Replace the default-material assumption when the user supplied a material.
     if request.material and "processes" in report_dict:
         for proc in report_dict["processes"]:
             if "assumptions" in proc and isinstance(proc["assumptions"], list):
-                # Filtra fora o aviso de falta de material para o gerador de PDF não imprimir
                 proc["assumptions"] = [
-                    asm for asm in proc["assumptions"]
-                    if "No material supplied" not in asm
+                    assumption
+                    for assumption in proc["assumptions"]
+                    if "No material supplied" not in assumption
                 ]
-                # Adiciona a suposição correta do material escolhido
                 mat_name = request.material.upper()
-                proc["assumptions"].insert(0, f"Material supplied: {mat_name} limits and thresholds applied.")
+                proc["assumptions"].insert(
+                    0, f"Material supplied: {mat_name} limits and thresholds applied."
+                )
 
     if not report_dict and not request.analysis.get("issues"):
         raise HTTPException(
@@ -769,6 +812,7 @@ def download_inline_analysis_report(request: ReportDownloadRequest):
 # ---------------------------------------------------------------------------
 # AI endpoint
 # ---------------------------------------------------------------------------
+
 
 @app.post("/ai/ask", response_model=AIAnswer, tags=["AI"])
 async def ask_faber_ai(request: AIAskRequest):
@@ -823,6 +867,8 @@ def get_mock_file():
     """
     Serves the mock STL file directly to bypass CORS during local development.
     """
-    
-    file_path = "datasets/STL/box_prism.stl" 
-    return FileResponse(path=file_path, media_type="application/octet-stream", filename="box_prism.stl")
+
+    file_path = "datasets/STL/box_prism.stl"
+    return FileResponse(
+        path=file_path, media_type="application/octet-stream", filename="box_prism.stl"
+    )
