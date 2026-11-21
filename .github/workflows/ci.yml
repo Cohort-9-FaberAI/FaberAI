@@ -24,7 +24,7 @@ jobs:
         run: pip install ruff==0.14.3
 
       - name: Run ruff
-        run: ruff check .
+        run: ruff check . ../scripts
 
   test:
     name: Tests (pytest)
@@ -39,12 +39,14 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements-runtime.txt
+            backend/requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Run test suite
         run: python -m pytest

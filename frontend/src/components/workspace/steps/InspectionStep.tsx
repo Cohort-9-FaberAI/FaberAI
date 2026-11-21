@@ -4,9 +4,8 @@ import WorkflowLayout from '../../layout/WorkflowLayout'
 import Spinner from '../../common/Spinner'
 import IssueAccordion from '../../analysis/IssueAccordion'
 import SeverityLegend from '../../analysis/SeverityLegend'
-import { useStore } from '../../../store'
+import { useFileWorkspace } from '../../../hooks/useFileWorkspace'
 import {
-  asAnalysisResult,
   getAnalysisScore,
   getMarkerIssuesForProcess,
   getMoldingScore,
@@ -23,11 +22,9 @@ interface InspectionStepProps {
 }
 
 export default function InspectionStep({ activeFile }: InspectionStepProps) {
-  const activeId = activeFile?.id ?? ''
-  const analysisResult = useStore((s) => s.analysisResults[activeId] ?? null)
-  const fileBuffer = useStore((s) => s.fileBuffers[activeId] ?? null)
+  const { analysis, settings, previewProps } = useFileWorkspace(activeFile)
   const [activeTab, setActiveTab] = useState<'molding' | 'printing'>('molding')
-  const process = useStore((s) => s.settingsByFile[activeId]?.process ?? null)
+  const { process } = settings
   const isNotSure = process === null
   const processType: 'injection_molding' | 'printing' =
     process === null
@@ -38,14 +35,8 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
         ? 'injection_molding'
         : 'printing'
 
-  const analysis = asAnalysisResult(analysisResult)
   const taskId = activeFile?.taskId ?? null
   const isDevManual = taskId === 'dev-manual'
-  const activeFileIsStl =
-    activeFile?.sourceFormat === 'stl' ||
-    (!activeFile?.sourceFormat && activeFile?.name.toLowerCase().endsWith('.stl'))
-  const livePreviewUrl = activeFileIsStl ? (activeFile?.fileUrl ?? null) : null
-  const livePreviewFilename = activeFile?.name ?? null
 
   const overallScore = getAnalysisScore(analysis)
   const score =
@@ -130,10 +121,7 @@ export default function InspectionStep({ activeFile }: InspectionStepProps) {
                 : 'The backend report will appear here as soon as processing completes.'
           }
           analysis={viewerAnalysis}
-          previewFileUrl={livePreviewUrl}
-          previewBuffer={fileBuffer}
-          previewSourceFormat={activeFile?.sourceFormat ?? null}
-          previewFilename={livePreviewFilename}
+          {...previewProps}
           viewerMeta={
             canContinue && score !== null ? (
               <span className="viewer-score">

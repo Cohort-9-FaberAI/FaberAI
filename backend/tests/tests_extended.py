@@ -258,8 +258,7 @@ class TestWorkerRetryPolicy:
 
         with patch("core.workers.update_analysis_status") as mock_update, \
             patch("core.workers.requests.get") as mock_get, \
-            patch("core.workers.run_geometry_engine", return_value={"mock_score": 85}), \
-            patch("core.workers.insert_analysis_result"):
+            patch("core.workers.run_geometry_engine", return_value={"mock_score": 85}):
 
             mock_response = MagicMock()
             mock_response.content = b"solid mock"

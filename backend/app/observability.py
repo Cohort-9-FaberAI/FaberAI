@@ -1,20 +1,16 @@
 """
 LangTrace observability setup for FaberAI.
 
-This module initialises the LangTrace SDK so that all LLM calls
-(Muse Spark agent, MCP tool executions, and explanation layer)
-are automatically traced and visible in the LangTrace dashboard.
+This module initializes optional LangTrace instrumentation for LLM calls.
+The tracing service is managed separately from the default Docker Compose stack.
 
 Usage:
     Import and call setup_langtrace() once at application startup
     (e.g. at the top of main.py or workers.py before any LLM calls).
 
-Dashboard:
-    http://localhost:3000  (when running docker-compose locally)
-
-Environment variables required in .env:
+Environment variables:
     LANGTRACE_API_KEY   - API key generated from the LangTrace dashboard
-    LANGTRACE_HOST      - defaults to http://localhost:3000
+    LANGTRACE_HOST      - tracing service URL, defaults to http://localhost:3000
 """
 
 import logging

@@ -1,7 +1,5 @@
 from celery import Celery
-from app.database import LOCAL_MODE, supabase
-from app import local_store
-from app.crud import insert_analysis_result, update_analysis_status
+from app.crud import update_analysis_status
 from app.schemas import (
     AnalysisResult,
     AnalysisStatus,
@@ -11,6 +9,7 @@ from app.schemas import (
     Vector3,
 )
 from app.services.geometry_engine_adapter import run_geometry_engine
+from app.services.storage import read_stored_file, store_file
 from dfm import DFMInputs, ToleranceRequest, run_dfm_analysis
 from dfm.models import Finding
 from geometry.loaders import StepSupportUnavailableError
@@ -18,15 +17,14 @@ import tempfile
 import os
 import requests
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Connection to Redis
 REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-celery_app = Celery(
-    "faberai_worker",
-    broker=REDIS_URL,
-    backend=REDIS_URL
-)
+celery_app = Celery("faberai_worker", broker=REDIS_URL, backend=REDIS_URL)
 
 celery_app.conf.update(
     task_serializer="json",
@@ -40,9 +38,9 @@ celery_app.conf.update(
 
 # Legacy severity (high / medium / low) → highlight color for the 3D viewer.
 _LEGACY_SEVERITY_COLORS = {
-    "high": "#ff4d4d",    # blocker
+    "high": "#ff4d4d",  # blocker
     "medium": "#ffb84d",  # major
-    "low": "#4caf50",     # minor
+    "low": "#4caf50",  # minor
 }
 
 _STEP_EXTENSIONS = {"step", "stp"}
@@ -90,21 +88,13 @@ def _upload_preview_stl_for_step(step_path: str) -> str | None:
             angular_tolerance=0.25,
             ascii_format=False,
         ):
-            print(f"[WORKER] STEP preview STL export returned false for: {step_path}")
+            logger.warning("STEP preview STL export returned false for %s", step_path)
             return None
 
         with open(preview_path, "rb") as preview_file:
-            if LOCAL_MODE:
-                return local_store.save_file(storage_path, preview_file.read())
-            supabase.storage.from_("cad-uploads").upload(
-                path=storage_path,
-                file=preview_file.read(),
-                file_options={"content-type": "model/stl"},
-            )
-
-        return supabase.storage.from_("cad-uploads").get_public_url(storage_path)
-    except Exception as exc:
-        print(f"[WORKER] STEP preview STL generation failed for {step_path}: {exc}")
+            return store_file(storage_path, preview_file.read(), "model/stl")
+    except Exception:
+        logger.exception("STEP preview STL generation failed for %s", step_path)
         return None
     finally:
         if preview_path and os.path.exists(preview_path):
@@ -136,7 +126,9 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
             return None
         return Vector3(x=float(x), y=float(y), z=float(z))
 
-    def _bbox_center(min_point: Vector3 | None, max_point: Vector3 | None) -> Vector3 | None:
+    def _bbox_center(
+        min_point: Vector3 | None, max_point: Vector3 | None
+    ) -> Vector3 | None:
         if min_point is None or max_point is None:
             return None
         return Vector3(
@@ -147,7 +139,11 @@ def _finding_to_issue(finding: Finding, rule_id: str) -> Issue:
 
     bbox_min = _vec3(ref.bbox_min if ref else None) or Vector3(x=0.0, y=0.0, z=0.0)
     bbox_max = _vec3(ref.bbox_max if ref else None) or Vector3(x=0.0, y=0.0, z=0.0)
-    centroid = _vec3(ref.centroid if ref else None) or _bbox_center(bbox_min, bbox_max) or Vector3(x=0.0, y=0.0, z=0.0)
+    centroid = (
+        _vec3(ref.centroid if ref else None)
+        or _bbox_center(bbox_min, bbox_max)
+        or Vector3(x=0.0, y=0.0, z=0.0)
+    )
 
     return Issue(
         issue_id=finding.finding_id,
@@ -232,8 +228,8 @@ def _build_dfm_inputs(
         "countdown": 5,
     },
     retry_backoff=True,
-    retry_backoff_max=60,     #cap backoff at 60 seconds
-    retry_jitter=True,       
+    retry_backoff_max=60,  # cap backoff at 60 seconds
+    retry_jitter=True,
 )
 def extract_geometry_task(
     self,
@@ -257,34 +253,23 @@ def extract_geometry_task(
         original_filename: The original name of the file for logging.
         analysis_id: The record ID to update throughout the lifecycle.
     """
-    print(f"[WORKER] Starting processing for: {original_filename}")
+    logger.info("Starting analysis %s for %s", analysis_id, original_filename)
     update_analysis_status(analysis_id, AnalysisStatus.processing.value)
-    print(f"[WORKER] Status set to processing for: {analysis_id}")
-    
+
     file_extension = original_filename.split(".")[-1].lower()
     tmp_path = None
 
     try:
-        #file from Supabase Storage
-        print(f"[WORKER] Downloading from: {file_url}")
-        if LOCAL_MODE:
-            file_content = local_store.read_file_url(file_url)
-        else:
-            response = requests.get(file_url, timeout=30)
-            response.raise_for_status()
-            file_content = response.content
+        file_content = read_stored_file(file_url)
 
         with tempfile.NamedTemporaryFile(
-            suffix=f".{file_extension}",
-            delete=False
+            suffix=f".{file_extension}", delete=False
         ) as tmp_file:
             tmp_file.write(file_content)
             tmp_path = tmp_file.name
 
-        print(f"[WORKER] File downloaded to temp path: {tmp_path}")
-
         result = run_geometry_engine(tmp_path, original_filename)
-        print(f"[WORKER] Processing complete for: {original_filename}")
+        logger.info("Geometry analysis complete for %s", analysis_id)
         preview_url = file_url if file_extension in _STL_EXTENSIONS else None
         if file_extension in _STEP_EXTENSIONS:
             preview_url = _upload_preview_stl_for_step(tmp_path)
@@ -311,15 +296,15 @@ def extract_geometry_task(
             for process_report in report.processes:
                 for rule_result in process_report.rule_results:
                     for finding in rule_result.findings:
-                        issues.append(
-                            _finding_to_issue(finding, rule_result.rule_id)
-                        )
-            print(
-                f"[WORKER] DFM analysis complete for {original_filename}: "
-                f"score {score}, manufacturable={report.manufacturable}"
+                        issues.append(_finding_to_issue(finding, rule_result.rule_id))
+            logger.info(
+                "DFM analysis complete for %s: score %s, manufacturable=%s",
+                analysis_id,
+                score,
+                report.manufacturable,
             )
-        except Exception as exc:
-            print(f"[WORKER] DFM analysis failed for {original_filename}: {exc}")
+        except Exception:
+            logger.exception("DFM analysis failed for %s", analysis_id)
 
         # Build a complete AnalysisResult that carries the geometry payload
         # inside geometry_data so the API can round-trip it without stripping fields.
@@ -330,9 +315,13 @@ def extract_geometry_task(
             manufacturability_score=score,
             file_url=preview_url,
             source_file_url=file_url,
-            printing_manufacturable=report.printing_manufacturable if dfm_report is not None else None,
+            printing_manufacturable=report.printing_manufacturable
+            if dfm_report is not None
+            else None,
             printing_score=report.printing_score if dfm_report is not None else None,
-            molding_manufacturable=report.molding_manufacturable if dfm_report is not None else None,
+            molding_manufacturable=report.molding_manufacturable
+            if dfm_report is not None
+            else None,
             molding_score=report.molding_score if dfm_report is not None else None,
             geometry_data=result,
             dfm_report=dfm_report,
@@ -345,9 +334,9 @@ def extract_geometry_task(
             extra_fields={
                 "manufacturability_score": score,
                 "results_json": analysis_result.model_dump(),
-            }
+            },
         )
-        print(f"[WORKER] Status set to completed for: {analysis_id}")
+        logger.info("Analysis completed for %s", analysis_id)
 
         return analysis_result.model_dump()
 
@@ -356,22 +345,29 @@ def extract_geometry_task(
             # Missing optional STEP dependencies won't be fixed by retrying:
             # mark the analysis failed immediately so the client sees FAILED
             # instead of a record stuck in "processing".
-            print(f"[WORKER] Cannot process {original_filename}: {exc}")
+            logger.error("Cannot process %s: %s", original_filename, exc)
             update_analysis_status(analysis_id, AnalysisStatus.failed.value)
             raise
 
         if self.request.retries >= self.max_retries:
-            print(f"[WORKER] All retries exhausted for: {original_filename}. Marking as failed.")
+            logger.error(
+                "All retries exhausted for %s; marking analysis failed", analysis_id
+            )
             update_analysis_status(
                 analysis_id,
                 AnalysisStatus.failed.value,
             )
         else:
-            print(f"[WORKER] Error on attempt {self.request.retries + 1}, retrying: {exc}")
+            logger.warning(
+                "Analysis %s failed on attempt %s: %s",
+                analysis_id,
+                self.request.retries + 1,
+                exc,
+            )
         raise
 
     finally:
         # Always clean up the temp file, even if processing fails
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
-            print(f"[WORKER] Temp file deleted: {tmp_path}")
+            logger.debug("Deleted temporary CAD file %s", tmp_path)

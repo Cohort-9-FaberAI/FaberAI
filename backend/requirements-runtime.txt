@@ -1,5 +1,5 @@
 # Direct dependencies for CAD analysis, the API, workers, and PDF reporting.
-# Knowledge-base embeddings and tracing remain in requirements.txt; the core
+# Knowledge-base embeddings and tracing live in requirements-knowledge.txt; the core
 # application does not need a multi-gigabyte ML stack or a model download.
 anthropic==0.120.2
 build123d==0.12.0

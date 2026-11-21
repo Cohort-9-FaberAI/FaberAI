@@ -5,7 +5,7 @@ from app.schemas import AnalysisResult, AnalysisDBRecord
 TABLE_NAME = "analysis_jobs"
 
 
-def insert_analysis_result(result: AnalysisResult) -> dict:
+def insert_analysis_result(result: AnalysisResult) -> list[dict]:
     """
     Validates and inserts an analysis into the configured record store.
     The full result payload is stored as JSON in the results_json column.
@@ -22,12 +22,7 @@ def insert_analysis_result(result: AnalysisResult) -> dict:
     if LOCAL_MODE:
         return local_store.insert_record(record.model_dump(mode="json"))
 
-    response = (
-        supabase
-        .table(TABLE_NAME)
-        .insert(record.model_dump())
-        .execute()
-    )
+    response = supabase.table(TABLE_NAME).insert(record.model_dump()).execute()
 
     return response.data
 
@@ -52,8 +47,7 @@ def get_analysis_by_id(analysis_id: str) -> dict | None:
 
     # maybe_single() returns None for the whole response when no row matches.
     response = (
-        supabase
-        .table(TABLE_NAME)
+        supabase.table(TABLE_NAME)
         .select("*")
         .eq("analysis_id", analysis_id)
         .maybe_single()
@@ -62,7 +56,12 @@ def get_analysis_by_id(analysis_id: str) -> dict | None:
 
     return response.data if response else None
 
-def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = None) -> dict:
+
+def update_analysis_status(
+    analysis_id: str,
+    status: str,
+    extra_fields: dict | None = None,
+) -> list[dict]:
     """
     Updates the status of an existing analysis record.
     Optionally updates additional fields (e.g. manufacturability_score, results_json)
@@ -74,7 +73,7 @@ def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = N
         extra_fields: Optional dict of additional columns to update in the same call.
 
     Returns:
-        The updated row data from Supabase.
+        The updated row data from the configured record store.
     """
     payload = {"status": status}
     if extra_fields:
@@ -84,8 +83,7 @@ def update_analysis_status(analysis_id: str, status: str, extra_fields: dict = N
         return local_store.update_record(analysis_id, payload)
 
     response = (
-        supabase
-        .table(TABLE_NAME)
+        supabase.table(TABLE_NAME)
         .update(payload)
         .eq("analysis_id", analysis_id)
         .execute()

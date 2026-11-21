@@ -11,7 +11,6 @@ interface WorkflowLayoutProps {
   previewBuffer?: ArrayBuffer | null
   previewSourceFormat?: 'stl' | 'step' | null
   previewFilename?: string | null
-  viewerLabel?: string
   viewerMeta?: ReactNode
   viewerOverride?: ReactNode
   children: ReactNode

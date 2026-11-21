@@ -1,9 +1,5 @@
 # Product
 
-## Register
-
-product
-
 ## Users
 
 Design engineers and manufacturing engineers reviewing CAD parts during manufacturability checks. They are trying to understand whether a part can be made as designed, why a process may fail, and what changes would improve the result.

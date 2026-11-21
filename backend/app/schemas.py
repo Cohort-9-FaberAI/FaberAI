@@ -66,7 +66,7 @@ class AnalysisResult(BaseModel):
     # converted preview mesh.
     source_file_url: Optional[str] = None
     part_metadata: Optional[PartMetadata] = None
-    issues: List[Issue] = []
+    issues: List[Issue] = Field(default_factory=list)
     # Raw geometry engine output — passed through as-is, no nested validation.
     # Carries the full GeometryEngineResponse payload (bounding_box, volume_mm3,
     # faces, edges, wall_samples, etc.) so nothing gets silently stripped.

@@ -85,13 +85,12 @@ def load_geometry(path: str) -> GeometryModel:
     """Load a STEP or STL file and populate a fully-measured GeometryModel.
 
     Dispatches on extension:
-        .step / .stp -> pythonOCC path
+        .step / .stp -> OpenCASCADE B-rep path (build123d/OCP or pythonOCC)
         .stl         -> trimesh path
 
-    STEP support is optional: if pythonocc-core is not installed, the STEP
-    path raises StepSupportUnavailableError with installation instructions
-    instead of an unhandled ImportError. The STL path has no optional
-    dependencies and always works.
+    STEP support is installed with the runtime requirements. Environments
+    without either CAD binding raise StepSupportUnavailableError with setup
+    instructions. STL processing uses the independent trimesh path.
     """
     fmt = get_file_format(path)
 
@@ -275,12 +274,8 @@ def _load_stl(path: str) -> GeometryModel:
     model.moment_of_inertia = compute_moment_inertia_mesh(mesh)
     model.measurements_reliable = is_mesh_reliable(mesh)
 
-    # NOTE: holes/bosses/cavities are intentionally left empty on the STL
-    # path. Mesh faces (from extract_faces_mesh) have no surface-type
-    # classification (no cylinder/plane distinction without real curvature
-    # analysis on a triangle soup), so cylindrical feature detection can't
-    # run against them yet — this matches the feature spec's STL placeholder
-    # allowance.
+    # Mesh-specific heuristics populate supported features below. Measurements
+    # that require exact B-rep surfaces can remain unavailable on STL parts.
 
     # Topology: faces, edges, face graph
     try:

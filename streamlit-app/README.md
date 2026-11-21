@@ -1,26 +1,18 @@
-# FaberAI Streamlit Frontend
+# Streamlit development client
 
-A minimal frontend for the backend geometry pipeline.
+This optional client uploads CAD files and polls the backend. The React app in
+`frontend/` is the primary user interface. Follow the root
+[quick start](../README.md#run-locally) to start the backend services first.
 
-## Setup
+Install this client's dependencies in a separate Python virtual environment.
+From the repository root:
 
-Install the Streamlit app dependencies in a separate environment:
-
-```bash
-cd /home/antonia/FaberAI/streamlit-app
+```sh
+cd streamlit-app
 python -m pip install -r requirements.txt
+python -m streamlit run app.py
 ```
 
-## Run
-
-```bash
-streamlit run app.py
-```
-
-## Usage
-
-1. Enter the backend URL (default: `http://localhost:8000`).
-2. Upload a `*.stl`, `*.step`, or `*.stp` file.
-3. Preview the STL file if supported.
-4. Click `Launch geometry pipeline` to upload to the backend.
-5. Use `Check task status` to poll the processing result.
+Set the backend URL to `http://localhost:8000` (or your configured API port).
+Upload an STL, STEP, or STP file; preview STL geometry when supported; select
+`Launch geometry pipeline`; then use `Check task status` to inspect the result.
